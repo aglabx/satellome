@@ -23,3 +23,10 @@ Dataset to make:
 - taxon to all large tandem repeats
 - large tandem repeat to taxons
 - large tandem repert to its annotation
+
+
+## Project folder
+
+/mnt/data/satelome 
+
+Project unix group: satelome
