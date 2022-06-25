@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Parse TRF output.')
     parser.add_argument('-i','--input', help='Input fasta file', required=True)
-    parser.add_argument('-o','--output', help='Output folder', required=True)
+    parser.add_argument('-o','--output', help='Output folder (full path!)', required=True)
     parser.add_argument('-p','--project', help='Project', required=True)
     parser.add_argument('-r','--results', help='Results yaml file', required=True)
     parser.add_argument('-t','--threads', help='Threads', required=True)
@@ -29,6 +29,8 @@ if __name__ == '__main__':
     results_file = args["results"]
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
+
+    assert output_dir.startswith("/")
     
     trf_search_by_splitting(fasta_file, threads=threads, wdir=output_dir, project=project)
     
