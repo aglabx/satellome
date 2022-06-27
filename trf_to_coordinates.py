@@ -25,6 +25,5 @@ if __name__ == '__main__':
 	with open(output_file, "w") as fh:
 		for trf_obj in sc_iter_tab_file(input_file, TRModel):
 			s = "%s\t%s\t%s\n" % (trf_obj.trf_head, trf_obj.trf_l_ind, trf_obj.trf_r_ind)
-			# print s
 			fh.write(s)
-		print
+		print()

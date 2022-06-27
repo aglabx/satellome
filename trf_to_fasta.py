@@ -25,6 +25,6 @@ if __name__ == '__main__':
 	with open(output_file, "w") as fh:
 		for i, trf_obj in enumerate(sc_iter_tab_file(input_file, TRModel)):
 			s = ">%s\t%s\n%s\n" % (trf_obj.trf_id, trf_obj.trf_family, trf_obj.trf_consensus*3)
-			print i, s
+			print(i, s)
 			fh.write(s)
-		print
+		print()
