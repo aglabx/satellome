@@ -87,7 +87,7 @@ if __name__ == '__main__':
             "ref_assembly_name_for_trf": "dataset",
             "assembly_stats": {
                 "dataset": {
-                    "total_length": 1700000000,
+                    "total_length": 3400000000,
                 },
             },
         },
