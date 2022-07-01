@@ -7,9 +7,7 @@
 
 import argparse
 from trseeker.models.gff3_model import sc_gff3_reader
-import pickle
 from collections import defaultdict
-
 
 
 if __name__ == '__main__':

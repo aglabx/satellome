@@ -6,10 +6,9 @@
 #@contact: ad3002@gmail.com
 
 import yaml
-import sys
 import os
 from trseeker.tools.trf_tools import trf_search_by_splitting
-from PySatDNA.core_functions.classification_micro import scf_basic_trs_classification
+from core_functions.classification_micro import scf_basic_trs_classification
 import argparse
 
 if __name__ == '__main__':

@@ -5,8 +5,6 @@
 #@author: Aleksey Komissarov
 #@contact: ad3002@gmail.com
 
-import sys
-from trseeker.models.trf_model import TRModel
 from trseeker.seqio.trf_file import TRFFileIO
 import argparse
 
