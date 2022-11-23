@@ -6,9 +6,9 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from trseeker.models.gff3_model import sc_gff3_reader
 from collections import defaultdict
 
+from trseeker.models.gff3_model import sc_gff3_reader
 
 if __name__ == "__main__":
 

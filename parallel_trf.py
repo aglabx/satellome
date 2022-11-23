@@ -6,6 +6,7 @@
 # @contact: ad3002@gmail.com
 
 import sys
+
 from trseeker.tools.trf_tools import trf_search_in_dir_parallel
 
 if __name__ == "__main__":

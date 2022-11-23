@@ -23,15 +23,14 @@ Core functions related to classification of microsatellites tandem repeats.
 """
 import os
 from collections import defaultdict
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.models.trf_model import TRModel
-from trseeker.tools.statistics import get_simple_statistics
-from trseeker.tools.ngrams_tools import compute_kmer_index_for_trf_file
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.seqio.tr_file import save_trs_as_fasta
+
 from PyExp import core_logger
 from trseeker.models.gff3_model import sc_gff3_reader
-from collections import defaultdict
+from trseeker.models.trf_model import TRModel
+from trseeker.seqio.tab_file import sc_iter_tab_file
+from trseeker.seqio.tr_file import save_trs_as_fasta
+from trseeker.tools.ngrams_tools import compute_kmer_index_for_trf_file
+from trseeker.tools.statistics import get_simple_statistics
 
 
 class RepeatCountStatsModel(object):

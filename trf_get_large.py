@@ -5,11 +5,12 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
+import argparse
 import sys
+
 from trseeker.models.trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
 from trseeker.seqio.tr_file import save_trs_dataset
-import argparse
 
 if __name__ == "__main__":
 

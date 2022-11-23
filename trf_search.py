@@ -5,14 +5,15 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-import yaml
+import argparse
 import os
 import sys
-from trseeker.tools.trf_tools import trf_search_by_splitting
-from trseeker.seqio.fasta_file import sc_iter_fasta_brute
-from core_functions.classification_micro import scf_basic_trs_classification
-import argparse
 
+import yaml
+from trseeker.seqio.fasta_file import sc_iter_fasta_brute
+from trseeker.tools.trf_tools import trf_search_by_splitting
+
+from core_functions.classification_micro import scf_basic_trs_classification
 
 if __name__ == "__main__":
 

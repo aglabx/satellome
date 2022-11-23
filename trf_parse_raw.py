@@ -5,8 +5,9 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-from trseeker.seqio.trf_file import TRFFileIO
 import argparse
+
+from trseeker.seqio.trf_file import TRFFileIO
 
 if __name__ == "__main__":
 
