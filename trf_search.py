@@ -7,6 +7,7 @@
 
 import yaml
 import os
+import sys
 from trseeker.tools.trf_tools import trf_search_by_splitting
 from trseeker.seqio.fasta_file import sc_iter_fasta_brute
 from core_functions.classification_micro import scf_basic_trs_classification
