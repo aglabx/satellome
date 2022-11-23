@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#@created: 10.03.2019
-#@author: Aleksey Komissarov
-#@contact: ad3002@gmail.com
+# @created: 10.03.2019
+# @author: Aleksey Komissarov
+# @contact: ad3002@gmail.com
 
 import yaml
 import os
@@ -13,17 +13,18 @@ from core_functions.classification_micro import scf_basic_trs_classification
 import argparse
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Parse TRF output.')
-    parser.add_argument('-i','--input', help='Input fasta file', required=True)
-    parser.add_argument('-o','--output', help='Output folder', required=True)
-    parser.add_argument('-p','--project', help='Project', required=True)
-    parser.add_argument('-r','--results', help='Results yaml file', required=True)
-    parser.add_argument('-t','--threads', help='Threads', required=True)
-    parser.add_argument('--genome_size', help='Expected genome size', required=False, default=0)
+    parser = argparse.ArgumentParser(description="Parse TRF output.")
+    parser.add_argument("-i", "--input", help="Input fasta file", required=True)
+    parser.add_argument("-o", "--output", help="Output folder", required=True)
+    parser.add_argument("-p", "--project", help="Project", required=True)
+    parser.add_argument("-r", "--results", help="Results yaml file", required=True)
+    parser.add_argument("-t", "--threads", help="Threads", required=True)
+    parser.add_argument(
+        "--genome_size", help="Expected genome size", required=False, default=0
+    )
     args = vars(parser.parse_args())
-
 
     fasta_file = args["input"]
     output_dir = args["output"]
@@ -43,9 +44,11 @@ if __name__ == '__main__':
         for header, seq in sc_iter_fasta_brute(fasta_file):
             genome_size += len(seq)
         print(f"{genome_size} bp.")
-    
-    output_file = trf_search_by_splitting(fasta_file, threads=threads, wdir=output_dir, project=project)
-    
+
+    output_file = trf_search_by_splitting(
+        fasta_file, threads=threads, wdir=output_dir, project=project
+    )
+
     base_prefix = os.path.splitext(output_file)[0]
 
     settings = {
@@ -58,35 +61,28 @@ if __name__ == '__main__':
         "files": {
             "trf_all_file": base_prefix + ".trf",
             "trf_micro_file": base_prefix + ".micro.trf",
-            
             "trf_micro_kmers_file": base_prefix + ".micro.kmers",
             "trf_pmicro_kmers_file": base_prefix + ".pmicro.kmers",
-
             "gff_micro_file": base_prefix + ".micro.gff",
             "report_micro_file": base_prefix + ".micro.report",
             "trf_perfect_micro_file": base_prefix + ".pmicro.trf",
             "gff_pmicro_file": base_prefix + ".pmicro.gff",
             "report_pmicro_file": base_prefix + ".pmicro.report",
-            
             "gff_tssr_file": base_prefix + ".tssr.gff",
             "trf_tssr_file": base_prefix + ".tssr.trf",
             "report_tssr_file": base_prefix + ".tssr.report",
             "trf_fssr_file": base_prefix + ".fssr.gff",
             "report_fssr_file": base_prefix + ".fssr.report",
-
             "trf_complex_file": base_prefix + ".complex.%s.trf",
             "gff_complex_file": base_prefix + ".complex.%s.gff",
             "clouds_complex_file": base_prefix + ".complex.%s.clouds",
             "clouds_png_complex_file": base_prefix + ".complex.%s.clouds.png",
-
             "trf_1k_file": base_prefix + ".1kb.trf",
             "gff_1k_file": base_prefix + ".1kb.gff",
             "trf_1k_fasta_file": base_prefix + ".1kb.fasta",
-
             "trf_3k_file": base_prefix + ".3kb.trf",
             "gff_3k_file": base_prefix + ".3kb.gff",
             "trf_3k_fasta_file": base_prefix + ".3kb.fasta",
-
             "trf_10k_file": base_prefix + ".10kb.trf",
             "gff_10k_file": base_prefix + ".10kb.gff",
             "trf_10k_fasta_file": base_prefix + ".10kb.fasta",
