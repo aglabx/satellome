@@ -8,32 +8,45 @@
 import yaml
 import os
 from trseeker.tools.trf_tools import trf_search_by_splitting
+from trseeker.seqio.fasta_file import sc_iter_fasta_brute
 from core_functions.classification_micro import scf_basic_trs_classification
 import argparse
+
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Parse TRF output.')
     parser.add_argument('-i','--input', help='Input fasta file', required=True)
-    parser.add_argument('-o','--output', help='Output folder (full path!)', required=True)
+    parser.add_argument('-o','--output', help='Output folder', required=True)
     parser.add_argument('-p','--project', help='Project', required=True)
     parser.add_argument('-r','--results', help='Results yaml file', required=True)
     parser.add_argument('-t','--threads', help='Threads', required=True)
+    parser.add_argument('--genome_size', help='Expected genome size', required=False, default=0)
     args = vars(parser.parse_args())
+
 
     fasta_file = args["input"]
     output_dir = args["output"]
     project = args["project"]
     threads = args["threads"]
     results_file = args["results"]
+    genome_size = int(args["genome_size"])
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
-    assert output_dir.startswith("/")
+    if not output_dir.startswith("/"):
+        print(f"Error: please provide the full path for output: {output_dir}")
+        sys.exit(1)
+
+    if genome_size == 0:
+        print("Computing genome size...", end=" ")
+        for header, seq in sc_iter_fasta_brute(fasta_file):
+            genome_size += len(seq)
+        print(f"{genome_size} bp.")
     
-    trf_search_by_splitting(fasta_file, threads=threads, wdir=output_dir, project=project)
+    output_file = trf_search_by_splitting(fasta_file, threads=threads, wdir=output_dir, project=project)
     
-    base_prefix = os.path.join(output_dir, os.path.splitext(fasta_file)[0])
+    base_prefix = os.path.splitext(output_file)[0]
 
     settings = {
         "folders": {
@@ -86,7 +99,7 @@ if __name__ == '__main__':
             "ref_assembly_name_for_trf": "dataset",
             "assembly_stats": {
                 "dataset": {
-                    "total_length": 3400000000,
+                    "total_length": genome_size,
                 },
             },
         },
