@@ -25,7 +25,7 @@ import os
 from collections import defaultdict
 
 from PyExp import core_logger
-from trseeker.models.gff3_model import sc_gff3_reader
+from trseeker.seqio.gff_file import sc_gff3_reader
 from trseeker.models.trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
 from trseeker.seqio.tr_file import save_trs_as_fasta
@@ -119,7 +119,7 @@ def _trs_separate_something(
                 if filter_func(trf_obj):
                     selected += 1
                     total_length += trf_obj.trf_array_length
-                    if i % 1000 == 0:
+                    if  i and i % 1000 == 0:
                         core_logger.info("selected %s from %s " % (selected, i))
                     trf_obj.trf_family, gff_string, mathstr = name_func(trf_obj)
                     fh.write(str(trf_obj))
