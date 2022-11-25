@@ -23,6 +23,8 @@ if __name__ == "__main__":
 
     reader = TRFFileIO()
     trf_id = 1
+    print(f"Started {input_file}...")
     trf_id = reader.parse_to_file(
         input_file, output_file, trf_id=trf_id, project=project
     )
+    print(f"...completed {output_file}.")
