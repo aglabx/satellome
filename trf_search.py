@@ -8,7 +8,7 @@
 import argparse
 import os
 import sys
-
+import pathlib
 import yaml
 from trseeker.seqio.fasta_file import sc_iter_fasta_brute
 from trseeker.tools.trf_tools import trf_search_by_splitting
@@ -23,6 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--project", help="Project", required=True)
     parser.add_argument("-r", "--results", help="Results yaml file", required=True)
     parser.add_argument("-t", "--threads", help="Threads", required=True)
+    parser.add_argument("--trf", help="Path to trf [trf]", required=False, default="trf")
     parser.add_argument(
         "--genome_size", help="Expected genome size", required=False, default=0
     )
@@ -33,6 +34,8 @@ if __name__ == "__main__":
     project = args["project"]
     threads = args["threads"]
     results_file = args["results"]
+    trf_path = args["trf"]
+
     genome_size = int(args["genome_size"])
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
@@ -47,8 +50,13 @@ if __name__ == "__main__":
             genome_size += len(seq)
         print(f"{genome_size} bp.")
 
+    code_dir = pathlib.Path(__file__).parent.resolve()
+    parser_program = os.path.join(code_dir, "trf_parse_raw.py")
+
     output_file = trf_search_by_splitting(
-        fasta_file, threads=threads, wdir=output_dir, project=project
+        fasta_file, threads=threads, wdir=output_dir, project=project,
+        trf_path=trf_path, 
+        parser_program=parser_program,
     )
 
     base_prefix = os.path.splitext(output_file)[0]
