@@ -835,11 +835,11 @@ def cf_compute_perfect_micro_kmers(settings, project):
     @settings:files trf_perfect_micro_file: file with perfect microsatellites TRs (monomer less than 5bp)
     @settings:files trf_pmicro_kmers_file: file with perfect microsatellites kmers
     """
-    trf_micro_file = settings["files"]["trf_perfect_micro_file"]
-    trf_micro_kmers_file = settings["files"]["trf_pmicro_kmers_file"]
+    trf_pmicro_file = settings["files"]["trf_perfect_micro_file"]
+    trf_pmicro_kmers_file = settings["files"]["trf_pmicro_kmers_file"]
     index = compute_kmer_index_for_trf_file(
         trf_pmicro_file,
-        trf_micro_kmers_file,
+        trf_pmicro_kmers_file,
         k=23,
         max_complexity=None,
         min_complexity=None,
