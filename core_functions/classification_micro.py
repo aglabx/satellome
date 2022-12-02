@@ -145,7 +145,7 @@ def _trs_separate_something(
 
         if family_table_file:
             _save_families_to_file(stats, family_table_file)
-            
+
         return {"filtered": selected, "dataset": N, "total_length": total_length}
 
 
@@ -852,13 +852,13 @@ def cf_get_micro_summary_table(settings, project):
 
     input_gff = project["work_files"]["repeats"][dataset]["trevis"]["micro"]["gff_file"]
     output_tsv = os.path.join(
-        "/home/akomissarov/Dropbox/PySatDNA/reports",
+        settings["reports"],
         project["pid"],
         "microsatellites.summary.tsv",
     )
 
     report_folder = os.path.join(
-        "/home/akomissarov/Dropbox/PySatDNA/reports", project["pid"]
+        settings["reports"], project["pid"]
     )
     if not os.path.isdir(report_folder):
         os.makedirs(report_folder)
