@@ -34,6 +34,7 @@ from trseeker.tools.statistics import get_simple_statistics
 
 
 class RepeatCountStatsModel(object):
+
     def __init__(self):
         self.max_length = 0
         self.min_length = 0
@@ -106,7 +107,7 @@ def _trs_separate_something(
     for i, trf_obj in enumerate(sc_iter_tab_file(input_trf_file, TRModel)):
         trf_objs.append(trf_obj)
     trf_objs.sort(key=lambda x: x.trf_head)
-
+    N = len(trf_objs)
     core_logger.info("Iterate TRs")
 
     stats = defaultdict(RepeatCountStatsModel)
@@ -119,8 +120,6 @@ def _trs_separate_something(
                 if filter_func(trf_obj):
                     selected += 1
                     total_length += trf_obj.trf_array_length
-                    if  i and i % 1000 == 0:
-                        core_logger.info("selected %s from %s " % (selected, i))
                     trf_obj.trf_family, gff_string, mathstr = name_func(trf_obj)
                     fh.write(str(trf_obj))
                     fh_gff.write(gff_string)
@@ -142,12 +141,12 @@ def _trs_separate_something(
             fh_gff.close()
         for key in stats:
             core_logger.info("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
-        core_logger.info("selected %s from %s " % (selected, i))
+        core_logger.info("selected %s from %s " % (selected, N))
 
         if family_table_file:
             _save_families_to_file(stats, family_table_file)
-
-        return {"filtered": selected, "dataset": i + 1, "total_length": total_length}
+            
+        return {"filtered": selected, "dataset": N, "total_length": total_length}
 
 
 def scf_basic_trs_classification(settings, project):
