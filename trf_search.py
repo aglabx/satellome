@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     ### PART 3. Annotation and naming
 
-    ### PART 4. Visualizaion
+    ### PART 4. Visualization
 
     # draw_chromosomes(settings, project)
     # draw_spheres(settings, project)
