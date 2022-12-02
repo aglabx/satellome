@@ -53,6 +53,8 @@ if __name__ == "__main__":
     code_dir = pathlib.Path(__file__).parent.resolve()
     parser_program = os.path.join(code_dir, "trf_parse_raw.py")
 
+    ### PART 1. Running TRF in parallel
+
     output_file = trf_search_by_splitting(
         fasta_file, threads=threads, wdir=output_dir, project=project,
         trf_path=trf_path, 
@@ -111,7 +113,16 @@ if __name__ == "__main__":
         },
     }
 
+    ### PART 2. Classify according to monomer/array features
+
     settings, project = scf_basic_trs_classification(settings, project)
 
     with open(results_file, "w") as fh:
         yaml.dump(project, fh, default_flow_style=False)
+
+    ### PART 3. Annotation and naming
+
+    ### PART 4. Visualizaion
+
+    # draw_chromosomes(settings, project)
+    # draw_spheres(settings, project)
