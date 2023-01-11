@@ -9,7 +9,7 @@ from trseeker.tools.sequence_tools import get_revcomp
 import math
 import plotly.graph_objects as go
 import plotly.express as px
-from trf_drawing import scaffold_length_sort_length, read_trf_file, get_gaps_annotation
+from satelome.trf_drawing import scaffold_length_sort_length, read_trf_file, get_gaps_annotation
 import os
 from collections import Counter
 import pandas as pd
