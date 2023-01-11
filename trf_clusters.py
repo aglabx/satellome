@@ -8,7 +8,7 @@
 from trseeker.tools.sequence_tools import get_revcomp
 import math
 import plotly.graph_objects as go
-
+import plotly.express as px
 
 class Graph:
  
@@ -259,3 +259,22 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
         
         
     _draw_sankey(output_file_name, title_text, labels, source, target, value)
+
+
+def draw_spheres(output_file_name, title_text, df_trs):
+    
+    fig = px.scatter_3d(df_trs, 
+                        x='gc', 
+                        y='period', 
+                        z='pmatch', 
+                        color='family_name', 
+                        size='log_length',
+                    )
+    fig.update_layout(title={
+            'text': title_text,
+            'y':0.99,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'})
+    fig.update_layout(width=800, height=800)
+    fig.write_image(output_file_name)
