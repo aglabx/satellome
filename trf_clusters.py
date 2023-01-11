@@ -261,7 +261,7 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
     _draw_sankey(output_file_name, title_text, labels, source, target, value)
 
 
-def draw_spheres(output_file_name, title_text, df_trs):
+def draw_spheres(output_file_name_prefix, title_text, df_trs):
     
     fig = px.scatter_3d(df_trs, 
                         x='gc', 
@@ -277,4 +277,61 @@ def draw_spheres(output_file_name, title_text, df_trs):
             'xanchor': 'center',
             'yanchor': 'top'})
     fig.update_layout(width=800, height=800)
+    output_file_name = output_file_name_prefix + ".3D.png"
     fig.write_image(output_file_name)
+
+
+    fig = px.scatter_3d(df_trs[df_trs["family_name"] != 'SING'], 
+                        x='gc', 
+                        y='period', 
+                        z='pmatch', 
+                        color='family_name', 
+                        size='log_length',
+                    )
+    fig.update_layout(title={
+            'text': title_text + " No Singletons",
+            'y':0.99,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'})
+    fig.update_layout(width=800, height=800)
+    output_file_name = output_file_name_prefix + ".3D.nosingl.png"
+    fig.write_image(output_file_name) 
+
+    fig = px.scatter(df_trs, 
+                 x="gc", 
+                 y="period", 
+                 color="family_name",
+                 size='log_length'
+                )
+    output_file_name = output_file_name_prefix + ".2D.gc_period.png"
+    fig.write_image(output_file_name) 
+
+    fig = px.scatter(df_trs, 
+                 x="gc", 
+                 y="period", 
+                 color="family_name",
+                 size='log_length'
+                )
+    output_file_name = output_file_name_prefix + ".2D.gc_period.png"
+    fig.write_image(output_file_name)
+
+    fig = px.scatter(df_trs, 
+                 x="gc", 
+                 y="pmatch", 
+                 color="family_name",
+                 size='log_length'
+                )
+    output_file_name = output_file_name_prefix + ".2D.gc_pmatch.png"
+    fig.write_image(output_file_name)
+
+    fig = px.scatter(df_trs, 
+                 x="pmatch", 
+                 y="period", 
+                 color="family_name",
+                 size='log_length'
+                )
+    output_file_name = output_file_name_prefix + ".2D.period_period.png"
+    fig.write_image(output_file_name)
+
+    
