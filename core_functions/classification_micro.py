@@ -852,14 +852,12 @@ def cf_get_micro_summary_table(settings, project):
 
     input_gff = project["work_files"]["repeats"][dataset]["trevis"]["micro"]["gff_file"]
     output_tsv = os.path.join(
-        settings["reports"],
-        project["pid"],
+        settings["folders"]["reports"],
         "microsatellites.summary.tsv",
     )
 
-    report_folder = os.path.join(
-        settings["reports"], project["pid"]
-    )
+    report_folder = settings["folders"]["reports"]
+    
     if not os.path.isdir(report_folder):
         os.makedirs(report_folder)
 
