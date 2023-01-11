@@ -60,7 +60,7 @@ def scaffold_length_sort_dict(fasta_file, lenght_cutoff=100000, name_regexp=None
         if len(seq) < lenght_cutoff:
             continue
         if name_regexp:
-            new_name = re.findall(ANURA_REGEXP, header)
+            new_name = re.findall(name_regexp, header)
             if new_name:
                 name = new_name[0]
         if chm2name:
@@ -83,7 +83,7 @@ def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=No
         if len(seq) < lenght_cutoff:
             continue
         if name_regexp:
-            new_name = re.findall(ANURA_REGEXP, header)
+            new_name = re.findall(name_regexp, header)
             if new_name:
                 name = new_name[0]
         if chm2name:
