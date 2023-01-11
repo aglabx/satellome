@@ -7,6 +7,8 @@
 
 from trseeker.tools.sequence_tools import get_revcomp
 import math
+import plotly.graph_objects as go
+
 
 class Graph:
  
@@ -131,7 +133,12 @@ def name_clusters(df_trs):
         print("Singletons", len(singl))
         for class_name, d in enumerate(items):
             print(len(d), [x[1] for x in d])
-            name = f"{class_name}_{d[0][1]}" 
+            
+            median_monomer = [x[1] for x in d]
+            median_monomer.sort()
+            median_monomer = median_monomer[int(len(median_monomer)/2)]
+            
+            name = f"{class_name}_{median_monomer}" 
             for id1, period in d:
                 df_trs.at[id1, 'family_name'] = name
         for id1, period in singl:
@@ -139,4 +146,116 @@ def name_clusters(df_trs):
 
     return df_trs
         
+
+def _draw_sankey(output_file_name, title_text, labels, source, target, value):
+    fig = go.Figure(data=[go.Sankey(
+        node = dict(
+        pad = 15,
+        thickness = 20,
+        line = dict(color = "black", width = 1),
+        label = labels,
+        color = "blue",
         
+        ),
+        link = dict(
+        source = source,
+        target = target,
+        value = value,
+    ))])
+    fig.update_layout(
+            title_text=title_text, 
+            font_size=10,
+            height=2000,
+            width=2000,
+    )
+    fig.write_image(output_file_name)
+
+def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True):
+
+    G = Graph(list(tr2vector.keys()))
+    for (id1,id2) in distances:
+        G.addEdge(id1, id2, distances[(id1,id2)])
+
+    steps = []
+
+    start_cutoff = int(all_distances[0])
+    
+    for i in range(start_cutoff, 0, -1):
+        G.remove_edges_by_distances(i)
+        comps = G.connectedComponents()
+        print(i, "->", len(comps))
+        items = []
+        singl = []
+        
+        id2INstep = {}
+        name2size = {}
+        name2ids = {}
+        name2id = {}
+        
+        for c in comps:
+            ids = [(G.node2id[id1], df_trs.loc[G.node2id[id1]].period) for id1 in c]
+            if len(ids) > 3:
+                items.append(ids)
+            else:
+                singl += ids
+
+        items.sort(key=lambda x: len(x))
+        for class_name, d in enumerate(items):
+            median_monomer = [x[1] for x in d]
+            median_monomer.sort()
+            median_monomer = median_monomer[int(len(median_monomer)/2)]
+            name = f"{i}_{class_name}_{median_monomer}" 
+            for id1, period in d:
+                id2INstep[id1] = name
+                name2id[name] = id1
+            name2size[name] = len(d)
+            name2ids[name] = d
+            
+        if not skip_singletons and singl:
+            name = f"{i}_SING" 
+            for id1, period in singl:
+                id2INstep[id1] = name
+                name2id[name] = id1
+            name2size[name] = len(singl)
+            name2ids[name] = singl
+            
+        steps.append((id2INstep, name2size, name2ids, name2id))
+
+
+    labels = []
+    source = []
+    target = []
+    value = []
+    name2monomers = {}
+    name2lid = {}
+    lid = 0
+    prev_id2INstep, prev_name2size, name2ids, prev_name2id = steps[0]
+    for name in prev_name2size:
+        labels.append(name)
+        name2lid[name] = lid
+        lid += 1
+
+        name2monomers[name] = name2ids[name]
+        
+    for id2INstep, name2size, name2ids, name2id in steps[1:]:
+        
+        print(name2size)
+        
+        for name in name2size:
+            labels.append(name)
+            name2lid[name] = lid
+            lid += 1
+            
+            start = name2lid[prev_id2INstep[name2id[name]]]
+            end = name2lid[name]
+            
+            source.append(start)
+            target.append(end)
+            value.append(name2size[name])
+            
+            name2monomers[name] = name2ids[name]
+            
+        prev_id2INstep = id2INstep
+        
+        
+    _draw_sankey(output_file_name, title_text, labels, source, target, value)
