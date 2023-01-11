@@ -12,7 +12,7 @@ import math
 
 CENPB_REGEXP = re.compile(r'.ttcg....a..cggg.')
 TELOMERE_REGEXP = re.compile(r'ttagggttagggttagggttagggttaggg')
-ANURA_REGEXP = re.compile("chromosome\: (.*)")
+CHRM_REGEXP = re.compile("chromosome\: (.*)")
 
 chm2name = {
     "NC_060925.1": "Chr1",
@@ -50,7 +50,7 @@ def sort_chrm(name):
         return 24
     return int(v)
 
-def scaffold_length_sort_dict(fasta_file, chm2name, lenght_cutoff=100000, name_regexp=ANURA_REGEXP):
+def scaffold_length_sort_dict(fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None):
     ''' Function that calculates length of scaffolds 
         and return table with scaffold data from fasta file
     '''
@@ -59,11 +59,12 @@ def scaffold_length_sort_dict(fasta_file, chm2name, lenght_cutoff=100000, name_r
         name = header[1:].split()[0]
         if len(seq) < lenght_cutoff:
             continue
-        new_name = re.findall(ANURA_REGEXP, header)
-        if new_name:
-            name = new_name[0]
-            
-        name = chm2name[name]
+        if name_regexp:
+            new_name = re.findall(ANURA_REGEXP, header)
+            if new_name:
+                name = new_name[0]
+        if chm2name:
+            name = chm2name[name]
         scaffold_length.append((name, 1, len(seq)))
         
     scaffold_length.sort(key=lambda x: sort_chrm(x[0]))
@@ -72,7 +73,7 @@ def scaffold_length_sort_dict(fasta_file, chm2name, lenght_cutoff=100000, name_r
     return scaffold_df
 
 
-def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=ANURA_REGEXP):
+def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None):
     ''' Function that calculates length of scaffolds 
         and return table with scaffold data from fasta file
     '''
@@ -81,14 +82,14 @@ def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=AN
         name = header[1:].split()[0]
         if len(seq) < lenght_cutoff:
             continue
-        new_name = re.findall(ANURA_REGEXP, header)
-        if new_name:
-            name = new_name[0]
-            
-        name = chm2name[name]
+        if name_regexp:
+            new_name = re.findall(ANURA_REGEXP, header)
+            if new_name:
+                name = new_name[0]
+        if chm2name:
+            name = chm2name[name]
         scaffold_length.append((name, 1, len(seq)))
         
-    
     scaffold_df = pd.DataFrame(scaffold_length, columns=['scaffold', 'start', 'end'])
     scaffold_df.sort_values(by=['end'], inplace=True, ascending=False)
     return scaffold_df
@@ -118,10 +119,44 @@ def check_patterns(data):
     centromers = data.loc[data['centromere'] == 1]
     telomers = data.loc[data['telomere'] == 1]
     return (centromers, telomers)
+    
 
+def get_gaps_annotation(fasta_file, lenght_cutoff=100000):
+    ''' Function that finding all gaps.
+    '''
+    gaps = []
+    for header, seq in sc_iter_fasta_brute(fasta_file):
+        name = header[1:].split()[0]
+        if len(seq) < lenght_cutoff:
+            continue
+        in_gap = False
+        gap_start = None
+        print(name)
+        for i in range(len(seq)):
+            if seq[i] == 'N':
+                if not in_gap:
+                    in_gap = True
+                    gap_start = i
+                continue
+            if in_gap:
+                in_gap = False
+                gaps.append([name, gap_start, i, abs(gap_start - i)])
+        if in_gap:
+            in_gap = False
+            gaps.append([name, gap_start, i, abs(gap_start - i)])
+    return gaps
 
-def draw_genome(fasta_file, trf_file):
+def get_gaps_annotation_re(fasta_file, lenght_cutoff=100000):
+    ''' Function that finding all gaps.
     '''
-    '''
-    trf_df = read_table(trf_file)
-    scaffold_df = scaffold_length(fasta_file, lenght_cutoff=100000, name_regexp=ANURA_REGEXP)
+    gaps = []
+    for header, seq in sc_iter_fasta_brute(fasta_file):
+        name = header[1:].split()[0]
+        if len(seq) < lenght_cutoff:
+            continue
+        print(name)
+        hits = re.findall("N+", seq)
+        print(hits)
+        for pos,item in hits:
+            gaps.append((name, pos, pos+len(item)))
+    return gaps
