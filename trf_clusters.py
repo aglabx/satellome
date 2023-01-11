@@ -9,9 +9,10 @@ from trseeker.tools.sequence_tools import get_revcomp
 import math
 import plotly.graph_objects as go
 import plotly.express as px
-from satelome.trf_drawing import scaffold_length_sort_length, read_trf_file
+from trf_drawing import scaffold_length_sort_length, read_trf_file, get_gaps_annotation
 import os
-
+from collections import Counter
+import pandas as pd
 
 class Graph:
  
@@ -94,6 +95,8 @@ def fill_vectors(df_trs, token2id, token2revtoken, k=5):
         N = len(seq)-k+1
         for i in range(N):
             token = seq[i:i+k]
+            if "N" in token:
+                continue
             vector[token2id[token]] += 1
             vector[token2id[token2revtoken[token]]] += 1
         vector = [100.*x/(2*N) for x in vector]
@@ -107,20 +110,20 @@ def compute_distances(tr2vector):
             distances[(id1,id2)] = math.dist(tr2vector[id1], tr2vector[id2])
     return distances
 
-def name_clusters(df_trs):
+def name_clusters(df_trs, level=1):
     token2id, token2revtoken = get_pentatokens()
     tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
     distances = compute_distances(tr2vector)
 
     all_distances = list(distances.values())
-    all_distances = set(map(all_distances, int))
+    all_distances = list(set(map(int, all_distances)))
     all_distances.sort(reverse=True)
 
     G = Graph(list(tr2vector.keys()))
     for (id1,id2) in distances:
         G.addEdge(id1, id2, distances[(id1,id2)])
 
-    for i in range(1, 0, -1):
+    for i in range(level, level-1, -1):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
         print(i, "->", len(comps))
@@ -173,6 +176,7 @@ def _draw_sankey(output_file_name, title_text, labels, source, target, value):
     )
     fig.write_image(output_file_name)
 
+
 def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True):
 
     G = Graph(list(tr2vector.keys()))
@@ -183,10 +187,20 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
 
     start_cutoff = int(all_distances[0])
     
+    name2trs = {}
+    last_n_comp = 0
+    
+    
     for i in range(start_cutoff, 0, -1):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
         print(i, "->", len(comps))
+        if len(comps) == last_n_comp:
+            print("..skipped")
+            continue
+        last_n_comp = len(comps)
+        
+        
         items = []
         singl = []
         
@@ -213,6 +227,8 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
                 name2id[name] = id1
             name2size[name] = len(d)
             name2ids[name] = d
+            name2trs[name] = d
+            
             
         if not skip_singletons and singl:
             name = f"{i}_SING" 
@@ -262,6 +278,8 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
         
         
     _draw_sankey(output_file_name, title_text, labels, source, target, value)
+    
+    return name2monomers, name2lid, name2trs
 
 
 def draw_spheres(output_file_name_prefix, title_text, df_trs):
@@ -338,12 +356,19 @@ def draw_spheres(output_file_name_prefix, title_text, df_trs):
     fig.write_image(output_file_name)
 
 
-def _draw_chromosomes(scaffold_for_plot, title_text):
+def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
 
+    if use_chrm:
+        scaffold_items = scaffold_for_plot['chrm']
+        yaxis_title='Chromosome name'
+    else:
+        scaffold_items = scaffold_for_plot['scaffold']
+        yaxis_title='Scaffold name'
+    
     fig = go.Figure()
     fig.add_trace(go.Bar(
         x=scaffold_for_plot['end'],
-        y=scaffold_for_plot['chrm'],
+        y=scaffold_items,
         orientation='h',
         name = 'Scaffold',
         marker_color='#f3f4f7',
@@ -355,7 +380,7 @@ def _draw_chromosomes(scaffold_for_plot, title_text):
             'x':0.5,
             'xanchor': 'center',
             'yanchor': 'top'}, 
-            xaxis_title='bp', yaxis_title='Chromosome name')
+            xaxis_title='bp', yaxis_title=yaxis_title)
 
     fig.update_layout(
         xaxis=dict(
@@ -405,12 +430,48 @@ def _draw_chromosomes(scaffold_for_plot, title_text):
 
     return fig
 
-def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_plot):
+def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_plot, gaps_df, use_chrm=False, enhance=2500000, gap_cutoff=1000):
 
-    fig = _draw_chromosomes(scaffold_for_plot, title_text)
-    names = set([x["name"] for i,x in df_trs.iterrows()])
+        
+    if use_chrm:
+        _df_trs = df_trs[df_trs['chrm'].isin(scaffold_for_plot['chrm'])]
+    else:
+        _df_trs = df_trs[df_trs['chrm'].isin(scaffold_for_plot['scaffold'])]
+
+        
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    fig.add_trace(go.Bar(
+            base=gaps_df['start'],
+            x=gaps_df['length'],
+            y=gaps_df['scaffold'],
+            orientation="h",
+            name="gaps",
+            marker_color='rgba(0, 0, 0)',
+        ))
+    output_file_name = output_file_name_prefix + ".gaps.png"
+    fig.write_image(output_file_name)
+    
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff]
+    _gaps_df["length"] = [max(x["length"], 2000000) for i,x in _gaps_df.iterrows()]
+    fig.add_trace(go.Bar(
+            base=_gaps_df['start'],
+            x=_gaps_df['length'],
+            y=_gaps_df['scaffold'],
+            orientation="h",
+            name="gaps",
+            marker_color='rgba(0, 0, 0)',
+        ))
+    output_file_name = output_file_name_prefix + ".gaps.1kb.enhanced.png"
+    fig.write_image(output_file_name)
+    
+    
+        
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    _df_trs['chrm'] = [x['scaffold'] for i, x in _df_trs.iterrows()]
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
-        items = df_trs[df_trs["name"]==name]
+        items = _df_trs[_df_trs["family_name"]==name]
         fig.add_trace(go.Bar(
             base=items['start'],
             x=items['length'],
@@ -420,12 +481,16 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
         ))
     output_file_name = output_file_name_prefix + ".raw.png"
     fig.write_image(output_file_name)
+    
+    
 
-    fig = _draw_chromosomes(scaffold_for_plot)
-    names = set([x["name"] for i,x in df_trs.iterrows()])
+
+    _title_text = title_text + " (enhanced)"
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
-        items = df_trs[df_trs["name"]==name]
-        items["length"] = [max(x["length"], 1000000) for i,x in items.iterrows()]
+        items = _df_trs[_df_trs["family_name"]==name]
+        items["length"] = [max(x["length"], enhance) for i,x in items.iterrows()]
         fig.add_trace(go.Bar(
             base=items['start'],
             x=items['length'],
@@ -436,14 +501,14 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     output_file_name = output_file_name_prefix + ".enchanced.png"
     fig.write_image(output_file_name)
 
-
-    fig = _draw_chromosomes(scaffold_for_plot)
-    names = set([x["name"] for i,x in df_trs.iterrows()])
+    _title_text = title_text + " (enhanced, no singletons)"
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         if name == "SING":
             continue
-        items = df_trs[df_trs["name"]==name]
-        items["length"] = [max(x["length"], 1000000) for i,x in items.iterrows()]
+        items = _df_trs[_df_trs["family_name"]==name]
+        items["length"] = [max(x["length"], enhance) for i,x in items.iterrows()]
         fig.add_trace(go.Bar(
             base=items['start'],
             x=items['length'],
@@ -453,13 +518,15 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
         ))
     output_file_name = output_file_name_prefix + ".nosing.enchanced.png"
     fig.write_image(output_file_name)
-
-    fig = _draw_chromosomes(scaffold_for_plot)
-    names = set([x["name"] for i,x in df_trs.iterrows()])
+    
+    
+    _title_text = title_text + " (no singletons)"
+    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         if name == "SING":
             continue
-        items = df_trs[df_trs["name"]==name]
+        items = _df_trs[_df_trs["family_name"]==name]
         fig.add_trace(go.Bar(
             base=items['start'],
             x=items['length'],
@@ -471,22 +538,30 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     fig.write_image(output_file_name)
 
 
-def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon):
+def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon, lenght_cutoff=10000000, level=1, enhance=1000000):
 
-
-    scaffold_df = scaffold_length_sort_length(fasta_file, chm2name, lenght_cutoff=100000, name_regexp=None)
+    scaffold_df = scaffold_length_sort_length(fasta_file, lenght_cutoff=lenght_cutoff)
     df_trs = read_trf_file(trf_file)
 
-
-
-    df_trs, tr2vector, distances, all_distances  = name_clusters(df_trs)
+    df_trs, tr2vector, distances, all_distances  = name_clusters(df_trs, level=level)
 
     output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.png")
     title_text = f"Tandem repeats flow in {taxon}"
-    draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True)
+    name2monomers, name2lid, name2ids = draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True)
+
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.spheres")
     title_text = f"Tandem repeats distribution in {taxon}"
     draw_spheres(output_file_name_prefix, title_text, df_trs)
+
+    gaps_data = get_gaps_annotation(fasta_file, lenght_cutoff=lenght_cutoff)
+    gaps_lengths = Counter([x[-1] for x in gaps_data])
+
+    print("Gaps distribution:", gaps_lengths)
+
+    gaps_df = pd.DataFrame(gaps_data, columns =['scaffold', 'start', 'end', 'length'])
+
+    df_trs['chrm'] = [x['scaffold'] for i, x in df_trs.iterrows()]
+
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
     title_text = f"Tandem repeats in {taxon}"
-    draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_df)
+    draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_df, gaps_df, enhance=enhance, use_chrm=False, gap_cutoff=50)
