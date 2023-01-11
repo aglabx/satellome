@@ -9,6 +9,9 @@ from trseeker.tools.sequence_tools import get_revcomp
 import math
 import plotly.graph_objects as go
 import plotly.express as px
+from trf_drawing import scaffold_length_sort_length, read_trf_file
+import os
+
 
 class Graph:
  
@@ -144,7 +147,7 @@ def name_clusters(df_trs):
         for id1, period in singl:
             df_trs.at[id1, 'family_name'] = "SING"
 
-    return df_trs
+    return df_trs, tr2vector, distances, all_distances
         
 
 def _draw_sankey(output_file_name, title_text, labels, source, target, value):
@@ -467,3 +470,23 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     output_file_name = output_file_name_prefix + ".nosing.raw.png"
     fig.write_image(output_file_name)
 
+
+def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon):
+
+
+    scaffold_df = scaffold_length_sort_length(fasta_file, chm2name, lenght_cutoff=100000, name_regexp=None)
+    df_trs = read_trf_file(trf_file)
+
+
+
+    df_trs, tr2vector, distances, all_distances  = name_clusters(df_trs)
+
+    output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.png")
+    title_text = f"Tandem repeats flow in {taxon}"
+    draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True)
+    output_file_name_prefix = os.path.join(output_folder, f"{taxon}.spheres")
+    title_text = f"Tandem repeats distribution in {taxon}"
+    draw_spheres(output_file_name_prefix, title_text, df_trs)
+    output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
+    title_text = f"Tandem repeats in {taxon}"
+    draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_df)

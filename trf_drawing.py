@@ -94,7 +94,7 @@ def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=AN
     return scaffold_df
 
 
-def read_table(trf_file):
+def read_trf_file(trf_file):
     ''' Function that convert Aleksey script's trf table to csv.
     '''
     data = pd.read_csv(trf_file, sep='\t', names=['project', '1', 'id', '2', '3', '4', 'start', 'end', 'period', '5', 'pmatch','6', '7', 'mono', 'array', 'gc', '8', '9', 'scaffold', '10', 'length', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26'], low_memory=False)
