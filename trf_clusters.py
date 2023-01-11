@@ -334,4 +334,136 @@ def draw_spheres(output_file_name_prefix, title_text, df_trs):
     output_file_name = output_file_name_prefix + ".2D.period_period.png"
     fig.write_image(output_file_name)
 
-    
+
+def _draw_chromosomes(scaffold_for_plot, title_text):
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=scaffold_for_plot['end'],
+        y=scaffold_for_plot['chrm'],
+        orientation='h',
+        name = 'Scaffold',
+        marker_color='#f3f4f7',
+    ))
+    fig.update_layout(barmode='overlay')
+    fig.update_layout(title={
+            'text': title_text,
+            'y':0.99,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'}, 
+            xaxis_title='bp', yaxis_title='Chromosome name')
+
+    fig.update_layout(
+        xaxis=dict(
+            automargin=True,
+            showline=True,
+            showgrid=False,
+            showticklabels=True,
+            linecolor='rgb(204, 204, 204)',
+            linewidth=1,
+            ticks='outside',
+            rangemode="nonnegative",
+            tickfont=dict(
+                family='Arial',
+                size=15,
+                color='rgb(82, 82, 82)',
+            ),
+        ),
+        # Turn off everything on y axis
+        yaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+            showticklabels=True,
+            ticklabelstep=1,
+            tickwidth=15,
+            tickfont=dict(
+                family='Arial',
+                size=15,
+                color='rgb(82, 82, 82)',
+            ),
+        ),
+        width=1400,
+        height=900,
+        margin=dict(
+            autoexpand=True,
+            #l=150,
+            #r=20,
+            #t=110,
+        ),
+        showlegend=True,
+        plot_bgcolor='white'
+    )
+
+    fig.update_layout(legend = dict(font = dict(family = "Arial", size = 15, color = "black")))
+
+    fig.update_xaxes(range=[0, max(scaffold_for_plot['end'])+1000])
+
+    return fig
+
+def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_plot):
+
+    fig = _draw_chromosomes(scaffold_for_plot, title_text)
+    names = set([x["name"] for i,x in df_trs.iterrows()])
+    for name in names:
+        items = df_trs[df_trs["name"]==name]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".raw.png"
+    fig.write_image(output_file_name)
+
+    fig = _draw_chromosomes(scaffold_for_plot)
+    names = set([x["name"] for i,x in df_trs.iterrows()])
+    for name in names:
+        items = df_trs[df_trs["name"]==name]
+        items["length"] = [max(x["length"], 1000000) for i,x in items.iterrows()]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".enchanced.png"
+    fig.write_image(output_file_name)
+
+
+    fig = _draw_chromosomes(scaffold_for_plot)
+    names = set([x["name"] for i,x in df_trs.iterrows()])
+    for name in names:
+        if name == "SING":
+            continue
+        items = df_trs[df_trs["name"]==name]
+        items["length"] = [max(x["length"], 1000000) for i,x in items.iterrows()]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".nosing.enchanced.png"
+    fig.write_image(output_file_name)
+
+    fig = _draw_chromosomes(scaffold_for_plot)
+    names = set([x["name"] for i,x in df_trs.iterrows()])
+    for name in names:
+        if name == "SING":
+            continue
+        items = df_trs[df_trs["name"]==name]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".nosing.raw.png"
+    fig.write_image(output_file_name)
+
