@@ -13,6 +13,9 @@ from satelome.trf_drawing import scaffold_length_sort_length, read_trf_file, get
 import os
 from collections import Counter
 import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
 
 class Graph:
  
@@ -90,24 +93,29 @@ def get_pentatokens():
 def fill_vectors(df_trs, token2id, token2revtoken, k=5):
     tr2vector = {}
     for id1, x in df_trs.iterrows():
-        vector = [0] * len(token2id)
+        vector = np.zeros((1,len(token2id)))
         seq = x['array'].upper()
         N = len(seq)-k+1
         for i in range(N):
             token = seq[i:i+k]
             if "N" in token:
                 continue
-            vector[token2id[token]] += 1
-            vector[token2id[token2revtoken[token]]] += 1
-        vector = [100.*x/(2*N) for x in vector]
+            vector[0,token2id[token]] += 1
+            vector[0,token2id[token2revtoken[token]]] += 1
+        vector /= 2*N
         tr2vector[id1] = vector
     return tr2vector
 
 def compute_distances(tr2vector):
     distances = {}
-    for id1 in tr2vector:
-        for id2 in tr2vector:
-            distances[(id1,id2)] = math.dist(tr2vector[id1], tr2vector[id2])
+    keys = list(tr2vector.keys())
+    for i, id1 in enumerate(keys):
+        if i % 100 == 0:
+            print(f"Computed {i}/{len(keys)}")
+        for id2 in keys[i:]:
+            # distances[(id1,id2)] = math.dist(tr2vector[id1], tr2vector[id2])
+            distances[(id1,id2)] = 1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0]
+            distances[(id2,id1)] = distances[(id1,id2)]
     return distances
 
 def name_clusters(df_trs, level=1):
@@ -118,15 +126,15 @@ def name_clusters(df_trs, level=1):
     all_distances = list(distances.values())
     all_distances = list(set(map(int, all_distances)))
     all_distances.sort(reverse=True)
+    start_cutoff = int(all_distances[0])
 
     G = Graph(list(tr2vector.keys()))
     for (id1,id2) in distances:
         G.addEdge(id1, id2, distances[(id1,id2)])
 
-    for i in range(level, level-1, -1):
+    for i in range(start_cutoff, level-1, -1):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
-        print(i, "->", len(comps))
         items = []
         singl = []
         for c in comps:
@@ -136,10 +144,8 @@ def name_clusters(df_trs, level=1):
             else:
                 singl += ids
         items.sort(key=lambda x: len(x))
-        print("Singletons", len(singl))
+        print(i, "->", len(comps), len(singl))
         for class_name, d in enumerate(items):
-            print(len(d), [x[1] for x in d])
-            
             median_monomer = [x[1] for x in d]
             median_monomer.sort()
             median_monomer = median_monomer[int(len(median_monomer)/2)]
@@ -147,6 +153,8 @@ def name_clusters(df_trs, level=1):
             name = f"{class_name}_{median_monomer}" 
             for id1, period in d:
                 df_trs.at[id1, 'family_name'] = name
+                df_trs.at[id1, 'locus_name'] = name
+
         for id1, period in singl:
             df_trs.at[id1, 'family_name'] = "SING"
 
@@ -189,7 +197,7 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
     
     name2trs = {}
     last_n_comp = 0
-    
+    id2names = {}
     
     for i in range(start_cutoff, 0, -1):
         G.remove_edges_by_distances(i)
@@ -228,13 +236,20 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
             name2size[name] = len(d)
             name2ids[name] = d
             name2trs[name] = d
-            
+
+            for id_, _ in d:
+                id2names.setdefault(id_, [])
+                id2names[id_].append(name)
             
         if not skip_singletons and singl:
             name = f"{i}_SING" 
             for id1, period in singl:
                 id2INstep[id1] = name
                 name2id[name] = id1
+
+                id2names.setdefault(id1, [])
+                id2names[id1].append(name)
+
             name2size[name] = len(singl)
             name2ids[name] = singl
             
@@ -279,7 +294,7 @@ def draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_
         
     _draw_sankey(output_file_name, title_text, labels, source, target, value)
     
-    return name2monomers, name2lid, name2trs
+    return name2monomers, name2lid, name2trs, id2names
 
 
 def draw_spheres(output_file_name_prefix, title_text, df_trs):
@@ -486,7 +501,7 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
 
 
     _title_text = title_text + " (enhanced)"
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         items = _df_trs[_df_trs["family_name"]==name]
@@ -502,7 +517,7 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     fig.write_image(output_file_name)
 
     _title_text = title_text + " (enhanced, no singletons)"
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         if name == "SING":
@@ -521,7 +536,7 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     
     
     _title_text = title_text + " (no singletons)"
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         if name == "SING":
