@@ -114,19 +114,23 @@ def compute_distances(tr2vector):
             print(f"Computed {i}/{len(keys)}")
         for id2 in keys[i:]:
             # distances[(id1,id2)] = math.dist(tr2vector[id1], tr2vector[id2])
-            distances[(id1,id2)] = 1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0]
+            distances[(id1,id2)] = 100*(1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0])
             distances[(id2,id1)] = distances[(id1,id2)]
     return distances
 
-def name_clusters(df_trs, level=1):
+
+def get_disances(df_trs):
     token2id, token2revtoken = get_pentatokens()
     tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
     distances = compute_distances(tr2vector)
+    return distances, tr2vector
 
+def name_clusters(distances, tr2vector, df_trs, level=1):
+    
     all_distances = list(distances.values())
     all_distances = list(set(map(int, all_distances)))
     all_distances.sort(reverse=True)
-    start_cutoff = int(all_distances[0])
+    start_cutoff = min(int(all_distances[0]), 50)
 
     G = Graph(list(tr2vector.keys()))
     for (id1,id2) in distances:
@@ -558,7 +562,8 @@ def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon, lenght_cutoff
     scaffold_df = scaffold_length_sort_length(fasta_file, lenght_cutoff=lenght_cutoff)
     df_trs = read_trf_file(trf_file)
 
-    df_trs, tr2vector, distances, all_distances  = name_clusters(df_trs, level=level)
+    distances, tr2vector = get_disances(df_trs)
+    df_trs, tr2vector, all_distances  = name_clusters(distances, tr2vector, df_trs, level=level)
 
     output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.png")
     title_text = f"Tandem repeats flow in {taxon}"
