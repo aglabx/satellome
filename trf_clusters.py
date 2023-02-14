@@ -15,7 +15,7 @@ from collections import Counter
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-
+from intervaltree import IntervalTree
 
 class Graph:
  
@@ -106,15 +106,46 @@ def fill_vectors(df_trs, token2id, token2revtoken, k=5):
         tr2vector[id1] = vector
     return tr2vector
 
+def fill_vectors_arrays(arrays, token2id, token2revtoken, k=5):
+    tr2vector = {}
+    for iid, array in enumerate(arrays):
+        vector = np.zeros((1,len(token2id)))
+        seq = array.upper()
+        N = len(seq)-k+1
+        for i in range(N):
+            token = seq[i:i+k]
+            if "N" in token:
+                continue
+            vector[0,token2id[token]] += 1
+            vector[0,token2id[token2revtoken[token]]] += 1
+        vector /= 2*N
+        tr2vector[iid] = vector
+    return tr2vector
+
+
 def compute_distances(tr2vector):
+    return compute_distances_cosine(tr2vector)
+
+
+def compute_distances_cosine(tr2vector):
     distances = {}
     keys = list(tr2vector.keys())
     for i, id1 in enumerate(keys):
         if i % 100 == 0:
             print(f"Computed {i}/{len(keys)}")
         for id2 in keys[i:]:
-            # distances[(id1,id2)] = math.dist(tr2vector[id1], tr2vector[id2])
             distances[(id1,id2)] = 100*(1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0])
+            distances[(id2,id1)] = distances[(id1,id2)]
+    return distances
+
+def compute_distances_euclidean(tr2vector):
+    distances = {}
+    keys = list(tr2vector.keys())
+    for i, id1 in enumerate(keys):
+        if i % 100 == 0:
+            print(f"Computed {i}/{len(keys)}")
+        for id2 in keys[i:]:
+            distances[(id1,id2)] = 100*math.dis(tr2vector[id1], tr2vector[id2])[0][0]
             distances[(id2,id1)] = distances[(id1,id2)]
     return distances
 
@@ -449,16 +480,16 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
 
     return fig
 
-def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_plot, gaps_df, use_chrm=False, enhance=2500000, gap_cutoff=1000):
+def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_plot, gaps_df, repeats_with_gap, repeats_without_gaps, use_chrm=False, enhance=2000000, gap_cutoff=1000):
 
-        
     if use_chrm:
         _df_trs = df_trs[df_trs['chrm'].isin(scaffold_for_plot['chrm'])]
     else:
         _df_trs = df_trs[df_trs['chrm'].isin(scaffold_for_plot['scaffold'])]
 
-        
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    ### 1. Raw gaps
+    title_text_ = title_text + "(raw gaps)"
+    fig = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
     fig.add_trace(go.Bar(
             base=gaps_df['start'],
             x=gaps_df['length'],
@@ -470,9 +501,11 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
     output_file_name = output_file_name_prefix + ".gaps.png"
     fig.write_image(output_file_name)
     
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    ### 2. Enhanced gaps
+    title_text_ = title_text + "(enlarged gaps)"
+    fig = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
     _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff]
-    _gaps_df["length"] = [max(x["length"], 2000000) for i,x in _gaps_df.iterrows()]
+    _gaps_df["length"] = [max(x["length"], enhance) for i,x in _gaps_df.iterrows()]
     fig.add_trace(go.Bar(
             base=_gaps_df['start'],
             x=_gaps_df['length'],
@@ -481,13 +514,97 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
             name="gaps",
             marker_color='rgba(0, 0, 0)',
         ))
-    output_file_name = output_file_name_prefix + ".gaps.1kb.enhanced.png"
+    output_file_name = output_file_name_prefix + f".gaps.{gap_cutoff}bp.enhanced.png"
     fig.write_image(output_file_name)
     
     
-        
-    fig = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
-    _df_trs['chrm'] = [x['scaffold'] for i, x in _df_trs.iterrows()]
+    ### #3. Enhanced repeats_with_gap 
+    title_text_ = title_text + "(enlarged TRs with gaps)"
+    size = enhance
+    fig = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
+    for chrm, start, end, family_name, gap_type, length in repeats_with_gap:
+        if gap_type == "aN" and length < size:
+            fig.add_trace(go.Bar(
+                base=[start],
+                x=[size],
+                y=[chrm],
+                orientation="h",
+                name=family_name
+            ))
+            fig.add_trace(go.Bar(
+                base=[start+size],
+                x=[size],
+                y=[chrm],
+                orientation="h",
+                name="gaps",
+                marker_color='rgba(0, 0, 0)',
+            ))
+        elif gap_type == "Na" and length < size:
+            fig.add_trace(go.Bar(
+                base=[start],
+                x=[size],
+                y=[chrm],
+                orientation="h",
+                name="gaps",
+                marker_color='rgba(0, 0, 0)',
+            ))
+            fig.add_trace(go.Bar(
+                base=[start+size],
+                x=[size+size],
+                y=[chrm],
+                orientation="h",
+                name=family_name
+                
+            ))
+        elif gap_type == "aNa" and length < size:
+            fig.add_trace(go.Bar(
+                base=[start],
+                x=[size*2/3],
+                y=[chrm],
+                orientation="h",
+                name=family_name
+            ))
+            fig.add_trace(go.Bar(
+                base=[start+size*2/3],
+                x=[size*2/3],
+                y=[chrm],
+                orientation="h",
+                name="gaps",
+                marker_color='rgba(0, 0, 0)',
+            ))
+            fig.add_trace(go.Bar(
+                base=[start++size*2/3++size*2/3],
+                x=[size*2/3],
+                y=[chrm],
+                orientation="h",
+                name=family_name
+                
+            ))            
+    output_file_name = output_file_name_prefix + ".repeats.with.gaps.enhanced.png"
+    fig.write_image(output_file_name)
+
+
+    ### #4. Enhanced TRs without gaps
+    _title_text = title_text + " (TRs without gaps)"
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for x in repeats_without_gaps])
+    for name in names:
+        items = [x for x in repeats_without_gaps if x["family_name"]==name]
+        fig.add_trace(go.Bar(
+            base=[x.start for x in repeats_without_gaps],
+            x=[max(x.length,size) for x in repeats_without_gaps],
+            y=[x.chrm for x in repeats_without_gaps],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".repeats.nogaps.enhanced.png"
+    fig.write_image(output_file_name)
+
+
+    ### #5. Raw all TRs
+
+    _title_text = title_text + " (all)"
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
         items = _df_trs[_df_trs["family_name"]==name]
@@ -500,11 +617,48 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
         ))
     output_file_name = output_file_name_prefix + ".raw.png"
     fig.write_image(output_file_name)
-    
-    
 
+    ### #6. Raw all TRs no singletons
 
-    _title_text = title_text + " (enhanced)"
+    _title_text = title_text + " (no singletons)"
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
+    for name in names:
+        if name == "SING":
+            continue
+        items = _df_trs[_df_trs["family_name"]==name]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".nosing.png"
+    fig.write_image(output_file_name)
+
+    ### #7. Raw TRs singletons
+
+    _title_text = title_text + " (no singletons)"
+    fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
+    names = set([x["family_name"] for i,x in _df_trs.iterrows()])
+    for name in names:
+        if name != "SING":
+            continue
+        items = _df_trs[_df_trs["family_name"]==name]
+        fig.add_trace(go.Bar(
+            base=items['start'],
+            x=items['length'],
+            y=items['chrm'],
+            orientation="h",
+            name=name
+        ))
+    output_file_name = output_file_name_prefix + ".sing.png"
+    fig.write_image(output_file_name)
+
+    ### #8. Raw all TRs (enhanced)
+
+    _title_text = title_text + " (enlarged, all)"
     fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
@@ -517,10 +671,12 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
             orientation="h",
             name=name
         ))
-    output_file_name = output_file_name_prefix + ".enchanced.png"
+    output_file_name = output_file_name_prefix + ".raw.enhanced.png"
     fig.write_image(output_file_name)
 
-    _title_text = title_text + " (enhanced, no singletons)"
+    ### #9. Raw all TRs no singletons (enhanced)
+
+    _title_text = title_text + " (enlarged, no singletons)"
     fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
@@ -537,15 +693,17 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
         ))
     output_file_name = output_file_name_prefix + ".nosing.enchanced.png"
     fig.write_image(output_file_name)
-    
-    
-    _title_text = title_text + " (no singletons)"
+
+    ### #10. Raw TRs singletons (enhanced)
+
+    _title_text = title_text + " (enlarged, only singletons)"
     fig = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
     names = set([x["family_name"] for i,x in _df_trs.iterrows()])
     for name in names:
-        if name == "SING":
+        if name != "SING":
             continue
         items = _df_trs[_df_trs["family_name"]==name]
+        items["length"] = [max(x["length"], enhance) for i,x in items.iterrows()]
         fig.add_trace(go.Bar(
             base=items['start'],
             x=items['length'],
@@ -553,26 +711,40 @@ def draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_for_pl
             orientation="h",
             name=name
         ))
-    output_file_name = output_file_name_prefix + ".nosing.raw.png"
+    output_file_name = output_file_name_prefix + ".sing.enchanced.png"
     fig.write_image(output_file_name)
 
 
-def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon, lenght_cutoff=10000000, level=1, enhance=1000000):
+def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon, lenght_cutoff=10000000, level=1, enhance=1000000, gap_cutoff=1000):
 
+    print("Loading chromosomes...")
     scaffold_df = scaffold_length_sort_length(fasta_file, lenght_cutoff=lenght_cutoff)
-    df_trs = read_trf_file(trf_file)
 
+    print("Loading trs...")
+    df_trs = read_trf_file(trf_file)
+    print(len(df_trs))
+
+    print("Computing distances...")
     distances, tr2vector = get_disances(df_trs)
-    df_trs, tr2vector, all_distances  = name_clusters(distances, tr2vector, df_trs, level=level)
+    print("Naming repeats...")
+    df_trs, tr2vector, distances, all_distances  = name_clusters(distances, tr2vector, df_trs, level=level)
+
+    if not os.path.isdir(output_folder):
+        os.makedirs(output_folder)
+
+    ### TODO: save distances and tr2vector
 
     output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.png")
     title_text = f"Tandem repeats flow in {taxon}"
-    name2monomers, name2lid, name2ids = draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True)
+    print("Draw sankey...")
+    name2monomers, name2lid, name2ids, id2names = draw_sankey(output_file_name, title_text, df_trs, tr2vector, distances, all_distances, skip_singletons=True)
 
+    print("Draw spheres...")
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.spheres")
     title_text = f"Tandem repeats distribution in {taxon}"
     draw_spheres(output_file_name_prefix, title_text, df_trs)
 
+    print("Draw gaps...")
     gaps_data = get_gaps_annotation(fasta_file, lenght_cutoff=lenght_cutoff)
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
@@ -582,6 +754,51 @@ def draw_all(trf_file, fasta_file, chm2name, output_folder, taxon, lenght_cutoff
 
     df_trs['chrm'] = [x['scaffold'] for i, x in df_trs.iterrows()]
 
+    chrms = set([x[0] for x in gaps_data])
+    print(chrms)
+
+    chrm2gapIT = {}
+    for chrm in chrms:
+        chrm2gapIT[chrm] = IntervalTree()
+        
+    for chrm, start, end, length in gaps_data:
+        chrm2gapIT[chrm].addi(start, end, "gap")
+
+    repeats_with_gap = []
+    repeats_without_gaps = []
+    for i, d in df_trs.iterrows():
+        if d.chrm not in chrm2gapIT:
+            continue
+        found_gaps = chrm2gapIT[d.chrm][d.start-10000:d.end+10000]
+        if not found_gaps:
+            repeats_without_gaps.append(d)
+            continue
+        found_gaps = list(found_gaps)
+        start_gap = min([x.begin for x in found_gaps])
+        end_gap = max([x.end for x in found_gaps])
+        
+        if d.start < start_gap and d.end < end_gap:
+            gap_type = "aN"
+        elif d.start < start_gap and d.end > end_gap:
+            gap_type = "aNa"
+        elif start_gap < d.start:
+            gap_type = "Na"
+        else:
+            print("Unknown")
+            print(d.family_name, d.start, d.end, start_gap, end_gap)
+        repeats_with_gap.append([
+            d.chrm,
+            min(d.start, start_gap),
+            max(d.end, end_gap),
+            d.family_name,
+            gap_type,
+            abs(min(d.start, start_gap) - max(d.end, end_gap)),
+        ])
+
+    ### TODO: save gaps
+    
+    print("Draw karyotypes...")
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
     title_text = f"Tandem repeats in {taxon}"
-    draw_karyotypes(output_file_name_prefix, title_text, df_trs, scaffold_df, gaps_df, enhance=enhance, use_chrm=False, gap_cutoff=50)
+    draw_karyotypes(output_file_name_prefix, taxon, df_trs, scaffold_df, gaps_df, repeats_with_gap, repeats_without_gaps, use_chrm=chm2name, enhance=enhance, gap_cutoff=gap_cutoff)
+
