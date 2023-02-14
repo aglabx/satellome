@@ -37,12 +37,17 @@ if __name__ == "__main__":
     trf_path = args["trf"]
 
     genome_size = int(args["genome_size"])
-    if not os.path.isdir(output_dir):
-        os.makedirs(output_dir)
+    
+    if output_dir == results_file:
+        print("Error: output folder and results files are the same.")
+        sys.exit(1)
 
     if not output_dir.startswith("/"):
         print(f"Error: please provide the full path for output: {output_dir}")
         sys.exit(1)
+
+    if not os.path.isdir(output_dir):
+        os.makedirs(output_dir)
 
     if genome_size == 0:
         print("Computing genome size...", end=" ")
