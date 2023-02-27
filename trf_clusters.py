@@ -185,12 +185,14 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
         singl = []
         for c in comps:
             ids = [(G.node2id[id1], df_trs.loc[G.node2id[id1]].period) for id1 in c]
-            if len(ids) > 3:
+            if len(ids) > 3:  # Why 3? It should be 1
                 items.append(ids)
             else:
                 singl += ids
         items.sort(key=lambda x: len(x))
-        print(i, "->", len(comps), len(singl))
+        print(
+            i, "->", len(comps), len(singl)
+        )  # print(f"For distance {i} -> total number of components is {len(comps)} and {len(singl)} out of them are singletones")
         for class_name, d in enumerate(items):
             median_monomer = [x[1] for x in d]
             median_monomer.sort()
@@ -552,72 +554,95 @@ def draw_karyotypes(
     title_text_ = title_text + "(enlarged TRs with gaps)"
     size = enhance
     fig = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
-    for chrm, start, end, family_name, gap_type, length in repeats_with_gap:
-        if gap_type == "aN" and length < size:
-            fig.add_trace(
-                go.Bar(
-                    base=[start], x=[size], y=[chrm], orientation="h", name=family_name
-                )
-            )
-            fig.add_trace(
-                go.Bar(
-                    base=[start + size],
-                    x=[size],
-                    y=[chrm],
-                    orientation="h",
-                    name="gaps",
-                    marker_color="rgba(0, 0, 0)",
-                )
-            )
-        elif gap_type == "Na" and length < size:
-            fig.add_trace(
-                go.Bar(
-                    base=[start],
-                    x=[size],
-                    y=[chrm],
-                    orientation="h",
-                    name="gaps",
-                    marker_color="rgba(0, 0, 0)",
-                )
-            )
-            fig.add_trace(
-                go.Bar(
-                    base=[start + size],
-                    x=[size + size],
-                    y=[chrm],
-                    orientation="h",
-                    name=family_name,
-                )
-            )
-        elif gap_type == "aNa" and length < size:
-            fig.add_trace(
-                go.Bar(
-                    base=[start],
-                    x=[size * 2 / 3],
-                    y=[chrm],
-                    orientation="h",
-                    name=family_name,
-                )
-            )
-            fig.add_trace(
-                go.Bar(
-                    base=[start + size * 2 / 3],
-                    x=[size * 2 / 3],
-                    y=[chrm],
-                    orientation="h",
-                    name="gaps",
-                    marker_color="rgba(0, 0, 0)",
-                )
-            )
-            fig.add_trace(
-                go.Bar(
-                    base=[start + +size * 2 / 3 + +size * 2 / 3],
-                    x=[size * 2 / 3],
-                    y=[chrm],
-                    orientation="h",
-                    name=family_name,
-                )
-            )
+    repeats_with_gap_df = pd.DataFrame(
+        repeats_with_gap,
+        columns=["chrm", "start", "end", "family_name", "gap_type", "length"],
+    )
+    aN = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "aN") & (repeats_with_gap_df.length < size)
+    ]
+    Na = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "Na") & (repeats_with_gap_df.length < size)
+    ]
+    aNa = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "aNa") & (repeats_with_gap_df.length < size)
+    ]
+
+    fig.add_trace(
+        go.Bar(
+            base=aN["start"],
+            x=[size] * len(aN),
+            y=aN["chrm"],
+            orientation="h",
+            name="Tandem Repeat_with gap aN",
+            marker_color="#FF00FF",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=aN["start"] + size,
+            x=[size] * len(aN),
+            y=aN["chrm"],
+            orientation="h",
+            name="gaps aN",
+            marker_color="#663399",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=Na["start"],
+            x=[size] * len(Na),
+            y=Na["chrm"],
+            orientation="h",
+            name="Tandem Repeat_with gap Na",
+            marker_color="#00CED1",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=Na["start"] + size,
+            x=[size] * len(Na),
+            y=Na["chrm"],
+            orientation="h",
+            name="gaps Na",
+            marker_color="#00BFFF",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=aNa["start"],
+            x=[size * 2 / 3] * len(aNa),
+            y=aNa["chrm"],
+            orientation="h",
+            name="Tandem Repeat_with gap aNa",
+            marker_color="#00FF7F",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=aNa["start"] + (size * 2 / 3),
+            x=[size * 2 / 3] * len(aNa),
+            y=aNa["chrm"],
+            orientation="h",
+            name="gaps aNa",
+            marker_color="#228B22",
+        )
+    )
+
+    fig.add_trace(
+        go.Bar(
+            base=aNa["start"] + +size * 2 / 3 + +size * 2 / 3,
+            x=[size * 2 / 3] * len(aNa),
+            y=aNa["chrm"],
+            orientation="h",
+            marker_color="#00FF7F",
+        )
+    )
     output_file_name = output_file_name_prefix + ".repeats.with.gaps.enhanced.png"
     fig.write_image(output_file_name)
 
