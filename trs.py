@@ -27,9 +27,9 @@ def get_args():
     parser.add_argument('-f', '--fasta', type=str, help='Fasta file')
     parser.add_argument('-i', '--input', type=str, help='TRF file')
     parser.add_argument('-o', '--output', type=str, help='Output folder')
-    parser.add_argument('-c', '--cutoff', type=int, default=1000000 help='Minimal length of scaffold')
-    parser.add_argument('-e', '--enhance', type=int, default=1000000 help='Enhance level for TRs visualization')
-    parser.add_argument('-t', '--taxon', type=str, default="Unk" help='Taxon name')
+    parser.add_argument('-c', '--cutoff', type=int, default=1000000, help='Minimal length of scaffold')
+    parser.add_argument('-e', '--enhance', type=int, default=1000000, help='Enhance level for TRs visualization')
+    parser.add_argument('-t', '--taxon', type=str, default="Unk", help='Taxon name')
     args = parser.parse_args()
     return args
 

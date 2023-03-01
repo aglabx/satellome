@@ -26,12 +26,47 @@ from collections import defaultdict
 
 from PyExp import core_logger
 from trseeker.seqio.gff_file import sc_gff3_reader
-from trseeker.models.trf_model import TRModel
+from trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.seqio.tr_file import save_trs_as_fasta
-from trseeker.tools.ngrams_tools import compute_kmer_index_for_trf_file
+from trseeker.tools.ngrams_tools import process_list_to_kmer_index, get_zlib_complexity
 from trseeker.tools.statistics import get_simple_statistics
 
+def compute_kmer_index_for_trf_file(file_name, index_file, k=23, max_complexity=None, min_complexity=None):
+    """
+    TODO: replace gzip complexity with DUST filter
+    """
+    data = []
+    print("Read arrays...")
+    for i, trf_obj in enumerate(sc_iter_tab_file(file_name, TRModel)):
+        data.append(trf_obj.trf_array)
+    print("Readed %s arrays." % i)
+    print("Compute k-mers...")
+    result = process_list_to_kmer_index(data, k, docids=False)
+    print("Save index...")
+    with open(index_file, "w") as fh:
+        for item in result:
+            if max_complexity:
+                if get_zlib_complexity(item[0]) > max_complexity:
+                    continue
+            if min_complexity:
+                if get_zlib_complexity(item[0]) < min_complexity:
+                    continue
+            s  = "%s\n" % "\t".join(map(str, item))
+            fh.write(s)
+    return result
+
+def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alpha=False):
+    ''' Save TRs dataset as one fasta file.
+    '''
+    trf_objs = []
+    for trf_obj in sc_iter_tab_file(trf_file, TRModel):
+        trf_objs.append(trf_obj)
+    with open(fasta_file, "w") as fh_fasta:
+        for trf_obj in trf_objs:
+            if skip_alpha:
+                if trf_obj.trf_family == "ALPHA":
+                    continue
+            fh_fasta.write(trf_obj.get_fasta_repr(add_project=add_project))
 
 class RepeatCountStatsModel(object):
 
