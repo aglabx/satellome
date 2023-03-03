@@ -7,6 +7,9 @@
 #include <mutex>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cmath>
+
 
 static std::mutex barrier;
 
@@ -1042,7 +1045,38 @@ struct TR {
     std::string tr_id;
     std::string tr_array;
     std::vector<size_t> embeding;
+    std::vector<double> norm_embeding;
 };
+
+struct Distance {
+    std::string tr_idA;
+    std::string tr_idB;
+    double distance;
+};
+
+double dot_product(const std::vector<double>& v1, const std::vector<double>& v2) {
+    double sum = 0;
+    for (size_t i = 0; i < v1.size(); i++) {
+        sum += v1[i] * v2[i];
+    }
+    return sum;
+}
+
+double norm(const std::vector<double>& v) {
+    double sum = 0;
+    for (size_t i = 0; i < v.size(); i++) {
+        sum += v[i] * v[i];
+    }
+    return std::sqrt(sum);
+}
+
+double cosine_distance(const std::vector<double>& v1, const std::vector<double>& v2) {
+    double dotProd = dot_product(v1, v2);
+    double norm1 = norm(v1);
+    double norm2 = norm(v2);
+    double cosineSim = dotProd / (norm1 * norm2);
+    return 1 - cosineSim;
+}
 
 void worker_for_embending(std::vector<TR> &trs_vector,
                         const std::map<std::string, int> &token2id,
@@ -1065,7 +1099,8 @@ void worker_for_embending(std::vector<TR> &trs_vector,
 
         // init embeding
         for (size_t i=0; i < LANG_SIZE; i++) {
-            trs_vector[tid].embeding.push_back(0.0);
+            trs_vector[tid].embeding.push_back(0);
+            trs_vector[tid].norm_embeding.push_back(0);
         }
         // count embeding
         for (size_t i=0; i < trs_vector[tid].tr_array.size() - k + 1; i++) {
@@ -1080,17 +1115,58 @@ void worker_for_embending(std::vector<TR> &trs_vector,
 
             
         }
-        // // normalize embeding
-        // double sum = trs_vector[tid].tr_array.size() - k + 1;
-        // for (size_t i=0; i < trs_vector[tid].embeding.size(); i++) {
-        //     trs_vector[tid].embeding[i] /= sum;
-        // }
+        // normalize embeding
+        double sum = trs_vector[tid].tr_array.size() - k + 1;
+        for (size_t i=0; i < trs_vector[tid].embeding.size(); i++) {
+            trs_vector[tid].norm_embeding[i] = trs_vector[tid].embeding[i] / sum;
+        }
     }
 }
+
+void worker_for_distances(const std::vector<TR> &v,
+                        std::vector<Distance> &distances,
+                        const size_t start_i,
+                        const size_t end_i,
+                        const size_t point
+                    ) {
+
+    barrier.lock();
+    std::cout << "Started from " << start_i << " to " << end_i << " " << std::endl;
+    barrier.unlock();
+    size_t p = 0;
+    for (size_t i = start_i; i < end_i; i++) {
+
+        if (i % 10000 == 0) {
+            barrier.lock();
+            std::cout << "\tcomputed: from  worker: " << 100*(i-start_i)/(end_i-start_i) << "%" << std::endl;
+            barrier.unlock();
+        }
+
+        for (size_t j = i+1; j < v.size(); j++) {
+            // barrier.lock();
+            // std::cout << start_i << " " << i << " " << j << " " << point+p << " " << distances.size() << std::endl;
+            // barrier.unlock();
+
+            double dist = cosine_distance(v[i].norm_embeding, v[j].norm_embeding);
+            distances[point+p].tr_idA = v[i].tr_id;
+            distances[point+p].tr_idB = v[j].tr_id;
+            distances[point+p].distance = dist;
+            p++;
+        }
+    }
+}
+
 
 size_t read_trs_file_to_vector(const std::string &trs_file,
                             std::vector<TR> &trs_vector) {
     std::ifstream trs_stream(trs_file);
+
+    if (!trs_stream.is_open()) {
+        std::cerr << "Can't open file: " << trs_file << std::endl;
+        exit(1);
+    }
+
+
     std::string str;
     while(std::getline(trs_stream, str)) {
         
@@ -1115,18 +1191,22 @@ size_t read_trs_file_to_vector(const std::string &trs_file,
     return trs_vector.size();
 }
 
+
+
 int main(int argc, char** argv) {
 
-    if (argc != 4) {
+    if (argc != 5) {
         std::cerr << "Embed TR arrays to the vectors" << std::endl;
         std::cerr << "Expected arguments: " << argv[0]
-        << " <trf_file> <output_file> <threads>" << std::endl;
+        << " <trf_file> <output_file> <distance_output_file> <threads>" << std::endl;
         std::terminate();
     }
 
     std::string trs_file = argv[1];
     std::string output_file = argv[2];
-    static uint num_threads = atoi(argv[3]);
+    std::string distance_output_file = argv[3];
+    static uint num_threads = atoi(argv[4]);
+    
 
     const uint k = 5;
     
@@ -1137,6 +1217,7 @@ int main(int argc, char** argv) {
     size_t n_items = read_trs_file_to_vector(trs_file, trs_vector);
 
     std::cout << "\titems: " << n_items << std::endl;
+
 
     if (n_items < num_threads) {
         num_threads = n_items;
@@ -1176,7 +1257,80 @@ int main(int argc, char** argv) {
     }
     std::cout << "\tDone." << std::endl;
 
+    std::vector<Distance> distances;
+    n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
+
+    if (n_items < 10000) {
+        
+
+        distances.resize(n_items);
+
+        std::cout << "4. Compute distances for " << n_items << " items..." <<  std::endl;
+
+
+        if (n_items < num_threads) {
+            num_threads = n_items;
+        } 
+
+        std::vector<std::thread> t2;
+        batch_size = (n_items / num_threads) + 1;
+
+        size_t queue = 0;
+        size_t prev_i = 0;
+        size_t i = 0;
+        size_t prev_point = 0;
+        size_t point = 0;
+        for (i = 0; i < trs_vector.size(); ++i) {
+            for (size_t j = i+1; j < trs_vector.size(); ++j) {
+                queue += 1;        
+                point += 1;
+            }
+            if (queue > batch_size) {
+                // std::cout << "Submit: " << prev_i << " " << i << " " << " " << prev_point << std::endl;
+
+                t2.push_back(
+                    std::thread(worker_for_distances,
+                                        std::ref(trs_vector),
+                                        std::ref(distances),
+                                        prev_i,
+                                        i+1,
+                                        prev_point
+                    )
+                );
+                prev_i = i+1;
+                prev_point += queue;
+                queue = 0;
+            }
+        }
+
+        // std::cout << "Submit: " << prev_i << " " << i << " " << prev_point << std::endl;
+
+        t2.push_back(
+            std::thread(worker_for_distances,
+                                std::ref(trs_vector),
+                                std::ref(distances),
+                                prev_i,
+                                i,
+                                prev_point
+            )
+        );
+
+        for (size_t i = 0; i < t2.size(); ++i) {
+            t2[i].join();
+        }
+
+        std::cout << "\tDone." << std::endl;
+    } else {
+        std::cout << "4. Skip distances computation, too many TRs (limit 10000)." <<  std::endl;
+    }
+
     std::ofstream fout(output_file, std::ios::out);
+    if (!fout.is_open()) {
+        std::cerr << "Cannot open output file: " << output_file << std::endl;
+        std::terminate();
+    }
+
+    
     
     std::cout << "4. Saving results to " << output_file << " ..." <<  std::endl;
 
@@ -1187,8 +1341,23 @@ int main(int argc, char** argv) {
         }
         fout << "\t" << trs_vector[i].tr_array.size() << std::endl;
     }
-
     fout.close();
+
+    if (n_items < 10000) {
+
+        std::ofstream fout_distance(distance_output_file, std::ios::out);
+        if (!fout_distance.is_open()) {
+            std::cerr << "Cannot open output file: " << distance_output_file << std::endl;
+            std::terminate();
+        }
+
+        std::cout << "5. Saving distances to " << distance_output_file << " ..." <<  std::endl;
+
+        for (size_t i=0; i < distances.size(); i++) {
+            fout_distance << distances[i].tr_idA << "\t" << distances[i].tr_idB << "\t" << distances[i].distance << std::endl;
+        }
+
+    }
 
     std::cout << "All done for " << trs_vector.size() << " repeats." << std::endl;
 
