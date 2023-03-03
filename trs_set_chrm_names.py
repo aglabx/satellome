@@ -37,7 +37,7 @@ def main(args):
 def get_args():
     parser = argparse.ArgumentParser(description='Create names for chrmosomes for fasta file')
     parser.add_argument('-f', '--fasta', help='Fasta file', required=True)
-    parser.add_argument('-o', '--output', help='Output folder', required=True)
+    parser.add_argument('-o', '--output', help='Output file', required=True)
     parser.add_argument('--manual', help='Ask each contig', default=False)
     parser.add_argument('-c', '--cutoff', type=int, default=1000000, help='Minimal length of scaffold')
     args = parser.parse_args()
