@@ -1041,7 +1041,7 @@ const std::map<std::string, int> token2id = {
 struct TR {
     std::string tr_id;
     std::string tr_array;
-    std::vector<double> embeding;
+    std::vector<size_t> embeding;
 };
 
 void worker_for_embending(std::vector<TR> &trs_vector,
@@ -1080,11 +1080,11 @@ void worker_for_embending(std::vector<TR> &trs_vector,
 
             
         }
-        // normalize embeding
-        double sum = trs_vector[tid].tr_array.size() - k + 1;
-        for (size_t i=0; i < trs_vector[tid].embeding.size(); i++) {
-            trs_vector[tid].embeding[i] /= sum;
-        }
+        // // normalize embeding
+        // double sum = trs_vector[tid].tr_array.size() - k + 1;
+        // for (size_t i=0; i < trs_vector[tid].embeding.size(); i++) {
+        //     trs_vector[tid].embeding[i] /= sum;
+        // }
     }
 }
 
@@ -1185,7 +1185,7 @@ int main(int argc, char** argv) {
         for (size_t j=0; j < trs_vector[i].embeding.size(); j++) {
             fout << trs_vector[i].embeding[j] << " ";
         }
-        fout << std::endl;
+        fout << "\t" << trs_vector[i].tr_array.size() << std::endl;
     }
 
     fout.close();
