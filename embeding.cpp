@@ -1148,10 +1148,47 @@ void worker_for_distances(const std::vector<TR> &v,
             // barrier.unlock();
 
             double dist = cosine_distance(v[i].norm_embeding, v[j].norm_embeding);
+            
             distances[point+p].tr_idA = v[i].tr_id;
             distances[point+p].tr_idB = v[j].tr_id;
             distances[point+p].distance = dist;
             p++;
+        }
+    }
+}
+
+void worker_for_distances_low_mem(const std::vector<TR> &v,
+                        std::vector<std::vector<Distance>> &distances_vector,
+                        const size_t start_i,
+                        const size_t end_i,
+                        const size_t step
+                    ) {
+
+    barrier.lock();
+    std::cout << "Started from " << start_i << " to " << end_i << " " << std::endl;
+    barrier.unlock();
+    for (size_t i = start_i; i < end_i; i++) {
+
+        if (i % 100 == 0) {
+            barrier.lock();
+            std::cout << "\tcomputed: from  worker (" << step << "): " << 100*(i-start_i)/(end_i-start_i) << "%" << std::endl;
+            barrier.unlock();
+        }
+
+        for (size_t j = i+1; j < v.size(); j++) {
+            
+            double dist = cosine_distance(v[i].norm_embeding, v[j].norm_embeding);
+            if (dist > 0.2) {
+                continue;
+            }
+
+
+            Distance d;
+            d.tr_idA = v[i].tr_id;
+            d.tr_idB = v[j].tr_id;
+            d.distance = dist;
+            distances_vector[step].push_back(d);
+
         }
     }
 }
@@ -1259,10 +1296,10 @@ int main(int argc, char** argv) {
 
     std::vector<Distance> distances;
     n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
+    std::vector<std::vector<Distance>> distances_vector(num_threads+1);
 
     if (n_items < 10000) {
         
-
         distances.resize(n_items);
 
         std::cout << "4. Compute distances for " << n_items << " items..." <<  std::endl;
@@ -1321,7 +1358,62 @@ int main(int argc, char** argv) {
 
         std::cout << "\tDone." << std::endl;
     } else {
-        std::cout << "4. Skip distances computation, too many TRs (limit 10000)." <<  std::endl;
+
+        std::cout << "4. Skip full distances computation, too many TRs (limit 10000). Compute only for distances less than 0.2" <<  std::endl;
+
+        
+
+        if (n_items < num_threads) {
+            num_threads = n_items;
+        } 
+
+        std::vector<std::thread> t2;
+        batch_size = (n_items / num_threads) + 1;
+
+        size_t queue = 0;
+        size_t prev_i = 0;
+        size_t i = 0;
+        size_t thread_i = 0;
+        for (i = 0; i < trs_vector.size(); ++i) {
+            for (size_t j = i+1; j < trs_vector.size(); ++j) {
+                queue += 1;        
+            }
+            if (queue > batch_size) {
+                // std::cout << "Submit: " << prev_i << " " << i << " " << " " << prev_point << std::endl;
+
+                t2.push_back(
+                    std::thread(worker_for_distances_low_mem,
+                                        std::ref(trs_vector),
+                                        std::ref(distances_vector),
+                                        prev_i,
+                                        i+1,
+                                        thread_i
+                    )
+                );
+                prev_i = i+1;
+                queue = 0;
+                thread_i++;
+            }
+        }
+
+        // std::cout << "Submit: " << prev_i << " " << i << " " << prev_point << std::endl;
+
+        t2.push_back(
+            std::thread(worker_for_distances_low_mem,
+                                std::ref(trs_vector),
+                                std::ref(distances_vector),
+                                prev_i,
+                                i,
+                                thread_i
+            )
+        );
+
+        for (size_t i = 0; i < t2.size(); ++i) {
+            t2[i].join();
+        }
+
+        std::cout << "\tDone." << std::endl;
+
     }
 
     std::ofstream fout(output_file, std::ios::out);
@@ -1330,7 +1422,6 @@ int main(int argc, char** argv) {
         std::terminate();
     }
 
-    
     
     std::cout << "4. Saving results to " << output_file << " ..." <<  std::endl;
 
@@ -1343,22 +1434,28 @@ int main(int argc, char** argv) {
     }
     fout.close();
 
-    if (n_items < 10000) {
-
-        std::ofstream fout_distance(distance_output_file, std::ios::out);
+    std::ofstream fout_distance(distance_output_file, std::ios::out);
         if (!fout_distance.is_open()) {
             std::cerr << "Cannot open output file: " << distance_output_file << std::endl;
             std::terminate();
         }
 
-        std::cout << "5. Saving distances to " << distance_output_file << " ..." <<  std::endl;
+    std::cout << "5. Saving distances to " << distance_output_file << " ..." <<  std::endl;
+
+    if (n_items < 10000) {
 
         for (size_t i=0; i < distances.size(); i++) {
             fout_distance << distances[i].tr_idA << "\t" << distances[i].tr_idB << "\t" << distances[i].distance << std::endl;
         }
 
+    } else {
+        for (size_t i=0; i < distances_vector.size(); i++) {
+            for (size_t j=0; j < distances_vector[i].size(); j++) {
+                fout_distance << distances_vector[i][j].tr_idA << "\t" << distances_vector[i][j].tr_idB << "\t" << distances_vector[i][j].distance << std::endl;
+            }
+        }
     }
-
+    fout_distance.close();
     std::cout << "All done for " << trs_vector.size() << " repeats." << std::endl;
 
     return 0;
