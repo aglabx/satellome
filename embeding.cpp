@@ -1,4 +1,4 @@
-// g++ -std=c++17 -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -O3 -rdynamic embeding.cpp -o embeding.exe
+// g++ -std=c++17 -pthread -static -Wl,--whole-archive -lpthread -Wl,--no-whole-archive -O3 -rdynamic distances.hpp embeding.cpp -o embeding.exe
 #include <map>
 #include <vector>
 #include <string>
@@ -9,7 +9,9 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
-
+#include "distances.hpp"
+#include "trf_file.hpp"
+#include <functional> 
 
 static std::mutex barrier;
 
@@ -1042,48 +1044,12 @@ const std::map<std::string, int> token2id = {
         {"TTTTT", 0}
 };
 
-struct TR {
-    std::string tr_id;
-    std::string tr_array;
-    std::vector<size_t> embeding;
-    std::vector<double> norm_embeding;
-};
-
-struct Distance {
-    size_t tr_idA;
-    size_t tr_idB;
-    double distance;
-};
-
-double dot_product(const std::vector<double>& v1, const std::vector<double>& v2) {
-    double sum = 0;
-    for (size_t i = 0; i < v1.size(); i++) {
-        sum += v1[i] * v2[i];
-    }
-    return sum;
-}
-
-double norm(const std::vector<double>& v) {
-    double sum = 0;
-    for (size_t i = 0; i < v.size(); i++) {
-        sum += v[i] * v[i];
-    }
-    return std::sqrt(sum);
-}
-
-double cosine_distance(const std::vector<double>& v1, const std::vector<double>& v2) {
-    double dotProd = dot_product(v1, v2);
-    double norm1 = norm(v1);
-    double norm2 = norm(v2);
-    double cosineSim = dotProd / (norm1 * norm2);
-    return 1 - cosineSim;
-}
-
-void worker_for_embending(std::vector<TR> &trs_vector,
-                        const std::map<std::string, int> &token2id,
+void worker_for_embending(
                         const size_t start,
                         const size_t end,
                         const size_t step,
+                        std::vector<TR>& trs_vector,
+                        const std::map<std::string, int>& token2id,
                         const uint k) {
 
     barrier.lock();
@@ -1112,9 +1078,7 @@ void worker_for_embending(std::vector<TR> &trs_vector,
                 trs_vector[tid].embeding[token_id] += 1.0;
             } else {
                 continue;
-            }
-
-            
+            }   
         }
         // normalize embeding
         double sum = trs_vector[tid].tr_array.size() - k + 1;
@@ -1124,10 +1088,12 @@ void worker_for_embending(std::vector<TR> &trs_vector,
     }
 }
 
-void worker_for_distances(const std::vector<TR> &v,
-                        std::vector<Distance> &distances,
+void worker_for_distances(
                         const size_t start_i,
                         const size_t end_i,
+                        const size_t step,
+                        const std::vector<TR> &v,
+                        std::vector<Distance> &distances,
                         const size_t point
                     ) {
 
@@ -1158,11 +1124,12 @@ void worker_for_distances(const std::vector<TR> &v,
     }
 }
 
-void worker_for_distances_low_mem(const std::vector<TR> &v,
-                        std::vector<std::vector<Distance>> &distances_vector,
+void worker_for_distances_low_mem(
                         const size_t start_i,
                         const size_t end_i,
-                        const size_t step
+                        const size_t step,
+                        const std::vector<TR> &v,
+                        std::vector<std::vector<Distance>> &distances_vector
                     ) {
 
     barrier.lock();
@@ -1195,41 +1162,32 @@ void worker_for_distances_low_mem(const std::vector<TR> &v,
 }
 
 
-size_t read_trs_file_to_vector(const std::string &trs_file,
-                            std::vector<TR> &trs_vector) {
-    std::ifstream trs_stream(trs_file);
-
-    if (!trs_stream.is_open()) {
-        std::cerr << "Can't open file: " << trs_file << std::endl;
-        exit(1);
-    }
-
-
-    std::string str;
-    while(std::getline(trs_stream, str)) {
-        
-        std::stringstream buffer(str);
-        std::string temp;
-        std::vector<std::string> values;
-
-        while(std::getline(buffer, temp, '\t') ) {
-            values.push_back(temp);
-        }
-
-        if (values.size() < 15) {
+template<class F, typename... Args>
+void run_function_with_threads(size_t n_items, size_t threads, F f, Args... args) {
+    std::vector<std::thread> threads_vector;
+    size_t batch_size = (n_items / threads) + 1;
+    for (size_t step = 0; step < threads; ++step) {
+        size_t start = step * batch_size;
+        size_t end = (step + 1) * batch_size;
+        if (start >= n_items) {
             continue;
         }
-
-        TR tr;
-        tr.tr_id = values[1];
-        tr.tr_array = values[14];
-        trs_vector.push_back(tr);
+        if (end > n_items) {
+            end = n_items;
+        }
+        threads_vector.push_back(
+            std::thread(f,
+                        start,
+                        end,
+                        step,
+                        std::ref(args)...
+            )
+        );
     }
-
-    return trs_vector.size();
+    for (size_t i = 0; i < threads; i++) {
+        threads_vector[i].join();
+    }
 }
-
-
 
 int main(int argc, char** argv) {
 
@@ -1243,7 +1201,7 @@ int main(int argc, char** argv) {
     std::string trs_file = argv[1];
     std::string output_file = argv[2];
     std::string distance_output_file = argv[3];
-    static uint num_threads = atoi(argv[4]);
+    static size_t num_threads = atoi(argv[4]);
     static bool skip_distances = atoi(argv[5]);
     
 
@@ -1261,45 +1219,30 @@ int main(int argc, char** argv) {
     if (n_items < num_threads) {
         num_threads = n_items;
     } 
+    
+    run_function_with_threads<std::function<void(size_t,
+                        size_t,
+                        size_t,
+                        std::vector<TR>&,
+                        std::map<std::string, int>&,
+                        uint)>, 
+                        std::vector<TR> &, 
+                        std::map<std::string, int>,
+                        uint
+                        >(n_items, 
+                              num_threads, 
+                              worker_for_embending,
+                              std::ref(trs_vector), 
+                              std::ref(token2id), 
+                              k);
 
-    std::vector<std::thread> t;
-    size_t batch_size;
-    batch_size = (n_items / num_threads) + 1;
-
-    for (size_t i = 0; i < num_threads; ++i) {
-
-        size_t start = i * batch_size;
-        size_t end = (i + 1) * batch_size;
-
-        if (start >= n_items) {
-            continue;
-        }
-
-        if (end > n_items) {
-            end = n_items;
-        }
-
-        t.push_back(
-            std::thread(worker_for_embending,
-                                std::ref(trs_vector),
-                                std::ref(token2id),
-                                start,
-                                end,
-                                i,
-                                k
-            )
-        );
-    }
-
-    for (size_t i = 0; i < t.size(); ++i) {
-        t[i].join();
-    }
+    
     std::cout << "\tDone." << std::endl;
 
     std::vector<Distance> distances;
     n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
     std::vector<std::vector<Distance>> distances_vector(num_threads+1);
-
+    size_t batch_size;
     if (n_items < 10000) {
         
         distances.resize(n_items);
@@ -1329,10 +1272,11 @@ int main(int argc, char** argv) {
 
                 t2.push_back(
                     std::thread(worker_for_distances,
-                                        std::ref(trs_vector),
-                                        std::ref(distances),
                                         prev_i,
                                         i+1,
+                                        0,
+                                        std::ref(trs_vector),
+                                        std::ref(distances),    
                                         prev_point
                     )
                 );
@@ -1346,10 +1290,11 @@ int main(int argc, char** argv) {
 
         t2.push_back(
             std::thread(worker_for_distances,
-                                std::ref(trs_vector),
-                                std::ref(distances),
                                 prev_i,
                                 i,
+                                0,
+                                std::ref(trs_vector),
+                                std::ref(distances),
                                 prev_point
             )
         );
@@ -1385,11 +1330,12 @@ int main(int argc, char** argv) {
 
                 t2.push_back(
                     std::thread(worker_for_distances_low_mem,
-                                        std::ref(trs_vector),
-                                        std::ref(distances_vector),
                                         prev_i,
                                         i+1,
-                                        thread_i
+                                        thread_i,
+                                        std::ref(trs_vector),
+                                        std::ref(distances_vector)
+                                        
                     )
                 );
                 prev_i = i+1;
@@ -1402,11 +1348,11 @@ int main(int argc, char** argv) {
 
         t2.push_back(
             std::thread(worker_for_distances_low_mem,
-                                std::ref(trs_vector),
-                                std::ref(distances_vector),
                                 prev_i,
                                 i,
-                                thread_i
+                                thread_i,
+                                std::ref(trs_vector),
+                                std::ref(distances_vector)
             )
         );
 
