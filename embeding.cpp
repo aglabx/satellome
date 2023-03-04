@@ -1092,9 +1092,9 @@ void worker_for_distances(
                         const size_t start_i,
                         const size_t end_i,
                         const size_t step,
-                        const std::vector<TR> &v,
-                        std::vector<Distance> &distances,
-                        const size_t point
+                        const size_t point,
+                        const std::vector<TR>& v,
+                        std::vector<Distance>& distances
                     ) {
 
     barrier.lock();
@@ -1184,7 +1184,97 @@ void run_function_with_threads(size_t n_items, size_t threads, F f, Args... args
             )
         );
     }
-    for (size_t i = 0; i < threads; i++) {
+    for (size_t i = 0; i < threads_vector.size(); i++) {
+        threads_vector[i].join();
+    }
+}
+
+template<class F, typename... Args>
+void run_function_with_threads2D(size_t n_items, size_t threads, F f, const std::vector<TR>& trs_vector, Args... args) {
+    std::vector<std::thread> threads_vector;
+    size_t batch_size = (n_items / threads) + 1;
+    size_t queue = 0;
+    size_t prev_i = 0;
+    size_t i = 0;
+    size_t prev_point = 0;
+    size_t point = 0;
+    size_t step = 0;
+    for (i = 0; i < trs_vector.size(); ++i) {
+        for (size_t j = i+1; j < trs_vector.size(); ++j) {
+            queue += 1;        
+            point += 1;
+        }
+        if (queue > batch_size) {
+            size_t end = i + 1;
+            threads_vector.push_back(
+                std::thread(f,
+                        prev_i,
+                        end,
+                        step,
+                        prev_point,
+                        std::ref(args)...
+               )
+            );
+            prev_i = i+1;
+            prev_point += queue;
+            queue = 0;
+            step += 1;
+        }
+    }
+    size_t end = i + 1;
+    threads_vector.push_back(
+                std::thread(f,
+                        prev_i,
+                        end,
+                        step,
+                        prev_point,
+                        std::ref(args)...
+               )
+            );
+    for (size_t i = 0; i < threads_vector.size(); i++) {
+        threads_vector[i].join();
+    }
+}
+
+template<class F, typename... Args>
+void run_function_with_results_vector(size_t n_items, size_t threads, F f, const std::vector<TR>& trs_vector, Args... args) {
+
+    std::vector<std::thread> threads_vector;
+    size_t batch_size = (n_items / threads) + 1;
+    size_t queue = 0;
+    size_t prev_i = 0;
+    size_t i = 0;
+    size_t thread_i = 0;
+    for (i = 0; i < trs_vector.size(); ++i) {
+        for (size_t j = i+1; j < trs_vector.size(); ++j) {
+            queue += 1;        
+        }
+        if (queue > batch_size) {
+            size_t end = i + i;
+            threads_vector.push_back(
+                std::thread(f,
+                            prev_i,
+                            end,
+                            thread_i,
+                            std::ref(args)...
+                )
+            );
+            prev_i = i+1;
+            queue = 0;
+            thread_i++;
+        }
+    }
+
+    threads_vector.push_back(
+        std::thread(f,
+                    prev_i,
+                    i,
+                    thread_i,
+                    std::ref(args)...
+        )
+    );
+
+    for (size_t i = 0; i < threads_vector.size(); ++i) {
         threads_vector[i].join();
     }
 }
@@ -1242,123 +1332,56 @@ int main(int argc, char** argv) {
     std::vector<Distance> distances;
     n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
     std::vector<std::vector<Distance>> distances_vector(num_threads+1);
-    size_t batch_size;
+    
+    if (n_items < num_threads) {
+        num_threads = n_items;
+    } 
+    
+
     if (n_items < 10000) {
         
         distances.resize(n_items);
 
         std::cout << "4. Compute distances for " << n_items << " items..." <<  std::endl;
-
-
-        if (n_items < num_threads) {
-            num_threads = n_items;
-        } 
-
-        std::vector<std::thread> t2;
-        batch_size = (n_items / num_threads) + 1;
-
-        size_t queue = 0;
-        size_t prev_i = 0;
-        size_t i = 0;
-        size_t prev_point = 0;
-        size_t point = 0;
-        for (i = 0; i < trs_vector.size(); ++i) {
-            for (size_t j = i+1; j < trs_vector.size(); ++j) {
-                queue += 1;        
-                point += 1;
-            }
-            if (queue > batch_size) {
-                // std::cout << "Submit: " << prev_i << " " << i << " " << " " << prev_point << std::endl;
-
-                t2.push_back(
-                    std::thread(worker_for_distances,
-                                        prev_i,
-                                        i+1,
-                                        0,
-                                        std::ref(trs_vector),
-                                        std::ref(distances),    
-                                        prev_point
-                    )
-                );
-                prev_i = i+1;
-                prev_point += queue;
-                queue = 0;
-            }
-        }
-
-        // std::cout << "Submit: " << prev_i << " " << i << " " << prev_point << std::endl;
-
-        t2.push_back(
-            std::thread(worker_for_distances,
-                                prev_i,
-                                i,
-                                0,
-                                std::ref(trs_vector),
-                                std::ref(distances),
-                                prev_point
-            )
-        );
-
-        for (size_t i = 0; i < t2.size(); ++i) {
-            t2[i].join();
-        }
+         
+        run_function_with_threads2D<std::function<void(size_t,
+                        size_t,
+                        size_t,
+                        size_t,
+                        std::vector<TR>&,
+                        std::vector<Distance>&
+                        )>,
+                        std::vector<TR>&, 
+                        std::vector<Distance>&
+                        >(n_items, 
+                            num_threads, 
+                            worker_for_distances,
+                            trs_vector,
+                            std::ref(trs_vector), 
+                            std::ref(distances)
+                        );
 
         std::cout << "\tDone." << std::endl;
+
     } else if (!skip_distances) {
 
         std::cout << "4. Skip full distances computation, too many TRs (limit 10000). Compute only for distances less than 0.1" <<  std::endl;
-
         
-
-        if (n_items < num_threads) {
-            num_threads = n_items;
-        } 
-
-        std::vector<std::thread> t2;
-        batch_size = (n_items / num_threads) + 1;
-
-        size_t queue = 0;
-        size_t prev_i = 0;
-        size_t i = 0;
-        size_t thread_i = 0;
-        for (i = 0; i < trs_vector.size(); ++i) {
-            for (size_t j = i+1; j < trs_vector.size(); ++j) {
-                queue += 1;        
-            }
-            if (queue > batch_size) {
-                // std::cout << "Submit: " << prev_i << " " << i << " " << " " << prev_point << std::endl;
-
-                t2.push_back(
-                    std::thread(worker_for_distances_low_mem,
-                                        prev_i,
-                                        i+1,
-                                        thread_i,
-                                        std::ref(trs_vector),
-                                        std::ref(distances_vector)
-                                        
-                    )
-                );
-                prev_i = i+1;
-                queue = 0;
-                thread_i++;
-            }
-        }
-
-        // std::cout << "Submit: " << prev_i << " " << i << " " << prev_point << std::endl;
-
-        t2.push_back(
-            std::thread(worker_for_distances_low_mem,
-                                prev_i,
-                                i,
-                                thread_i,
-                                std::ref(trs_vector),
-                                std::ref(distances_vector)
-            )
-        );
-
-        for (size_t i = 0; i < t2.size(); ++i) {
-            t2[i].join();
-        }
+        run_function_with_results_vector<std::function<void(size_t,
+                        size_t,
+                        size_t,
+                        std::vector<TR>&,
+                        std::vector<std::vector<Distance>>&
+                        )>,
+                        std::vector<TR>&, 
+                        std::vector<std::vector<Distance>>&
+                        >(n_items, 
+                            num_threads, 
+                            worker_for_distances_low_mem,
+                            trs_vector,
+                            std::ref(trs_vector), 
+                            std::ref(distances_vector)
+                        );
 
         std::cout << "\tDone." << std::endl;
 
