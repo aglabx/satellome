@@ -13,7 +13,7 @@
 
 static std::mutex barrier;
 
-const float CUTOFF_TO_REPORT = 0.2;
+const float CUTOFF_TO_REPORT = 0.1;
 const uint LANG_SIZE = 512;
 const std::map<std::string, int> token2id = {
         {"AAAAA", 0},
@@ -1050,8 +1050,8 @@ struct TR {
 };
 
 struct Distance {
-    std::string tr_idA;
-    std::string tr_idB;
+    size_t tr_idA;
+    size_t tr_idB;
     double distance;
 };
 
@@ -1150,8 +1150,8 @@ void worker_for_distances(const std::vector<TR> &v,
 
             double dist = cosine_distance(v[i].norm_embeding, v[j].norm_embeding);
             
-            distances[point+p].tr_idA = v[i].tr_id;
-            distances[point+p].tr_idB = v[j].tr_id;
+            distances[point+p].tr_idA = i;
+            distances[point+p].tr_idB = j;
             distances[point+p].distance = dist;
             p++;
         }
@@ -1185,8 +1185,8 @@ void worker_for_distances_low_mem(const std::vector<TR> &v,
 
 
             Distance d;
-            d.tr_idA = v[i].tr_id;
-            d.tr_idB = v[j].tr_id;
+            d.tr_idA = i;
+            d.tr_idB = j;
             d.distance = dist;
             distances_vector[step].push_back(d);
 
@@ -1234,7 +1234,7 @@ size_t read_trs_file_to_vector(const std::string &trs_file,
 int main(int argc, char** argv) {
 
     if (argc != 5) {
-        std::cerr << "Embed TR arrays to the vectors" << std::endl;
+        std::cerr << "Embed TR arrays to the vectors and computed distances." << std::endl;
         std::cerr << "Expected arguments: " << argv[0]
         << " <trf_file> <output_file> <distance_output_file> <threads>" << std::endl;
         std::terminate();
@@ -1360,7 +1360,7 @@ int main(int argc, char** argv) {
         std::cout << "\tDone." << std::endl;
     } else {
 
-        std::cout << "4. Skip full distances computation, too many TRs (limit 10000). Compute only for distances less than 0.2" <<  std::endl;
+        std::cout << "4. Skip full distances computation, too many TRs (limit 10000). Compute only for distances less than 0.1" <<  std::endl;
 
         
 
@@ -1446,13 +1446,13 @@ int main(int argc, char** argv) {
     if (n_items < 10000) {
 
         for (size_t i=0; i < distances.size(); i++) {
-            fout_distance << distances[i].tr_idA << "\t" << distances[i].tr_idB << "\t" << distances[i].distance << std::endl;
+            fout_distance << trs_vector[distances[i].tr_idA].tr_id << "\t" << trs_vector[distances[i].tr_idB].tr_id << "\t" << distances[i].distance << std::endl;
         }
 
     } else {
         for (size_t i=0; i < distances_vector.size(); i++) {
             for (size_t j=0; j < distances_vector[i].size(); j++) {
-                fout_distance << distances_vector[i][j].tr_idA << "\t" << distances_vector[i][j].tr_idB << "\t" << distances_vector[i][j].distance << std::endl;
+                fout_distance << trs_vector[distances_vector[i][j].tr_idA].tr_id << "\t" << trs_vector[distances_vector[i][j].tr_idB].tr_id << "\t" << distances_vector[i][j].distance << std::endl;
             }
         }
     }
