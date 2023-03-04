@@ -1105,7 +1105,7 @@ void worker_for_distances(
     size_t p = 0;
     for (size_t i = start_i; i < end_i; i++) {
 
-        if (i % 10000 == 0) {
+        if (i % 1000 == 0) {
             barrier.lock();
             std::cout << "\tcomputed: from  worker: " << 100*(i-start_i)/(end_i-start_i) << "%" << std::endl;
             barrier.unlock();
@@ -1139,7 +1139,7 @@ void worker_for_distances_low_mem(
     barrier.unlock();
     for (size_t i = start_i; i < end_i; i++) {
 
-        if (i % 100 == 0) {
+        if (i % 1000 == 0) {
             barrier.lock();
             std::cout << "\tcomputed: from  worker (" << step << "): " << 100*(i-start_i)/(end_i-start_i) << "%" << std::endl;
             barrier.unlock();
