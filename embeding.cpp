@@ -13,6 +13,7 @@
 
 static std::mutex barrier;
 
+const float CUTOFF_TO_REPORT = 0.2;
 const uint LANG_SIZE = 512;
 const std::map<std::string, int> token2id = {
         {"AAAAA", 0},
@@ -1178,7 +1179,7 @@ void worker_for_distances_low_mem(const std::vector<TR> &v,
         for (size_t j = i+1; j < v.size(); j++) {
             
             double dist = cosine_distance(v[i].norm_embeding, v[j].norm_embeding);
-            if (dist > 0.2) {
+            if (dist > CUTOFF_TO_REPORT) {
                 continue;
             }
 
