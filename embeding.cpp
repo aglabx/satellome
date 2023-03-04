@@ -18,6 +18,7 @@ static std::mutex barrier;
 
 const float CUTOFF_TO_REPORT = 0.1;
 const uint LANG_SIZE = 512;
+const size_t SIZE_WHILE_COMPUTE_ALL_PAIRS = 10000;
 const std::map<std::string, int> token2id = {
         {"AAAAA", 0},
         {"AAAAC", 1},
@@ -1185,13 +1186,13 @@ int main(int argc, char** argv) {
 
     // Read trs file
     std::cout << "1. Read trs file..." << std::endl;
-    size_t n_items = read_trs_file_to_vector(trs_file, trs_vector);
+    size_t trs_n_items = read_trs_file_to_vector(trs_file, trs_vector);
 
-    std::cout << "\titems: " << n_items << std::endl;
+    std::cout << "\titems: " << trs_n_items << std::endl;
 
 
-    if (n_items < num_threads) {
-        num_threads = n_items;
+    if (trs_n_items < num_threads) {
+        num_threads = trs_n_items;
     } 
     
     run_function_with_threads<std::function<void(size_t,
@@ -1203,7 +1204,7 @@ int main(int argc, char** argv) {
                         std::vector<TR> &, 
                         std::map<std::string, int>,
                         uint
-                        >(n_items, 
+                        >(trs_n_items, 
                               num_threads, 
                               worker_for_embending,
                               std::ref(trs_vector), 
@@ -1214,19 +1215,18 @@ int main(int argc, char** argv) {
     std::cout << "\tDone." << std::endl;
 
     std::vector<Distance> distances;
-    n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
+    size_t dist_n_items = (trs_vector.size()*(trs_vector.size()-1))/2;
     std::vector<std::vector<Distance>> distances_vector(num_threads+1);
     
-    if (n_items < num_threads) {
-        num_threads = n_items;
+    if (dist_n_items < num_threads) {
+        num_threads = dist_n_items;
     } 
     
-
-    if (n_items < 10000) {
+    if (trs_n_items < SIZE_WHILE_COMPUTE_ALL_PAIRS) {
         
-        distances.resize(n_items);
+        distances.resize(dist_n_items);
 
-        std::cout << "4. Compute distances for " << n_items << " items..." <<  std::endl;
+        std::cout << "4. Compute distances for " << dist_n_items << " items..." <<  std::endl;
          
         run_function_with_threads2D<std::function<void(size_t,
                         size_t,
@@ -1238,7 +1238,7 @@ int main(int argc, char** argv) {
                         const std::vector<TR>&,
                         std::vector<TR>&, 
                         std::vector<Distance>&
-                        >(n_items, 
+                        >(dist_n_items, 
                             num_threads, 
                             worker_for_distances,
                             trs_vector,
@@ -1261,7 +1261,7 @@ int main(int argc, char** argv) {
                         const std::vector<TR>&,
                         std::vector<TR>&, 
                         std::vector<std::vector<Distance>>&
-                        >(n_items, 
+                        >(dist_n_items, 
                             num_threads, 
                             worker_for_distances_low_mem,
                             trs_vector,
@@ -1299,7 +1299,7 @@ int main(int argc, char** argv) {
 
     std::cout << "5. Saving distances to " << distance_output_file << " ..." <<  std::endl;
 
-    if (n_items < 10000) {
+    if (trs_n_items < 10000) {
 
         for (size_t i=0; i < distances.size(); i++) {
             fout_distance << trs_vector[distances[i].tr_idA].tr_id << "\t" << trs_vector[distances[i].tr_idB].tr_id << "\t" << distances[i].distance << std::endl;
