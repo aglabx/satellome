@@ -16,7 +16,7 @@
 
 static std::mutex barrier;
 
-const float CUTOFF_TO_REPORT = 0.1;
+const float CUTOFF_TO_REPORT = 0.2;
 const uint LANG_SIZE = 512;
 const size_t SIZE_WHILE_COMPUTE_ALL_PAIRS = 10000;
 const std::map<std::string, int> token2id = {
@@ -1226,7 +1226,7 @@ int main(int argc, char** argv) {
         
         distances.resize(dist_n_items);
 
-        std::cout << "4. Compute distances for " << dist_n_items << " items..." <<  std::endl;
+        std::cout << "4. Compute distances for " << dist_n_items << " items using ALL PAIRS..." <<  std::endl;
          
         run_function_with_threads2D<std::function<void(size_t,
                         size_t,
