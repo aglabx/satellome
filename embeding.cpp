@@ -1233,10 +1233,10 @@ size_t read_trs_file_to_vector(const std::string &trs_file,
 
 int main(int argc, char** argv) {
 
-    if (argc != 5) {
+    if (argc != 6) {
         std::cerr << "Embed TR arrays to the vectors and computed distances." << std::endl;
         std::cerr << "Expected arguments: " << argv[0]
-        << " <trf_file> <output_file> <distance_output_file> <threads>" << std::endl;
+        << " <trf_file> <output_file> <distance_output_file> <threads> <skip_distances (0 for default don't skip)>" << std::endl;
         std::terminate();
     }
 
@@ -1244,6 +1244,7 @@ int main(int argc, char** argv) {
     std::string output_file = argv[2];
     std::string distance_output_file = argv[3];
     static uint num_threads = atoi(argv[4]);
+    static bool skip_distances = atoi(argv[5]);
     
 
     const uint k = 5;
@@ -1358,7 +1359,7 @@ int main(int argc, char** argv) {
         }
 
         std::cout << "\tDone." << std::endl;
-    } else {
+    } else if (!skip_distances) {
 
         std::cout << "4. Skip full distances computation, too many TRs (limit 10000). Compute only for distances less than 0.1" <<  std::endl;
 
@@ -1449,7 +1450,7 @@ int main(int argc, char** argv) {
             fout_distance << trs_vector[distances[i].tr_idA].tr_id << "\t" << trs_vector[distances[i].tr_idB].tr_id << "\t" << distances[i].distance << std::endl;
         }
 
-    } else {
+    } else if (!skip_distances) {
         for (size_t i=0; i < distances_vector.size(); i++) {
             for (size_t j=0; j < distances_vector[i].size(); j++) {
                 fout_distance << trs_vector[distances_vector[i][j].tr_idA].tr_id << "\t" << trs_vector[distances_vector[i][j].tr_idB].tr_id << "\t" << distances_vector[i][j].distance << std::endl;
