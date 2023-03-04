@@ -1299,21 +1299,25 @@ int main(int argc, char** argv) {
 
     std::cout << "5. Saving distances to " << distance_output_file << " ..." <<  std::endl;
 
+    size_t n_distances = 0;
     if (trs_n_items < 10000) {
 
         for (size_t i=0; i < distances.size(); i++) {
+            n_distances += 1;
             fout_distance << trs_vector[distances[i].tr_idA].tr_id << "\t" << trs_vector[distances[i].tr_idB].tr_id << "\t" << distances[i].distance << std::endl;
         }
 
     } else if (!skip_distances) {
         for (size_t i=0; i < distances_vector.size(); i++) {
             for (size_t j=0; j < distances_vector[i].size(); j++) {
+                n_distances += 1;
                 fout_distance << trs_vector[distances_vector[i][j].tr_idA].tr_id << "\t" << trs_vector[distances_vector[i][j].tr_idB].tr_id << "\t" << distances_vector[i][j].distance << std::endl;
             }
         }
     }
     fout_distance.close();
     std::cout << "All done for " << trs_vector.size() << " repeats." << std::endl;
+    std::cout << "All done for " << n_distances << " distances." << std::endl;
 
     return 0;
 }
