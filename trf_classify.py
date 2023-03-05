@@ -89,9 +89,9 @@ def main():
 
 def get_args():
     parser = argparse.ArgumentParser(description='Classify TRF and write basic statistics')
-    parser.add_argument('-i', '--prefix', type=str, help='TRF prefix')
-    parser.add_argument('-o', '--output', type=str, help='Output directory')
-    parser.add_argument('-l', '--total_length', type=int, help='Total length of the assembly')
+    parser.add_argument('-i', '--prefix', type=str, help='TRF prefix (trf file without extension))', required=True)
+    parser.add_argument('-o', '--output', type=str, help='Output directory', required=True)
+    parser.add_argument('-l', '--total_length', type=int, help='Total length of the assembly', required=True)
     args = parser.parse_args()
     return args
 
