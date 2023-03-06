@@ -8,7 +8,7 @@
 import argparse
 from trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
-
+import shutil
 
 def refine_names(trf_file):
     data = []
@@ -27,6 +27,9 @@ def refine_names(trf_file):
     with open(trf_file + ".1", "w") as fw:
         for obj in data:
             fw.write(obj.get_as_string(obj.dumpable_attributes))
+
+    shutil.move(trf_file + ".1", trf_file)
+    
 
 
 def main():
