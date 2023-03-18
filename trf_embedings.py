@@ -69,11 +69,13 @@ def compute_distances_cosine(tr2vector):
         if i % 100 == 0:
             print(f"Computed {i}/{len(keys)}")
         for id2 in keys[i:]:
-            distances[(id1, id2)] = 100 * (
-                1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0]
-            )
+            distances[(id1, id2)] = get_cosine_distance(tr2vector[id1], tr2vector[id2])
             distances[(id2, id1)] = distances[(id1, id2)]
     return distances
+
+
+def get_cosine_distance(vector1, vector2):
+    return 100 * (1 - cosine_similarity(vector1, vector2)[0][0])
 
 
 def compute_distances_euclidean(tr2vector):
@@ -93,3 +95,5 @@ def get_disances(df_trs):
     tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
     distances = compute_distances(tr2vector)
     return distances, tr2vector
+
+token2id, token2revtoken = get_pentatokens()
