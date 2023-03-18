@@ -12,7 +12,7 @@ from trseeker.tools.parsers import parse_chromosome_name
 from trseeker.tools.parsers import trf_parse_line
 from trseeker.tools.sequence_tools import clear_sequence
 from trseeker.tools.sequence_tools import get_gc
-from trf_embedings import create_vector, token2id, token2revtoken
+from satelome.trf_embedings import create_vector, token2id, token2revtoken
 
 class TRModel(AbstractModel):
     """ Class for tandem repeat wrapping

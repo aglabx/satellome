@@ -18,7 +18,7 @@ from trseeker.tools.sequence_tools import get_gc, remove_consensus_redundancy
 from PyExp import sc_iter_filepath_folder, WiseOpener
 from trseeker.settings import load_settings
 from trseeker.seqio.tab_file import sc_iter_tab_file
-from trf_embedings import get_cosine_distance
+from satelome.trf_embedings import get_cosine_distance
 
 settings = load_settings()
 

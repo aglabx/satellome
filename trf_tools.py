@@ -20,7 +20,7 @@ from PyExp import sc_iter_filepath_folder
 import gzip
 from multiprocessing import Pool
 from trseeker.seqio.fasta_file import sc_iter_fasta
-from trf_file import TRFFileIO
+from satelome.trf_file import TRFFileIO
 
 trf_reader = TRFFileIO().iter_parse
 

@@ -8,7 +8,7 @@
 import argparse
 import sys
 
-from trseeker.models.trf_model import TRModel
+from satelome.trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
 from trseeker.seqio.tr_file import save_trs_dataset
 
