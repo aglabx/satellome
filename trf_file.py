@@ -18,7 +18,7 @@ from trseeker.tools.sequence_tools import get_gc, remove_consensus_redundancy
 from PyExp import sc_iter_filepath_folder, WiseOpener
 from trseeker.settings import load_settings
 from trseeker.seqio.tab_file import sc_iter_tab_file
-
+from trf_embedings import get_cosine_distance
 
 settings = load_settings()
 
@@ -129,6 +129,21 @@ class TRFFileIO(AbstractBlockFileIO):
             if not line:
                 continue
             yield line
+
+    def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
+        """ Join two overlapped objects.
+        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
+        """
+        # a ------ 
+        # b    -----
+        if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
+            vector1 = obj1.get_vector()
+            vector2 = obj2.get_vector()
+            dist = get_cosine_distance(vector1, vector2)
+            if dist < cutoff_distance:
+                obj1.set_form_overlap(obj2)
+                return True
+        return False
         
     def _filter_obj_set(self, obj_set):
         # NB: I removed the overlaping part due to suspicious results.
@@ -153,10 +168,9 @@ class TRFFileIO(AbstractBlockFileIO):
                     # Check period
                     if obj1.trf_pmatch >= obj2.trf_pmatch:
                         obj_set[b] = None
-                        continue
                     else:
                         obj_set[a] = None
-                        continue
+                    continue
                 # a ------ ------  ------- 
                 # b ---       ---    ---
                 if obj1.trf_l_ind <= obj2.trf_l_ind and obj1.trf_r_ind >= obj2.trf_r_ind:
@@ -170,10 +184,8 @@ class TRFFileIO(AbstractBlockFileIO):
                 # a ------ 
                 # b    -----
                 if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
-                    #TODO: move overlaping part in different place
-                    # is_overlapping = True
-                    # obj1.overlap = obj2.trf_id
-                    # obj2.overlap = obj1.trf_id
+                    if self._join_overlapped(obj1, obj2, cutoff_distance=0.1):
+                        obj_set[b] = None
                     continue
                 # a ------ 
                 # b                -----

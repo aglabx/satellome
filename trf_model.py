@@ -12,7 +12,7 @@ from trseeker.tools.parsers import parse_chromosome_name
 from trseeker.tools.parsers import trf_parse_line
 from trseeker.tools.sequence_tools import clear_sequence
 from trseeker.tools.sequence_tools import get_gc
-
+from trf_embedings import create_vector, token2id, token2revtoken
 
 class TRModel(AbstractModel):
     """ Class for tandem repeat wrapping
@@ -189,7 +189,7 @@ class TRModel(AbstractModel):
         self.trf_head = trf_parse_head(head).strip()
         self.trf_gi = parse_fasta_head(self.trf_head)[0]
         self.trf_chr = parse_chromosome_name(self.trf_head)
-
+      
         (self.trf_l_ind,
          self.trf_r_ind,
          self.trf_period,
@@ -225,6 +225,32 @@ class TRModel(AbstractModel):
         self.trf_chr = parse_chromosome_name(self.trf_head)
         self.trf_array_length = len(self.trf_array)
 
+    def set_form_overlap(self, obj2):
+        """ Init object with data from overlap with another TRFObj located right to self.
+        """
+        self.trf_r_ind = obj2.trf_r_ind
+        self.trf_period = min(self.trf_period, obj2.trf_period)
+        self.trf_array = self.trf_array + obj2.trf_array[len(self.trf_array):]
+        self.trf_array_length = len(self.trf_array)
+        self.trf_n_copy = self.trf_array_length / self.trf_period
+        self.trf_l_cons = min(self.trf_l_cons, obj2.trf_l_cons)
+        self.trf_pmatch = min(self.trf_pmatch, obj2.trf_pmatch)
+        self.trf_indels = None
+        self.trf_score = None
+        self.trf_n_a = None
+        self.trf_n_c = None
+        self.trf_n_g = None
+        self.trf_n_t = None
+        self.trf_entropy = None
+        self.trf_pvar = int(100 - float(self.trf_pmatch))
+        self.trf_array_gc = get_gc(self.trf_array)
+        self.trf_consensus_gc = get_gc(self.trf_consensus)
+
+
+    def get_vector(self):
+        """ Get vector representation of TRF object."""
+        return create_vector(token2id, token2revtoken, self.trf_array , k=5)
+        
 
     def get_index_repr(self):
         """ Get string for index file."""
