@@ -5,8 +5,6 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-from trseeker.tools.sequence_tools import get_revcomp
-import math
 import plotly.graph_objects as go
 import plotly.express as px
 from satelome.trf_drawing import (
@@ -17,10 +15,8 @@ from satelome.trf_drawing import (
 import os
 from collections import Counter
 import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 from intervaltree import IntervalTree
-
+from trf_embedings import get_disances
 
 class Graph:
 
@@ -78,93 +74,6 @@ class Graph:
                 temp = []
                 cc.append(self.DFSUtil(temp, v, visited))
         return cc
-
-
-def get_pentatokens():
-    token2id = {}
-    token2revtoken = {}
-    i = 0
-    for n1 in "ACGT":
-        for n2 in "ACGT":
-            for n3 in "ACGT":
-                for n4 in "ACGT":
-                    for n5 in "ACGT":
-                        token = "".join([n1, n2, n3, n4, n5])
-                        token2id[token] = i
-                        i += 1
-                        token2revtoken[token] = get_revcomp(token)
-    return token2id, token2revtoken
-
-
-def fill_vectors(df_trs, token2id, token2revtoken, k=5):
-    tr2vector = {}
-    for id1, x in df_trs.iterrows():
-        vector = np.zeros((1, len(token2id)))
-        seq = x["array"].upper()
-        N = len(seq) - k + 1
-        for i in range(N):
-            token = seq[i : i + k]
-            if "N" in token:
-                continue
-            vector[0, token2id[token]] += 1
-            vector[0, token2id[token2revtoken[token]]] += 1
-        vector /= 2 * N
-        tr2vector[id1] = vector
-    return tr2vector
-
-
-def fill_vectors_arrays(arrays, token2id, token2revtoken, k=5):
-    tr2vector = {}
-    for iid, array in enumerate(arrays):
-        vector = np.zeros((1, len(token2id)))
-        seq = array.upper()
-        N = len(seq) - k + 1
-        for i in range(N):
-            token = seq[i : i + k]
-            if "N" in token:
-                continue
-            vector[0, token2id[token]] += 1
-            vector[0, token2id[token2revtoken[token]]] += 1
-        vector /= 2 * N
-        tr2vector[iid] = vector
-    return tr2vector
-
-
-def compute_distances(tr2vector):
-    return compute_distances_cosine(tr2vector)
-
-
-def compute_distances_cosine(tr2vector):
-    distances = {}
-    keys = list(tr2vector.keys())
-    for i, id1 in enumerate(keys):
-        if i % 100 == 0:
-            print(f"Computed {i}/{len(keys)}")
-        for id2 in keys[i:]:
-            distances[(id1, id2)] = 100 * (
-                1 - cosine_similarity(tr2vector[id1], tr2vector[id2])[0][0]
-            )
-            distances[(id2, id1)] = distances[(id1, id2)]
-    return distances
-
-
-def compute_distances_euclidean(tr2vector):
-    distances = {}
-    keys = list(tr2vector.keys())
-    for i, id1 in enumerate(keys):
-        if i % 100 == 0:
-            print(f"Computed {i}/{len(keys)}")
-        for id2 in keys[i:]:
-            distances[(id1, id2)] = 100 * math.dis(tr2vector[id1], tr2vector[id2])[0][0]
-            distances[(id2, id1)] = distances[(id1, id2)]
-    return distances
-
-
-def get_disances(df_trs):
-    token2id, token2revtoken = get_pentatokens()
-    tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
-    distances = compute_distances(tr2vector)
-    return distances, tr2vector
 
 
 def name_clusters(distances, tr2vector, df_trs, level=1):
