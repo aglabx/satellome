@@ -19,7 +19,7 @@ import os, shutil, tempfile
 from PyExp import sc_iter_filepath_folder
 import gzip
 from multiprocessing import Pool
-from trseeker.seqio.fasta_file import sc_iter_fasta
+from satelome.utils import sc_iter_fasta_brute
 from satelome.trf_file import TRFFileIO
 
 trf_reader = TRFFileIO().iter_parse
@@ -33,12 +33,12 @@ def trf_search_by_splitting(fasta_file, threads=30, wdir=".", project="NaN", trf
     ### 1. Split chromosomes into temp file
     total_length = 0
     next_file = 0
-    for i, seq_obj in enumerate(sc_iter_fasta(fasta_file)):
-        print(seq_obj.header)
+    for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
+        print(header)
         file_path = os.path.join(folder_path, "%s.fa" % next_file)
         with open(file_path, "a") as fw:
-            fw.write(">%s\n%s\n" % (seq_obj.header, seq_obj.sequence))
-        total_length += len(seq_obj.sequence)
+            fw.write("%s\n%s\n" % (header, seq))
+        total_length += len(seq)
         if total_length > 100000:
             next_file += 1
             total_length = 0

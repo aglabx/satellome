@@ -11,7 +11,7 @@ Classes:
 - TRFFileIO(AbstractBlockFileIO)
 
 """
-import re, os
+import os
 from trf_model import TRModel
 from trseeker.seqio.block_file import AbstractBlockFileIO
 from trseeker.tools.sequence_tools import get_gc, remove_consensus_redundancy

@@ -1,3 +1,5 @@
 PyExp
-trseeker
+pandas
+numpy
+sklearn
 pyyaml

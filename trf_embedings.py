@@ -1,5 +1,5 @@
 import math
-from trseeker.tools.sequence_tools import get_revcomp
+from satelome.utils import get_revcomp
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
