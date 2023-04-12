@@ -6,9 +6,11 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
 import shutil
+import logging
+from trf_model import TRModel
+from seqio import sc_iter_tab_file
+
 
 def refine_names(trf_file):
     data = []
@@ -36,7 +38,7 @@ def main():
     args = get_args()
     trf_file = args.input
     
-    print("Refining names...")
+    logging.info("Refining names...")
     refine_names(trf_file)
 
 

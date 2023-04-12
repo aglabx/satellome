@@ -7,7 +7,7 @@
 
 import plotly.graph_objects as go
 import plotly.express as px
-from satelome.trf_drawing import (
+from trf_drawing import (
     scaffold_length_sort_length,
     read_trf_file,
     get_gaps_annotation,
@@ -17,6 +17,7 @@ from collections import Counter
 import pandas as pd
 from intervaltree import IntervalTree
 from trf_embedings import get_disances
+
 
 class Graph:
 

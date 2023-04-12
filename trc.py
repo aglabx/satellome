@@ -6,7 +6,7 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from satelome.trf_clusters import *
+from trf_clusters import *
 
 def main():
     args = get_args()

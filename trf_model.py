@@ -6,13 +6,9 @@
 #@contact: ad3002@gmail.com 
 
 from PyExp import AbstractModel
-from trseeker.tools.parsers import trf_parse_head
-from trseeker.tools.parsers import parse_fasta_head
-from trseeker.tools.parsers import parse_chromosome_name
-from trseeker.tools.parsers import trf_parse_line
-from trseeker.tools.sequence_tools import clear_sequence
-from trseeker.tools.sequence_tools import get_gc
-from satelome.trf_embedings import create_vector, token2id, token2revtoken
+from parsers import parse_fasta_head, parse_chromosome_name,trf_parse_line, trf_parse_head
+from sequence_tools import clear_sequence, get_gc
+from trf_embedings import create_vector, token2id, token2revtoken
 
 class TRModel(AbstractModel):
     """ Class for tandem repeat wrapping

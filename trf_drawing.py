@@ -7,7 +7,7 @@
 
 import re
 import pandas as pd
-from trseeker.seqio.fasta_file import sc_iter_fasta_brute
+from seqio import sc_iter_fasta_brute
 import math
 
 CENPB_REGEXP = re.compile(r'.ttcg....a..cggg.')

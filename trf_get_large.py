@@ -8,9 +8,9 @@
 import argparse
 import sys
 
-from satelome.trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.seqio.tr_file import save_trs_dataset
+from trf_model import TRModel
+from seqio import sc_iter_tab_file
+from seqio import save_trs_dataset
 
 if __name__ == "__main__":
 

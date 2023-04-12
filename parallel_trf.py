@@ -6,12 +6,12 @@
 # @contact: ad3002@gmail.com
 
 import sys
-
-from trseeker.tools.trf_tools import trf_search_in_dir_parallel
+import logging
+from trf_tools import trf_search_in_dir_parallel
 
 if __name__ == "__main__":
     if len(sys.argv) != 5:
-        print("Usage: name.py input_folder output_folder mask threads")
+        logging.error("Usage: name.py input_folder output_folder mask threads")
         exit(0)
     else:
         input_folder = sys.argv[1]

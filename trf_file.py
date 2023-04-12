@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#@created: 05.06.2011
-#@author: Aleksey Komissarov
-#@contact: ad3002@gmail.com 
+# @created: 05.06.2011
+# @author: Aleksey Komissarov
+# @contact: ad3002@gmail.com
 
 """
 Classes:
@@ -13,41 +13,38 @@ Classes:
 """
 import re, os
 from trf_model import TRModel
-from trseeker.seqio.block_file import AbstractBlockFileIO
-from trseeker.tools.sequence_tools import get_gc, remove_consensus_redundancy
+from seqio import AbstractBlockFileIO
+from sequence_tools import get_gc, remove_consensus_redundancy
 from PyExp import sc_iter_filepath_folder, WiseOpener
-from trseeker.settings import load_settings
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from satelome.trf_embedings import get_cosine_distance
-
-settings = load_settings()
+from seqio import sc_iter_tab_file
+from trf_embedings import get_cosine_distance
 
 
 class TRFFileIO(AbstractBlockFileIO):
-    """  Working with raw ouput from TRF, where each block starts with '>' token.
-    
+    """Working with raw ouput from TRF, where each block starts with '>' token.
+
     Public parameters:
-    
+
     - self.use_mongodb -- Bool
 
     Public methods:
-    
+
     - iter_parse(self, trf_file, filter=True)
     - parse_to_file(self, file_path, output_path, trf_id=0) -> trf_id
-    
+
     Private methods:
-    
+
     - _gen_data_line(self, data)
     - _filter_obj_set(self, obj_set)
     - _join_overlapped(self, obj1, obj2)
-    
+
     Inherited public properties:
-    
+
     - data  - iterable data, each item is tuple (head, body)
     - N     - a number of items in data
-    
+
     Inherited public methods:
-    
+
     - [OR] __init__(self)
     - read_from_file(self, input_file)
     - read_online(self, input_file) ~> item
@@ -58,23 +55,22 @@ class TRFFileIO(AbstractBlockFileIO):
     - write_to_file(self, output_file)
     - write_to_db(self, db_cursor)
     - read_as_iter(self, source)
-    - iterate(self) ~> item of data 
+    - iterate(self) ~> item of data
     - do(self, cf, args) -> result
     - process(self, cf, args)
     - clear(self)
     - do_with_iter(self, cf, args) -> [result,]
     - process_with_iter(self, cf, args)
-        
+
     """
 
     def __init__(self):
-        """ Overrided. Hardcoded start token."""
+        """Overrided. Hardcoded start token."""
         token = "Sequence:"
         super(TRFFileIO, self).__init__(token)
 
     def iter_parse(self, trf_file, filter=True):
-        """ Iterate over raw trf data and yield TRFObjs.
-        """
+        """Iterate over raw trf data and yield TRFObjs."""
         trf_id = 1
         for ii, (head, body, start, next) in enumerate(self.read_online(trf_file)):
             head = head.replace("\t", " ")
@@ -99,13 +95,15 @@ class TRFFileIO(AbstractBlockFileIO):
             obj_set, variants2df = remove_consensus_redundancy(obj_set)
             yield obj_set
 
-    def parse_to_file(self, file_path, output_path, trf_id=0, project=None, verbose=True):
-        """ Parse trf file in tab delimited file."""
+    def parse_to_file(
+        self, file_path, output_path, trf_id=0, project=None, verbose=True
+    ):
+        """Parse trf file in tab delimited file."""
         if trf_id == 0:
             mode = "w"
         else:
             mode = "a"
-        
+
         with WiseOpener(output_path, mode) as fw:
             for trf_obj_set in self.iter_parse(file_path):
                 for trf_obj in trf_obj_set:
@@ -131,10 +129,10 @@ class TRFFileIO(AbstractBlockFileIO):
             yield line
 
     def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
-        """ Join two overlapped objects.
-        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
+        """Join two overlapped objects.
+        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1.
         """
-        # a ------ 
+        # a ------
         # b    -----
         if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
             vector1 = obj1.get_vector()
@@ -144,7 +142,7 @@ class TRFFileIO(AbstractBlockFileIO):
                 obj1.set_form_overlap(obj2)
                 return True
         return False
-        
+
     def _filter_obj_set(self, obj_set):
         # NB: I removed the overlaping part due to suspicious results.
         # Complex filter
@@ -162,36 +160,45 @@ class TRFFileIO(AbstractBlockFileIO):
                 obj2 = obj_set[b]
                 if not obj2:
                     continue
-                # a ------ 
+                # a ------
                 # b ------
-                if obj1.trf_l_ind == obj2.trf_l_ind and obj1.trf_r_ind == obj2.trf_r_ind:
+                if (
+                    obj1.trf_l_ind == obj2.trf_l_ind
+                    and obj1.trf_r_ind == obj2.trf_r_ind
+                ):
                     # Check period
                     if obj1.trf_pmatch >= obj2.trf_pmatch:
                         obj_set[b] = None
                     else:
                         obj_set[a] = None
                     continue
-                # a ------ ------  ------- 
+                # a ------ ------  -------
                 # b ---       ---    ---
-                if obj1.trf_l_ind <= obj2.trf_l_ind and obj1.trf_r_ind >= obj2.trf_r_ind:
+                if (
+                    obj1.trf_l_ind <= obj2.trf_l_ind
+                    and obj1.trf_r_ind >= obj2.trf_r_ind
+                ):
                     obj_set[b] = None
                     continue
                 # a ---       ---    ---
-                # b ------ ------  ------- 
-                if obj2.trf_l_ind <= obj1.trf_l_ind and obj2.trf_r_ind >= obj1.trf_r_ind:
+                # b ------ ------  -------
+                if (
+                    obj2.trf_l_ind <= obj1.trf_l_ind
+                    and obj2.trf_r_ind >= obj1.trf_r_ind
+                ):
                     obj_set[a] = None
                     continue
-                # a ------ 
+                # a ------
                 # b    -----
                 if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
                     if self._join_overlapped(obj1, obj2, cutoff_distance=0.1):
                         obj_set[b] = None
                     continue
-                # a ------ 
+                # a ------
                 # b                -----
                 if obj1.trf_r_ind < obj2.trf_l_ind:
                     break
-                # a               ------ 
+                # a               ------
                 # b -----
                 if obj2.trf_r_ind < obj1.trf_l_ind:
                     break
@@ -209,34 +216,39 @@ class TRFFileIO(AbstractBlockFileIO):
                     obj2 = obj_set[b]
                     if not obj2:
                         continue
-                    # a ------ 
+                    # a ------
                     # b               -----
                     if obj1.trf_r_ind < obj2.trf_l_ind:
                         break
-                    # a              ------ 
+                    # a              ------
                     # b -----
                     if obj2.trf_r_ind < obj1.trf_l_ind:
                         break
-                    # a ------ 
+                    # a ------
                     # b    -----
-                    if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
+                    if (
+                        obj1.trf_r_ind > obj2.trf_l_ind
+                        and obj1.trf_r_ind < obj2.trf_r_ind
+                    ):
 
                         overlap = float(abs(obj1.trf_r_ind - obj2.trf_l_ind))
                         min_length = min(obj1.trf_array_length, obj2.trf_array_length)
                         overlap_proc_diff = overlap * 1.0 / min_length
                         gc_dif = abs(obj1.trf_array_gc - obj2.trf_array_gc)
 
-                        if overlap_proc_diff >= settings["trf_settings"]["overlapping_cutoff_proc"] \
-                                    and gc_dif <= settings["trf_settings"]["overlapping_gc_diff"]:
+                        if overlap_proc_diff >= 30 and gc_dif <= 0.05:
                             is_overlapping = True
                             obj1 = self._join_overlapped(obj1, obj2)
                             obj2 = None
                             # print("overlap: ", overlap, "min_length:", min_length, "overlap_proc_diff:", overlap_proc_diff, "gc_dif:", gc_dif)
                             # print("JOINED")
                         continue
-                    # a ------ 
+                    # a ------
                     # b ------
-                    if obj1.trf_l_ind == obj2.trf_l_ind and obj1.trf_r_ind == obj2.trf_r_ind:
+                    if (
+                        obj1.trf_l_ind == obj2.trf_l_ind
+                        and obj1.trf_r_ind == obj2.trf_r_ind
+                    ):
                         # Check period
                         if obj1.trf_pmatch >= obj2.trf_pmatch:
                             obj_set[b] = None
@@ -244,71 +256,43 @@ class TRFFileIO(AbstractBlockFileIO):
                         else:
                             obj_set[a] = None
                             continue
-                    # a ------ ------  ------- 
+                    # a ------ ------  -------
                     # b ---       ---     ---
-                    if obj1.trf_l_ind <= obj2.trf_l_ind and obj1.trf_r_ind >= obj2.trf_r_ind:
+                    if (
+                        obj1.trf_l_ind <= obj2.trf_l_ind
+                        and obj1.trf_r_ind >= obj2.trf_r_ind
+                    ):
                         obj_set[b] = None
                         continue
                     # a ---       ---            ---
-                    # b ------ ------  ------- 
-                    if obj2.trf_l_ind <= obj1.trf_l_ind and obj2.trf_r_ind >= obj1.trf_r_ind:
+                    # b ------ ------  -------
+                    if (
+                        obj2.trf_l_ind <= obj1.trf_l_ind
+                        and obj2.trf_r_ind >= obj1.trf_r_ind
+                    ):
                         obj_set[a] = None
                         continue
 
             obj_set = [a for a in obj_set if not a is None]
-        
+
         return obj_set
 
-    def _join_overlapped(self, obj1, obj2):
-        ''' Join overlapping sequences.'''
-        obj1.trf_pmatch = int(obj1.trf_pmatch)
-        obj2.trf_pmatch = int(obj2.trf_pmatch)
-        obj1.trf_array_length = int(obj1.trf_array_length)
-        obj2.trf_array_length = int(obj2.trf_array_length)
-
-        obj1.trf_array = obj1.trf_array + obj2.trf_array[obj1.trf_r_ind - obj2.trf_l_ind:]
-
-        if obj1.trf_array_length < obj2.trf_array_length:
-
-            obj1.trf_consensus = obj2.trf_consensus
-            obj1.trf_consensus_gc = obj2.trf_consensus_gc
-            obj1.trf_period = obj2.trf_period
-            obj1.trf_l_cons = obj2.trf_l_cons
-
-            obj1.trf_n_a = obj2.trf_n_a
-            obj1.trf_n_t = obj2.trf_n_t
-            obj1.trf_n_c = obj2.trf_n_c
-            obj1.trf_n_g = obj2.trf_n_g
-
-
-        obj1.trf_pmatch = int((obj1.trf_pmatch * obj1.trf_array_length + obj2.trf_pmatch * obj2.trf_array_length) / (obj1.trf_array_length + obj2.trf_array_length))
-
-        obj1.trf_l_ind = min(obj1.trf_l_ind, obj2.trf_l_ind)
-        obj1.trf_r_ind = max(obj1.trf_r_ind, obj2.trf_r_ind)
-        obj1.trf_array_length = obj1.trf_r_ind - obj1.trf_l_ind
-        obj1.trf_n_copy = obj1.trf_array_length / obj1.trf_period
-
-        obj1.trf_array_gc = get_gc(obj1.trf_array)
-
-        obj1.trf_joined = 1
-
-        return obj1
 
 def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
-    """ Parse raw TRF output in given folder to output_trf_file."""
+    """Parse raw TRF output in given folder to output_trf_file."""
     reader = TRFFileIO()
     trf_id = 1
     if os.path.isfile(output_trf_file):
         os.remove(output_trf_file)
     for file_path in sc_iter_filepath_folder(trf_raw_folder, mask="dat"):
         print("Start parse file %s..." % file_path)
-        trf_id = reader.parse_to_file(file_path, output_trf_file, trf_id=trf_id, project=project)
+        trf_id = reader.parse_to_file(
+            file_path, output_trf_file, trf_id=trf_id, project=project
+        )
+
 
 def sc_trf_to_fasta(trf_file, fasta_file):
-    """ Convert TRF file to fasta file.
-    """
+    """Convert TRF file to fasta file."""
     with open(fasta_file, "w") as fw:
         for trf_obj in sc_iter_tab_file(trf_file, TRModel):
             fw.write(trf_obj.fasta)
-
-

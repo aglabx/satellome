@@ -10,19 +10,23 @@ import os
 import yaml
 from core_functions.classification_micro import scf_basic_trs_classification
 
+
 def classify_trf_data(trf_prefix, output_dir, total_length):
-    
+
     base_prefix = trf_prefix
+    trf_file = os.path.join(output_dir, base_prefix)
 
     settings = {
         "folders": {
             "data_gff3": os.path.join(output_dir, "data_gff3"),
             "reports": os.path.join(output_dir, "reports"),
+            "trf_folder": os.path.join(output_dir, "trf"),
             "trf_parsed_folder": output_dir,
             "mathematica": os.path.join(output_dir, "mathematica"),
+            "fasta_folder": os.path.join(output_dir, "fasta"),
         },
         "files": {
-            "trf_all_file": base_prefix + ".trf",
+            "trf_all_file": trf_file + ".trf",
             "trf_micro_file": base_prefix + ".micro.trf",
             "trf_micro_kmers_file": base_prefix + ".micro.kmers",
             "trf_pmicro_kmers_file": base_prefix + ".pmicro.kmers",
@@ -62,7 +66,6 @@ def classify_trf_data(trf_prefix, output_dir, total_length):
                 },
             },
         },
-        
     }
 
     ### PART 2. Classify according to monomer/array features
@@ -76,24 +79,43 @@ def classify_trf_data(trf_prefix, output_dir, total_length):
     with open(results_file, "w") as fh:
         yaml.dump(project, fh, default_flow_style=False)
 
+    return settings
+
 
 def main():
     args = get_args()
     trf_prefix = args.prefix
     output_dir = args.output
     total_length = args.total_length
-    
+
     print("Refining names...")
     classify_trf_data(trf_prefix, output_dir, total_length)
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Classify TRF and write basic statistics')
-    parser.add_argument('-i', '--prefix', type=str, help='TRF prefix (trf file without extension))', required=True)
-    parser.add_argument('-o', '--output', type=str, help='Output directory', required=True)
-    parser.add_argument('-l', '--total_length', type=int, help='Total length of the assembly', required=True)
+    parser = argparse.ArgumentParser(
+        description="Classify TRF and write basic statistics"
+    )
+    parser.add_argument(
+        "-i",
+        "--prefix",
+        type=str,
+        help="TRF prefix (trf file without extension))",
+        required=True,
+    )
+    parser.add_argument(
+        "-o", "--output", type=str, help="Output directory", required=True
+    )
+    parser.add_argument(
+        "-l",
+        "--total_length",
+        type=int,
+        help="Total length of the assembly",
+        required=True,
+    )
     args = parser.parse_args()
     return args
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

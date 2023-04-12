@@ -7,7 +7,7 @@
 
 import argparse
 
-from trseeker.seqio.trf_file import TRFFileIO
+from trf_file import TRFFileIO
 
 if __name__ == "__main__":
 

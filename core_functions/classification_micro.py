@@ -22,27 +22,29 @@ Core functions related to classification of microsatellites tandem repeats.
 
 """
 import os
+import logging
 from collections import defaultdict
-
-from PyExp import core_logger
-from trseeker.seqio.gff_file import sc_gff3_reader
+from seqio import sc_gff3_reader
 from trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.tools.ngrams_tools import process_list_to_kmer_index, get_zlib_complexity
-from trseeker.tools.statistics import get_simple_statistics
+from seqio import sc_iter_tab_file
+from ngrams_tools import process_list_to_kmer_index, get_zlib_complexity
+from statistics_tool import get_simple_statistics
 
-def compute_kmer_index_for_trf_file(file_name, index_file, k=23, max_complexity=None, min_complexity=None):
+
+def compute_kmer_index_for_trf_file(
+    file_name, index_file, k=23, max_complexity=None, min_complexity=None
+):
     """
     TODO: replace gzip complexity with DUST filter
     """
     data = []
-    print("Read arrays...")
+    logging.info("Read arrays...")
     for i, trf_obj in enumerate(sc_iter_tab_file(file_name, TRModel)):
         data.append(trf_obj.trf_array)
-    print("Readed %s arrays." % i)
-    print("Compute k-mers...")
+    logging.info("Readed %s arrays." % i)
+    logging.info("Compute k-mers...")
     result = process_list_to_kmer_index(data, k, docids=False)
-    print("Save index...")
+    logging.info("Save index...")
     with open(index_file, "w") as fh:
         for item in result:
             if max_complexity:
@@ -51,13 +53,15 @@ def compute_kmer_index_for_trf_file(file_name, index_file, k=23, max_complexity=
             if min_complexity:
                 if get_zlib_complexity(item[0]) < min_complexity:
                     continue
-            s  = "%s\n" % "\t".join(map(str, item))
+            s = "%s\n" % "\t".join(map(str, item))
             fh.write(s)
     return result
 
-def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alpha=False):
-    ''' Save TRs dataset as one fasta file.
-    '''
+
+def save_trs_as_fasta(
+    trf_file, fasta_file, project, add_project=False, skip_alpha=False
+):
+    """Save TRs dataset as one fasta file."""
     trf_objs = []
     for trf_obj in sc_iter_tab_file(trf_file, TRModel):
         trf_objs.append(trf_obj)
@@ -68,8 +72,8 @@ def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alp
                     continue
             fh_fasta.write(trf_obj.get_fasta_repr(add_project=add_project))
 
-class RepeatCountStatsModel(object):
 
+class RepeatCountStatsModel(object):
     def __init__(self):
         self.max_length = 0
         self.min_length = 0
@@ -143,7 +147,7 @@ def _trs_separate_something(
         trf_objs.append(trf_obj)
     trf_objs.sort(key=lambda x: x.trf_head)
     N = len(trf_objs)
-    core_logger.info("Iterate TRs")
+    print("Iterate TRs")
 
     stats = defaultdict(RepeatCountStatsModel)
 
@@ -175,8 +179,8 @@ def _trs_separate_something(
         if output_math_file:
             fh_gff.close()
         for key in stats:
-            core_logger.info("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
-        core_logger.info("selected %s from %s " % (selected, N))
+            logging.info("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
+        logging.info("selected %s from %s " % (selected, N))
 
         if family_table_file:
             _save_families_to_file(stats, family_table_file)
@@ -190,15 +194,15 @@ def scf_basic_trs_classification(settings, project):
     fuzzy SSR and complex TRs.
     """
     # cf_set_ref_trf_file(settings, project)
-    cf_separate_perfect_microsatellites(settings, project)
-    cf_separate_microsatellites(settings, project)
-    cf_separate_true_ssr(settings, project)
-    cf_separate_fuzzy_ssr(settings, project)
-    cf_separate_complex_trs(settings, project)
+    # cf_separate_perfect_microsatellites(settings, project)
+    # cf_separate_microsatellites(settings, project)
+    # cf_separate_true_ssr(settings, project)
+    # cf_separate_fuzzy_ssr(settings, project)
+    # cf_separate_complex_trs(settings, project)
     cf_separate_1kb(settings, project)
     cf_separate_3kb(settings, project)
     cf_separate_10kb(settings, project)
-    cf_get_micro_summary_table(settings, project)
+    # cf_get_micro_summary_table(settings, project)
 
     return settings, project
 
@@ -216,6 +220,8 @@ def cf_separate_perfect_microsatellites(settings, project):
         os.makedirs(settings["folders"]["data_gff3"])
     if not os.path.isdir(settings["folders"]["reports"]):
         os.makedirs(settings["folders"]["reports"])
+    if not os.path.isdir(settings["folders"]["trf_folder"]):
+        os.makedirs(settings["folders"]["trf_folder"])
 
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_trf_file" in project["work_files"]:
@@ -225,9 +231,15 @@ def cf_separate_perfect_microsatellites(settings, project):
 
     dataset = project["work_files"]["ref_assembly_name_for_trf"]
 
-    trf_pmicro_file = settings["files"]["trf_perfect_micro_file"]
-    gff_pmicro_file = settings["files"]["gff_pmicro_file"]
-    family_table_file = settings["files"]["report_pmicro_file"]
+    trf_pmicro_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_perfect_micro_file"]
+    )
+    gff_pmicro_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_pmicro_file"]
+    )
+    family_table_file = os.path.join(
+        settings["folders"]["reports"], settings["files"]["report_pmicro_file"]
+    )
 
     filter_func = lambda x: x.trf_period < 6 and x.trf_pmatch == 100
 
@@ -247,6 +259,7 @@ def cf_separate_perfect_microsatellites(settings, project):
         )
         return name, gff, None
 
+    print(trf_all_file)
     r = _trs_separate_something(
         trf_all_file,
         trf_pmicro_file,
@@ -293,9 +306,15 @@ def cf_separate_microsatellites(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_micro_file = settings["files"]["trf_micro_file"]
-    gff_micro_file = settings["files"]["gff_micro_file"]
-    family_table_file = settings["files"]["report_micro_file"]
+    trf_micro_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_micro_file"]
+    )
+    gff_micro_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_micro_file"]
+    )
+    family_table_file = os.path.join(
+        settings["folders"]["reports"], settings["files"]["report_micro_file"]
+    )
 
     filter_func = lambda x: x.trf_period < 6
 
@@ -361,9 +380,15 @@ def cf_separate_true_ssr(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_tssr_file"]
-    gff_file = settings["files"]["gff_tssr_file"]
-    family_table_file = settings["files"]["report_tssr_file"]
+    trf_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_tssr_file"]
+    )
+    gff_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_tssr_file"]
+    )
+    family_table_file = os.path.join(
+        settings["folders"]["reports"], settings["files"]["report_tssr_file"]
+    )
 
     def filter_func(x):
         array = x.trf_array.lower()
@@ -463,9 +488,15 @@ def cf_separate_fuzzy_ssr(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_micro_file"]
-    gff_file = settings["files"]["trf_fssr_file"]
-    family_table_file = settings["files"]["report_fssr_file"]
+    trf_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_micro_file"]
+    )
+    gff_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["trf_fssr_file"]
+    )
+    family_table_file = os.path.join(
+        settings["folders"]["reports"], settings["files"]["report_fssr_file"]
+    )
 
     def filter_func(x):
         array = x.trf_array.lower()
@@ -581,21 +612,17 @@ def cf_separate_complex_trs(settings, project):
     if not os.path.isdir(settings["folders"]["mathematica"]):
         os.makedirs(settings["folders"]["mathematica"])
 
-    trf_complex_file = (
-        settings["files"]["trf_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
+    trf_complex_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_complex_file"]
     )
-    gff_complex_file = (
-        settings["files"]["gff_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
+    gff_complex_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_complex_file"]
     )
-    clouds_complex_file = (
-        settings["files"]["clouds_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
+    clouds_complex_file = os.path.join(
+        settings["folders"]["mathematica"], settings["files"]["clouds_complex_file"]
     )
-    clouds_png_complex_file = (
-        settings["files"]["clouds_png_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
+    clouds_png_complex_file = os.path.join(
+        settings["folders"]["mathematica"], settings["files"]["clouds_png_complex_file"]
     )
 
     filter_func = (
@@ -665,15 +692,30 @@ def cf_separate_complex_trs(settings, project):
 def cf_separate_1kb(settings, project):
     """Split all TRs by length greater 1kb."""
 
+    if not os.path.isdir(settings["folders"]["data_gff3"]):
+        os.makedirs(settings["folders"]["data_gff3"])
+    if not os.path.isdir(settings["folders"]["reports"]):
+        os.makedirs(settings["folders"]["reports"])
+    if not os.path.isdir(settings["folders"]["trf_folder"]):
+        os.makedirs(settings["folders"]["trf_folder"])
+    if not os.path.isdir(settings["folders"]["fasta_folder"]):
+        os.makedirs(settings["folders"]["fasta_folder"])
+
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_trf_file" in project["work_files"]:
         trf_all_file = project["work_files"]["ref_trf_file"]
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_1k_file"]
-    gff_file = settings["files"]["gff_1k_file"]
-    fasta_file = settings["files"]["trf_1k_fasta_file"]
+    trf_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_1k_file"]
+    )
+    gff_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_1k_file"]
+    )
+    fasta_file = os.path.join(
+        settings["folders"]["fasta_folder"], settings["files"]["trf_1k_fasta_file"]
+    )
 
     filter_func = lambda x: x.trf_array_length > 1000
 
@@ -710,6 +752,8 @@ def cf_separate_1kb(settings, project):
         3,
     )
 
+    project["work_files"].setdefault("repeats", {})
+    project["work_files"]["repeats"].setdefault(dataset, {})
     project["work_files"]["repeats"][dataset].setdefault("trevis", {})
     project["work_files"]["repeats"][dataset]["trevis"].setdefault("1kb", {})
     project["work_files"]["repeats"][dataset]["trevis"]["1kb"] = {
@@ -732,9 +776,15 @@ def cf_separate_3kb(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_3k_file"]
-    gff_file = settings["files"]["gff_3k_file"]
-    fasta_file = settings["files"]["trf_3k_fasta_file"]
+    trf_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_3k_file"]
+    )
+    gff_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_3k_file"]
+    )
+    fasta_file = os.path.join(
+        settings["folders"]["fasta_folder"], settings["files"]["trf_3k_fasta_file"]
+    )
 
     filter_func = lambda x: x.trf_array_length > 3000
 
@@ -793,9 +843,15 @@ def cf_separate_10kb(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_10k_file"]
-    gff_file = settings["files"]["gff_10k_file"]
-    fasta_file = settings["files"]["trf_10k_fasta_file"]
+    trf_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_10k_file"]
+    )
+    gff_file = os.path.join(
+        settings["folders"]["data_gff3"], settings["files"]["gff_10k_file"]
+    )
+    fasta_file = os.path.join(
+        settings["folders"]["fasta_folder"], settings["files"]["trf_10k_fasta_file"]
+    )
 
     filter_func = lambda x: x.trf_array_length > 10000
 
@@ -852,8 +908,12 @@ def cf_compute_micro_kmers(settings, project):
     @settings:files trf_micro_file: file with noperfect microsatellites TRs (monomer less than 5bp)
     @settings:files trf_micro_kmers_file: file with noperfect microsatellites kmers
     """
-    trf_micro_file = settings["files"]["trf_micro_file"]
-    trf_micro_kmers_file = settings["files"]["trf_micro_kmers_file"]
+    trf_micro_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_micro_file"]
+    )
+    trf_micro_kmers_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_micro_kmers_file"]
+    )
     index = compute_kmer_index_for_trf_file(
         trf_micro_file,
         trf_micro_kmers_file,
@@ -870,8 +930,12 @@ def cf_compute_perfect_micro_kmers(settings, project):
     @settings:files trf_perfect_micro_file: file with perfect microsatellites TRs (monomer less than 5bp)
     @settings:files trf_pmicro_kmers_file: file with perfect microsatellites kmers
     """
-    trf_pmicro_file = settings["files"]["trf_perfect_micro_file"]
-    trf_pmicro_kmers_file = settings["files"]["trf_pmicro_kmers_file"]
+    trf_pmicro_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_perfect_micro_file"]
+    )
+    trf_pmicro_kmers_file = os.path.join(
+        settings["folders"]["trf_folder"], settings["files"]["trf_pmicro_kmers_file"]
+    )
     index = compute_kmer_index_for_trf_file(
         trf_pmicro_file,
         trf_pmicro_kmers_file,
@@ -892,7 +956,7 @@ def cf_get_micro_summary_table(settings, project):
     )
 
     report_folder = settings["folders"]["reports"]
-    
+
     if not os.path.isdir(report_folder):
         os.makedirs(report_folder)
 
@@ -935,5 +999,5 @@ def cf_get_micro_summary_table(settings, project):
         fh.write(s)
         for d in data:
             s = "%s\t%s\t%s\t%s\t%s\n" % d
-            print(s.strip())
+            logging.info(s.strip())
             fh.write(s)

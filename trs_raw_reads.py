@@ -9,7 +9,7 @@ import aindex
 import os
 import argparse
 from trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
+from seqio import sc_iter_tab_file
 import statistics
 
 def main(args):
