@@ -19,6 +19,7 @@ from PyExp import sc_iter_filepath_folder, WiseOpener
 from trseeker.settings import load_settings
 from trseeker.seqio.tab_file import sc_iter_tab_file
 from satelome.trf_embedings import get_cosine_distance
+from satelome.parsers import refine_name
 
 settings = load_settings()
 
@@ -113,6 +114,7 @@ class TRFFileIO(AbstractBlockFileIO):
 
                     if project:
                         trf_obj.set_project_data(project)
+                    refine_name(trf_obj)
 
                     fw.write(str(trf_obj))
 

@@ -211,3 +211,19 @@ def get_wgs_prefix_from_head(head):
             return res.group(1)
         else:
             return None
+
+def refine_name(trf_obj):
+    """Refine TRF name
+    :param trf_obj: TRF object
+    :return: TRF object with refined name
+    """
+    name = trf_obj.trf_head.split()
+    if len(name):
+        name = name[0]
+    else:
+        name = name
+    trf_obj.trf_id = f"{name}_{trf_obj.trf_l_ind}_{trf_obj.trf_r_ind}"
+    trf_obj.id = f"AGT{(i+1) * 100:013d}"
+    trf_obj.trf_consensus = trf_obj.trf_consensus.upper()
+    trf_obj.trf_array = trf_obj.trf_array.upper()
+    return trf_obj

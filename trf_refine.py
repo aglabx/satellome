@@ -9,20 +9,14 @@ import argparse
 from trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
 import shutil
+from satelome.parsers import refine_name
+
 
 def refine_names(trf_file):
     data = []
-    for i, obj in enumerate(sc_iter_tab_file(trf_file, TRModel)):
-        name = obj.trf_head.split()
-        if len(name):
-            name = name[0]
-        else:
-            name = name
-        obj.trf_id = f"{name}_{obj.trf_l_ind}_{obj.trf_r_ind}"
-        obj.id = f"AGT{(i+1) * 100:013d}"
-        obj.trf_consensus = obj.trf_consensus.upper()
-        obj.trf_array = obj.trf_array.upper()
-        data.append(obj)
+    for i, trf_obj in enumerate(sc_iter_tab_file(trf_file, TRModel)):
+        refine_name(trf_obj)
+        data.append(trf_obj)
     
     with open(trf_file + ".1", "w") as fw:
         for obj in data:
