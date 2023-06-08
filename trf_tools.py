@@ -17,15 +17,13 @@ Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
 
 import os, shutil, tempfile
 from PyExp import sc_iter_filepath_folder
-import gzip
-from multiprocessing import Pool
 from satelome.utils import sc_iter_fasta_brute
 from satelome.trf_file import TRFFileIO
 
 trf_reader = TRFFileIO().iter_parse
 
 
-def trf_search_by_splitting(fasta_file, threads=30, wdir=".", project="NaN", trf_path="/home/akomissarov/libs/trf", parser_program="./trf_parse_raw.py"):
+def trf_search_by_splitting(fasta_file, threads=30, wdir=".", project="NaN", trf_path="/home/akomissarov/libs/trf", parser_program="./trf_parse_raw.py", keep_raw=False):
     """ TRF search by splitting on fasta file in files.
     """
     folder_path = tempfile.mkdtemp(dir=wdir)
@@ -74,9 +72,10 @@ def trf_search_by_splitting(fasta_file, threads=30, wdir=".", project="NaN", trf
     os.chdir(current_dir)
 
     ## 4. Remove temp folder
-    if folder_path.count("/") <= 3:
-        input("Remove: %s ?" % folder_path)
-    shutil.rmtree(folder_path)
+    if not keep_raw:
+        if folder_path.count("/") <= 3:
+            input("Remove: %s ?" % folder_path)
+        shutil.rmtree(folder_path)
 
     return output_file
 

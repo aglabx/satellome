@@ -1,5 +1,10 @@
 # satelome
 
+## Toolset desciption
+
+**trf_search** - from fasta file to trf file
+**trf_parse_raw** - from trf file to parsed trf with normalised monomer and joined overlapping repeats 
+
 Hypotesis to check:
 
 Part A.
@@ -30,3 +35,12 @@ Dataset to make:
 /mnt/data/satelome 
 
 Project unix group: satelome
+
+```
+    ### PART 3. Annotation and naming
+
+    ### PART 4. Visualization
+
+    # draw_chromosomes(settings, project)
+    # draw_spheres(settings, project)
+```

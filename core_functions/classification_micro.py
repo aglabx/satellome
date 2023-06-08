@@ -368,10 +368,10 @@ def cf_separate_true_ssr(settings, project):
     def filter_func(x):
         array = x.trf_array.lower()
         n = float(len(array))
-        a = array.count("a")
-        t = array.count("t")
-        c = array.count("c")
-        g = array.count("g")
+        a = array.count("A")
+        t = array.count("T")
+        c = array.count("C")
+        g = array.count("G")
         if a == 0 or t == 0 or c == 0 or g == 0:
             return True
         return False
@@ -379,10 +379,10 @@ def cf_separate_true_ssr(settings, project):
     def name_func(trf_obj):
         array = trf_obj.trf_array.lower()
         n = float(len(array))
-        a = array.count("a")
-        t = array.count("t")
-        c = array.count("c")
-        g = array.count("g")
+        a = array.count("A")
+        t = array.count("T")
+        c = array.count("C")
+        g = array.count("G")
         if (a and c and g) or (t and g and c):
             name = "tSSR_ACG"
         elif (a and c and t) or (t and g and a):
@@ -470,10 +470,10 @@ def cf_separate_fuzzy_ssr(settings, project):
     def filter_func(x):
         array = x.trf_array.lower()
         n = float(len(array))
-        a = array.count("a")
-        t = array.count("t")
-        c = array.count("c")
-        g = array.count("g")
+        a = array.count("A")
+        t = array.count("T")
+        c = array.count("C")
+        g = array.count("G")
         if a / n < 0.01 or a < 4:
             return True
         if c / n < 0.01 or c < 4:
@@ -487,10 +487,10 @@ def cf_separate_fuzzy_ssr(settings, project):
     def name_func(trf_obj):
         array = trf_obj.trf_array.lower()
         n = float(len(array))
-        a = array.count("a")
-        t = array.count("t")
-        c = array.count("c")
-        g = array.count("g")
+        a = array.count("A")
+        t = array.count("T")
+        c = array.count("C")
+        g = array.count("G")
         if a / n < 0.01 or a < 4:
             a = False
         if c / n < 0.01 or c < 4:
