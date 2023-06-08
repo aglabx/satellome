@@ -6,13 +6,35 @@
 #@contact: ad3002@gmail.com 
 
 from PyExp import AbstractModel
-from trseeker.tools.parsers import trf_parse_head
-from trseeker.tools.parsers import parse_fasta_head
-from trseeker.tools.parsers import parse_chromosome_name
-from trseeker.tools.parsers import trf_parse_line
-from trseeker.tools.sequence_tools import clear_sequence
-from trseeker.tools.sequence_tools import get_gc
+import re
+from satelome.parsers import trf_parse_head
+from satelome.parsers import parse_fasta_head
+from satelome.parsers import parse_chromosome_name
+from satelome.parsers import trf_parse_line
 from satelome.trf_embedings import create_vector, token2id, token2revtoken
+
+
+def get_gc(sequence):
+    """Count GC content."""
+    length = len(sequence)
+    if not length:
+        return 0
+    count_c = sequence.count("c") + sequence.count("C")
+    count_g = sequence.count("g") + sequence.count("G")
+    gc = float(count_c + count_g) / float(length)
+    return float(gc)
+
+
+def clear_sequence(sequence):
+    """Clear sequence (full alphabet):
+
+    - lower case
+    - \s -> ""
+    - [^actgn] -> ""
+    """
+    sequence = sequence.strip().upper()
+    sequence = re.sub("\s+", "", sequence)
+    return re.sub("[^actgnuwsmkrybdhvACTGNUWSMKRYBDHV\-]", "", sequence)
 
 class TRModel(AbstractModel):
     """ Class for tandem repeat wrapping
@@ -228,23 +250,26 @@ class TRModel(AbstractModel):
     def set_form_overlap(self, obj2):
         """ Init object with data from overlap with another TRFObj located right to self.
         """
+        self.trf_pmatch = int((self.trf_pmatch * self.trf_array_length + obj2.trf_pmatch * obj2.trf_array_length) / (self.trf_array_length + obj2.trf_array_length))
         self.trf_r_ind = obj2.trf_r_ind
         self.trf_period = min(self.trf_period, obj2.trf_period)
         self.trf_array = self.trf_array + obj2.trf_array[len(self.trf_array):]
         self.trf_array_length = len(self.trf_array)
+        if obj2.trf_l_cons < self.trf_l_cons:
+            self.trf_consensus = obj2.trf_consensus
         self.trf_n_copy = self.trf_array_length / self.trf_period
         self.trf_l_cons = min(self.trf_l_cons, obj2.trf_l_cons)
-        self.trf_pmatch = min(self.trf_pmatch, obj2.trf_pmatch)
         self.trf_indels = None
         self.trf_score = None
-        self.trf_n_a = None
-        self.trf_n_c = None
-        self.trf_n_g = None
-        self.trf_n_t = None
+        self.trf_n_a = self.trf_array.count("A")
+        self.trf_n_c = self.trf_array.count("C")
+        self.trf_n_g = self.trf_array.count("G")
+        self.trf_n_t = self.trf_array.count("T")
         self.trf_entropy = None
         self.trf_pvar = int(100 - float(self.trf_pmatch))
         self.trf_array_gc = get_gc(self.trf_array)
         self.trf_consensus_gc = get_gc(self.trf_consensus)
+        self.trf_joined = 1
 
 
     def get_vector(self):

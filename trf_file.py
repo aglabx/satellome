@@ -129,21 +129,6 @@ class TRFFileIO(AbstractBlockFileIO):
             if not line:
                 continue
             yield line
-
-    def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
-        """ Join two overlapped objects.
-        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
-        """
-        # a ------ 
-        # b    -----
-        if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
-            vector1 = obj1.get_vector()
-            vector2 = obj2.get_vector()
-            dist = get_cosine_distance(vector1, vector2)
-            if dist < cutoff_distance:
-                obj1.set_form_overlap(obj2)
-                return True
-        return False
         
     def _filter_obj_set(self, obj_set):
         # NB: I removed the overlaping part due to suspicious results.
@@ -229,8 +214,8 @@ class TRFFileIO(AbstractBlockFileIO):
                         if overlap_proc_diff >= settings["trf_settings"]["overlapping_cutoff_proc"] \
                                     and gc_dif <= settings["trf_settings"]["overlapping_gc_diff"]:
                             is_overlapping = True
-                            obj1 = self._join_overlapped(obj1, obj2)
-                            obj2 = None
+                            if self._join_overlapped(obj1, obj2):
+                                obj2 = None
                             # print("overlap: ", overlap, "min_length:", min_length, "overlap_proc_diff:", overlap_proc_diff, "gc_dif:", gc_dif)
                             # print("JOINED")
                         continue
@@ -259,40 +244,21 @@ class TRFFileIO(AbstractBlockFileIO):
         
         return obj_set
 
-    def _join_overlapped(self, obj1, obj2):
+    def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
         ''' Join overlapping sequences.'''
-        obj1.trf_pmatch = int(obj1.trf_pmatch)
-        obj2.trf_pmatch = int(obj2.trf_pmatch)
-        obj1.trf_array_length = int(obj1.trf_array_length)
-        obj2.trf_array_length = int(obj2.trf_array_length)
-
-        obj1.trf_array = obj1.trf_array + obj2.trf_array[obj1.trf_r_ind - obj2.trf_l_ind:]
-
-        if obj1.trf_array_length < obj2.trf_array_length:
-
-            obj1.trf_consensus = obj2.trf_consensus
-            obj1.trf_consensus_gc = obj2.trf_consensus_gc
-            obj1.trf_period = obj2.trf_period
-            obj1.trf_l_cons = obj2.trf_l_cons
-
-            obj1.trf_n_a = obj2.trf_n_a
-            obj1.trf_n_t = obj2.trf_n_t
-            obj1.trf_n_c = obj2.trf_n_c
-            obj1.trf_n_g = obj2.trf_n_g
-
-
-        obj1.trf_pmatch = int((obj1.trf_pmatch * obj1.trf_array_length + obj2.trf_pmatch * obj2.trf_array_length) / (obj1.trf_array_length + obj2.trf_array_length))
-
-        obj1.trf_l_ind = min(obj1.trf_l_ind, obj2.trf_l_ind)
-        obj1.trf_r_ind = max(obj1.trf_r_ind, obj2.trf_r_ind)
-        obj1.trf_array_length = obj1.trf_r_ind - obj1.trf_l_ind
-        obj1.trf_n_copy = obj1.trf_array_length / obj1.trf_period
-
-        obj1.trf_array_gc = get_gc(obj1.trf_array)
-
-        obj1.trf_joined = 1
-
-        return obj1
+        """ Join two overlapped objects.
+        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
+        """
+        # a ------ 
+        # b    -----
+        if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
+            vector1 = obj1.get_vector()
+            vector2 = obj2.get_vector()
+            dist = get_cosine_distance(vector1, vector2)
+            if dist < cutoff_distance:
+                obj1.set_form_overlap(obj2)
+                return True
+        return False
 
 def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
     """ Parse raw TRF output in given folder to output_trf_file."""

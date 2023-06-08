@@ -66,12 +66,3 @@ if __name__ == "__main__":
             trf_path=trf_path, 
             parser_program=parser_program,
         )
-
-    
-
-    ### PART 3. Annotation and naming
-
-    ### PART 4. Visualization
-
-    # draw_chromosomes(settings, project)
-    # draw_spheres(settings, project)
