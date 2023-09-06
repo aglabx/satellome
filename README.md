@@ -1,5 +1,7 @@
 # satelome
 
+## Installation instruction
+
 ## Toolset desciption
 
 **trf_search** - from fasta file to trf file
@@ -44,3 +46,4 @@ Project unix group: satelome
     # draw_chromosomes(settings, project)
     # draw_spheres(settings, project)
 ```
+
