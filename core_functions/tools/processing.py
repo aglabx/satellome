@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# @created: 23.02.2011
-# @author: Aleksey Komissarov
-# @contact: ad3002@gmail.com
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
 # @created: 14.02.2023
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
@@ -36,3 +30,4 @@ def get_genome_size(fasta_file):
         genome_size += len(seq)
     print(f"{genome_size} bp.")
     return genome_size
+

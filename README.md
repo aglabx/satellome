@@ -40,6 +40,7 @@ pip install -r requirements.txt
 ```bash
 curl -OJX GET "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCF_000146045.2/download?include_annotation_type=GENOME_FASTA,GENOME_GFF&filename=GCF_000146045.2.zip" -H "Accept: application/zip"
 unzip GCF_000146045.2.zip
+rm GCF_000146045.2.zip
 ```
 
 ## Backlog
