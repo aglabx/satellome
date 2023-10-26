@@ -9,6 +9,7 @@ import argparse
 import subprocess
 import sys
 import os
+from core_functions.tools.gene_intersect import add_annotation_from_gff
 
 from satelome.core_functions.tools.processing import get_genome_size
 
@@ -25,6 +26,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--genome_size", help="Expected genome size", required=False, default=0
     )
+    parser.add_argument("--gff", help="Input gff file", required=False, default=None)
+    parser.add_argument("-c", "--cutoff", help="Cutoff for large TRs", required=False, default=1000)
     args = vars(parser.parse_args())
 
     fasta_file = args["input"]
@@ -32,7 +35,9 @@ if __name__ == "__main__":
     project = args["project"]
     threads = args["threads"]
     trf_path = args["trf"]
+    large_cutoff = int(args["cutoff"])
     genome_size = int(args["genome_size"])
+    gff_file = args["gff"]
 
 
     input_filename_without_extension = os.path.basename(os.path.splitext(fasta_file)[0])
@@ -40,7 +45,16 @@ if __name__ == "__main__":
     trf_prefix = os.path.join(
         output_dir,
         input_filename_without_extension
-    ) 
+    )
+
+    if genome_size == 0:
+        genome_size = get_genome_size(fasta_file)
+
+    current_file_path = os.path.abspath(__file__)
+    current_directory = os.path.dirname(current_file_path)
+
+    trf_search_path = os.path.join(current_directory, "steps", "trf_search.py")
+    trf_classify_path = os.path.join(current_directory, "steps", "trf_classify.py")
     
     settings = {
         "fasta_file": fasta_file,
@@ -50,15 +64,14 @@ if __name__ == "__main__":
         "trf_path": trf_path,
         "genome_size": genome_size,
         "trf_prefix": trf_prefix,
+        "large_cutoff": large_cutoff,
+        "trf_search_path": trf_search_path,
+        "trf_classify_path": trf_classify_path,
+        "gff_file": gff_file,
+        "trf_file": f"{trf_prefix}.trf",
     }
 
-    if genome_size == 0:
-        genome_size = get_genome_size(fasta_file)
-
-    current_file_path = os.path.abspath(__file__)
-    current_directory = os.path.dirname(current_file_path)
-
-    trf_search_path = os.path.join(current_directory, "trf_search.py")
+    #TODO: use large_cutoff in code
 
     command = f"time python {trf_search_path} -i {fasta_file} \
                                    -o {output_dir} \
@@ -75,9 +88,21 @@ if __name__ == "__main__":
         print(f"trf_search.py failed with return code {completed_process.returncode}")
         sys.exit(1)
 
-    trf_search_path = os.path.join(current_directory, "trf_classify.py")
+    if gff_file:
+        print("Adding annotation from GFF file...")
+        reports_folder = os.path.join(
+            output_dir,
+            "reports")
+        if not os.path.exists(reports_folder):
+            os.makedirs(reports_folder)
+        report_file = os.path.join(
+            reports_folder,
+            "annotation_report.txt"
+        )
+        add_annotation_from_gff(settings["trf_file"], gff_file, report_file)
+        print("Annotation added!")
 
-    command = f"time python {trf_search_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
+    command = f"time python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
     print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
