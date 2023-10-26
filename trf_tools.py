@@ -17,7 +17,7 @@ Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
 
 import os, shutil, tempfile
 from PyExp import sc_iter_filepath_folder
-from satelome.utils import sc_iter_fasta_brute
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.core_functions.io.trf_file import TRFFileIO
 
 trf_reader = TRFFileIO().iter_parse

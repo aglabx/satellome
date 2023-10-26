@@ -7,7 +7,7 @@
 
 import re
 import pandas as pd
-from satelome.utils import sc_iter_fasta_brute
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 import math
 
 CENPB_REGEXP = re.compile(r'.ttcg....a..cggg.')

@@ -10,7 +10,7 @@ import os
 import sys
 import pathlib
 
-from satelome.utils import sc_iter_fasta_brute
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.trf_tools import trf_search_by_splitting
 
 
