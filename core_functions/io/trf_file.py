@@ -20,7 +20,9 @@ from satelome.core_functions.settings import load_settings
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.trf_embedings import get_cosine_distance
 from satelome.parsers import refine_name
+from satelome.core_functions.tools.processing import get_revcomp
 from collections import defaultdict
+
 
 settings = load_settings()
 
@@ -71,20 +73,6 @@ def get_shifts_variants(sequence):
         shifts.add(sequence[i:] + sequence[:i])
     return list(shifts)
 
-
-REVCOMP_DICTIONARY = dict(list(zip("ATCGNatcgn~[]", "TAGCNtagcn~][")))
-
-
-def get_revcomp(sequence):
-    """Return reverse complementary sequence.
-
-    >>> complementary('AT CG')
-    'CGAT'
-
-    """
-    return "".join(
-        REVCOMP_DICTIONARY.get(nucleotide, "") for nucleotide in reversed(sequence)
-    )
 
 
 def sort_dictionary_by_value(d, reverse=False):

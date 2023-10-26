@@ -1,5 +1,5 @@
 import math
-from satelome.utils import get_revcomp
+from satelome.core_functions.tools.processing import get_revcomp
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
