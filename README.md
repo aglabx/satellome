@@ -35,6 +35,12 @@ pip install -r requirements.txt
 **main.py** - from fasta file to trf file
 **trf_parse_raw** - from trf file to parsed trf with normalised monomer and joined overlapping repeats 
 
+## Download test dataset
+
+```bash
+curl -OJX GET "https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/GCF_000146045.2/download?include_annotation_type=GENOME_FASTA,GENOME_GFF&filename=GCF_000146045.2.zip" -H "Accept: application/zip"
+unzip GCF_000146045.2.zip
+```
 
 ## Backlog
 
