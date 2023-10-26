@@ -2,10 +2,41 @@
 
 ## Installation instruction
 
+### 1. Install conda
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+```
+
+```bash
+bash Miniconda3-latest-Linux-x86_64.sh
+```
+
+### 2. Create conda environment
+
+```bash
+conda create -n satelome python=3.9
+```
+
+### 3. Activate conda environment
+
+```bash
+conda activate satelome
+```
+
+### 4. Install requirements
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Toolset desciption
 
 **main.py** - from fasta file to trf file
 **trf_parse_raw** - from trf file to parsed trf with normalised monomer and joined overlapping repeats 
+
+
+## Backlog
 
 Hypotesis to check:
 
