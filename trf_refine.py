@@ -6,11 +6,11 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from satelome.trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
+from satelome.core_functions.models.trf_model import TRModel
+from satelome.core_functions.io.tab_file import sc_iter_tab_file
 import shutil
 from satelome.parsers import refine_name
-from satelome.trf_file import join_overlapped
+from satelome.core_functions.io.trf_file import join_overlapped
 
 
 def refine_names(trf_file):

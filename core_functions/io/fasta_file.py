@@ -1,19 +1,21 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# @created: 05.06.2011
+# @author: Aleksey Komissarov
+# @contact: ad3002@gmail.com
+"""
+Classes:
 
-REVCOMP_DICTIONARY = dict(zip('ATCGNatcgn~[]', 'TAGCNtagcn~]['))
+- FastaFileIO(AbstractBlockFileIO)
+  
+"""
+import gzip
 
-def get_revcomp(sequence):
-    '''Return reverse complementary sequence.
 
-    >>> complementary('AT CG')
-    'CGAT'
-
-    '''
-    return ''.join(REVCOMP_DICTIONARY.get(nucleotide, '') for nucleotide in reversed(sequence))
-
-    
 def sc_iter_fasta_brute(file_name, inmem=False, lower=False):
-    """ Iter over fasta file."""
-    
+    """Iter over fasta file."""
+
     header = None
     seq = []
     if file_name.endswith(".gz"):
@@ -22,7 +24,7 @@ def sc_iter_fasta_brute(file_name, inmem=False, lower=False):
     else:
         opener = open
         decoder = lambda x: x
-    
+
     with opener(file_name) as fh:
         if inmem:
             data = [decoder(x) for x in fh.readlines()]
@@ -46,4 +48,3 @@ def sc_iter_fasta_brute(file_name, inmem=False, lower=False):
             if lower:
                 sequence = sequence.lower()
             yield header, sequence
-

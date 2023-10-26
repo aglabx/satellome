@@ -6,7 +6,7 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from trseeker.seqio.fasta_file import sc_iter_fasta_brute
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 import re
 
 def main(args):

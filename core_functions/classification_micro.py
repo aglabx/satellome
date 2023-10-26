@@ -8,13 +8,10 @@
 Core functions related to classification of microsatellites tandem repeats.
 
 - cf_separate_perfect_microsatellites(settings, project)
-- cf_compute_perfect_micro_kmers(settings, project)
 - cf_separate_microsatellites(settings, project)
-- cf_compute_micro_kmers(settings, project)
 - cf_separate_true_ssr(settings, project)
 - cf_separate_fuzzy_ssr(settings, project)
 - cf_separate_complex_trs(settings, project)
-- cf_compute_complex_kmers(settings, project)
 - cf_separate_1kb(settings, project)
 - cf_separate_3kb(settings, project)
 - cf_separate_10kb(settings, project)
@@ -24,36 +21,10 @@ Core functions related to classification of microsatellites tandem repeats.
 import os
 from collections import defaultdict
 
-from PyExp import core_logger
-from trseeker.seqio.gff_file import sc_gff3_reader
-from trf_model import TRModel
-from trseeker.seqio.tab_file import sc_iter_tab_file
-from trseeker.tools.ngrams_tools import process_list_to_kmer_index, get_zlib_complexity
-from trseeker.tools.statistics import get_simple_statistics
-
-def compute_kmer_index_for_trf_file(file_name, index_file, k=23, max_complexity=None, min_complexity=None):
-    """
-    TODO: replace gzip complexity with DUST filter
-    """
-    data = []
-    print("Read arrays...")
-    for i, trf_obj in enumerate(sc_iter_tab_file(file_name, TRModel)):
-        data.append(trf_obj.trf_array)
-    print("Readed %s arrays." % i)
-    print("Compute k-mers...")
-    result = process_list_to_kmer_index(data, k, docids=False)
-    print("Save index...")
-    with open(index_file, "w") as fh:
-        for item in result:
-            if max_complexity:
-                if get_zlib_complexity(item[0]) > max_complexity:
-                    continue
-            if min_complexity:
-                if get_zlib_complexity(item[0]) < min_complexity:
-                    continue
-            s  = "%s\n" % "\t".join(map(str, item))
-            fh.write(s)
-    return result
+from satelome.core_functions.io.gff_file import sc_gff3_reader
+from satelome.core_functions.models.trf_model import TRModel
+from satelome.core_functions.io.tab_file import sc_iter_tab_file
+from satelome.core_functions.tools.statistics import get_simple_statistics
 
 def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alpha=False):
     ''' Save TRs dataset as one fasta file.
@@ -143,7 +114,7 @@ def _trs_separate_something(
         trf_objs.append(trf_obj)
     trf_objs.sort(key=lambda x: x.trf_head)
     N = len(trf_objs)
-    core_logger.info("Iterate TRs")
+    print("Iterate TRs")
 
     stats = defaultdict(RepeatCountStatsModel)
 
@@ -175,8 +146,8 @@ def _trs_separate_something(
         if output_math_file:
             fh_gff.close()
         for key in stats:
-            core_logger.info("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
-        core_logger.info("selected %s from %s " % (selected, N))
+            print("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
+        print("selected %s from %s " % (selected, N))
 
         if family_table_file:
             _save_families_to_file(stats, family_table_file)
@@ -844,41 +815,6 @@ def cf_separate_10kb(settings, project):
 
     return r
 
-
-def cf_compute_micro_kmers(settings, project):
-    """
-    Compute kmer for noperfect microsatellites
-
-    @settings:files trf_micro_file: file with noperfect microsatellites TRs (monomer less than 5bp)
-    @settings:files trf_micro_kmers_file: file with noperfect microsatellites kmers
-    """
-    trf_micro_file = settings["files"]["trf_micro_file"]
-    trf_micro_kmers_file = settings["files"]["trf_micro_kmers_file"]
-    index = compute_kmer_index_for_trf_file(
-        trf_micro_file,
-        trf_micro_kmers_file,
-        k=23,
-        max_complexity=None,
-        min_complexity=None,
-    )
-
-
-def cf_compute_perfect_micro_kmers(settings, project):
-    """
-    Compute kmer for perfect microsatellites
-
-    @settings:files trf_perfect_micro_file: file with perfect microsatellites TRs (monomer less than 5bp)
-    @settings:files trf_pmicro_kmers_file: file with perfect microsatellites kmers
-    """
-    trf_pmicro_file = settings["files"]["trf_perfect_micro_file"]
-    trf_pmicro_kmers_file = settings["files"]["trf_pmicro_kmers_file"]
-    index = compute_kmer_index_for_trf_file(
-        trf_pmicro_file,
-        trf_pmicro_kmers_file,
-        k=23,
-        max_complexity=None,
-        min_complexity=None,
-    )
 
 
 def cf_get_micro_summary_table(settings, project):

@@ -7,7 +7,7 @@
 
 import argparse
 
-from trseeker.seqio.trf_file import TRFFileIO
+from satelome.core_functions.io.trf_file import TRFFileIO
 
 if __name__ == "__main__":
 

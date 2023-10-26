@@ -12,11 +12,11 @@ Classes:
 
 """
 import os
-from trf_model import TRModel
-from trseeker.seqio.block_file import AbstractBlockFileIO
+from satelome.core_functions.models.trf_model import TRModel
+from satelome.core_functions.io.block_file import AbstractBlockFileIO
 from PyExp import sc_iter_filepath_folder, WiseOpener
-from trseeker.settings import load_settings
-from trseeker.seqio.tab_file import sc_iter_tab_file
+from satelome.core_functions.settings import load_settings
+from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.trf_embedings import get_cosine_distance
 from satelome.parsers import refine_name
 from collections import defaultdict
