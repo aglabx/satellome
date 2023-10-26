@@ -6,9 +6,10 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from satelome.trf_clusters import *
+from satelome.trf_clusters import draw_all
 
 def main():
+    ''' Main function.'''
     args = get_args()
     trf_file = args.input
     output_folder = args.output

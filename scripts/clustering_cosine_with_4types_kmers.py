@@ -31,7 +31,7 @@ def read_fasta(fasta):
                 sequence = []
                 name = line[1:]
             else:
-                sequence.append(line.lower())
+                sequence.append(line.upper())
             line = file.readline().strip()
     return sequences
 

@@ -212,7 +212,7 @@ def get_wgs_prefix_from_head(head):
         else:
             return None
 
-def refine_name(trf_obj):
+def refine_name(i, trf_obj):
     """Refine TRF name
     :param trf_obj: TRF object
     :return: TRF object with refined name

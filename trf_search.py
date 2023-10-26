@@ -11,7 +11,7 @@ import sys
 import pathlib
 
 from satelome.utils import sc_iter_fasta_brute
-from trf_tools import trf_search_by_splitting
+from satelome.trf_tools import trf_search_by_splitting
 
 
 if __name__ == "__main__":

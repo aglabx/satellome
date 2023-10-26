@@ -366,7 +366,7 @@ def cf_separate_true_ssr(settings, project):
     family_table_file = settings["files"]["report_tssr_file"]
 
     def filter_func(x):
-        array = x.trf_array.lower()
+        array = x.trf_array.upper()
         n = float(len(array))
         a = array.count("A")
         t = array.count("T")
@@ -377,7 +377,7 @@ def cf_separate_true_ssr(settings, project):
         return False
 
     def name_func(trf_obj):
-        array = trf_obj.trf_array.lower()
+        array = trf_obj.trf_array.upper()
         n = float(len(array))
         a = array.count("A")
         t = array.count("T")
@@ -468,7 +468,7 @@ def cf_separate_fuzzy_ssr(settings, project):
     family_table_file = settings["files"]["report_fssr_file"]
 
     def filter_func(x):
-        array = x.trf_array.lower()
+        array = x.trf_array.upper()
         n = float(len(array))
         a = array.count("A")
         t = array.count("T")
@@ -485,7 +485,7 @@ def cf_separate_fuzzy_ssr(settings, project):
         return False
 
     def name_func(trf_obj):
-        array = trf_obj.trf_array.lower()
+        array = trf_obj.trf_array.upper()
         n = float(len(array))
         a = array.count("A")
         t = array.count("T")
@@ -605,7 +605,7 @@ def cf_separate_complex_trs(settings, project):
         and x.trf_array_gc > 0.2
         and x.trf_array_gc < 0.8
         and x.trf_n_copy > 4
-        and x.trf_entropy > 1.82
+        and (x.trf_entropy and x.trf_entropy > 1.82)
     )
 
     def name_func(trf_obj):
@@ -882,7 +882,7 @@ def cf_compute_perfect_micro_kmers(settings, project):
 
 
 def cf_get_micro_summary_table(settings, project):
-    """ """
+    """ Get summary table for microsatellites """
     dataset = project["work_files"]["ref_assembly_name_for_trf"]
 
     input_gff = project["work_files"]["repeats"][dataset]["trevis"]["micro"]["gff_file"]

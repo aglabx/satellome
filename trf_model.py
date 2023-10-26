@@ -216,7 +216,7 @@ class TRModel(AbstractModel):
          self.trf_r_ind,
          self.trf_period,
          self.trf_n_copy,
-         self.trf_l_cons,
+         trf_l_cons,
          self.trf_pmatch,
          self.trf_indels,
          self.trf_score,
@@ -251,21 +251,25 @@ class TRModel(AbstractModel):
         """ Init object with data from overlap with another TRFObj located right to self.
         """
         self.trf_pmatch = int((self.trf_pmatch * self.trf_array_length + obj2.trf_pmatch * obj2.trf_array_length) / (self.trf_array_length + obj2.trf_array_length))
-        self.trf_r_ind = obj2.trf_r_ind
         self.trf_period = min(self.trf_period, obj2.trf_period)
-        self.trf_array = self.trf_array + obj2.trf_array[len(self.trf_array):]
+
+        left_flank = obj2.trf_l_ind - self.trf_l_ind
+        self.trf_array = self.trf_array + obj2.trf_array[len(self.trf_array)-left_flank:]
+        
+        self.trf_r_ind = obj2.trf_r_ind
         self.trf_array_length = len(self.trf_array)
-        if obj2.trf_l_cons < self.trf_l_cons:
+        assert self.trf_array_length == self.trf_r_ind - self.trf_l_ind + 1
+
+        if obj2.trf_period < self.trf_period:
             self.trf_consensus = obj2.trf_consensus
         self.trf_n_copy = self.trf_array_length / self.trf_period
-        self.trf_l_cons = min(self.trf_l_cons, obj2.trf_l_cons)
         self.trf_indels = None
         self.trf_score = None
         self.trf_n_a = self.trf_array.count("A")
         self.trf_n_c = self.trf_array.count("C")
         self.trf_n_g = self.trf_array.count("G")
         self.trf_n_t = self.trf_array.count("T")
-        self.trf_entropy = None
+        self.trf_entropy = max(self.trf_entropy, obj2.trf_entropy)
         self.trf_pvar = int(100 - float(self.trf_pmatch))
         self.trf_array_gc = get_gc(self.trf_array)
         self.trf_consensus_gc = get_gc(self.trf_consensus)

@@ -6,16 +6,41 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from trf_model import TRModel
+from satelome.trf_model import TRModel
 from trseeker.seqio.tab_file import sc_iter_tab_file
 import shutil
 from satelome.parsers import refine_name
+from satelome.trf_file import join_overlapped
 
 
 def refine_names(trf_file):
     data = []
+    last_head = None
+    last_end = None
     for i, trf_obj in enumerate(sc_iter_tab_file(trf_file, TRModel)):
-        refine_name(trf_obj)
+
+        if i % 10000 == 0:
+            print(i, end="\r", flush=True)
+
+        refine_name(i, trf_obj)
+
+        # check overlapped
+        if last_head is not None:
+            if trf_obj.trf_l_ind < last_end and last_head == trf_obj.trf_head:
+                # print(str(data[-1]))
+                # print(str(trf_obj))
+                if join_overlapped(data[-1], trf_obj, cutoff_distance=0.1):
+                    last_head = trf_obj.trf_head
+                    last_end = trf_obj.trf_r_ind
+                    # print(str(data[-1]))
+                    # print("Joined")
+                    continue
+
+                # input("?")
+        
+        last_head = trf_obj.trf_head
+        last_end = trf_obj.trf_r_ind
+        
         data.append(trf_obj)
     
     with open(trf_file + ".1", "w") as fw:
@@ -23,22 +48,18 @@ def refine_names(trf_file):
             fw.write(obj.get_as_string(obj.dumpable_attributes))
 
     shutil.move(trf_file + ".1", trf_file)
-    
+    print("Done.")
 
 
-def main():
-    args = get_args()
+def main(args):
     trf_file = args.input
-    
-    print("Refining names...")
+    print("Refining names and overlapping...")
     refine_names(trf_file)
 
-
-def get_args():
-    parser = argparse.ArgumentParser(description='Refine TRF names')
-    parser.add_argument('-i', '--input', type=str, help='TRF file')
-    args = parser.parse_args()
-    return args
-
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser(description='Refine TRF names')
+    parser.add_argument('-i', '--input', type=str, help='TRF file', required=True)
+    args = parser.parse_args()
+
+    main(args)

@@ -14,14 +14,168 @@ Classes:
 import os
 from trf_model import TRModel
 from trseeker.seqio.block_file import AbstractBlockFileIO
-from trseeker.tools.sequence_tools import get_gc, remove_consensus_redundancy
 from PyExp import sc_iter_filepath_folder, WiseOpener
 from trseeker.settings import load_settings
 from trseeker.seqio.tab_file import sc_iter_tab_file
 from satelome.trf_embedings import get_cosine_distance
 from satelome.parsers import refine_name
+from collections import defaultdict
 
 settings = load_settings()
+
+def join_overlapped(obj1, obj2, cutoff_distance=0.1):
+     
+    ''' Join overlapping sequences.'''
+    """ Join two overlapped objects.
+    We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
+    """
+    # a ------ 
+    # b    -----
+    if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
+        vector1 = obj1.get_vector()
+        vector2 = obj2.get_vector()
+        dist = get_cosine_distance(vector1, vector2)
+        left_part = obj2.trf_l_ind - obj1.trf_l_ind
+        right_part = obj2.trf_r_ind - obj1.trf_r_ind
+        middle_part = obj1.trf_r_ind - obj2.trf_l_ind
+
+        intersect_fraction = middle_part / (left_part + right_part + middle_part)
+
+        # print("DIST", dist, "FRAQ", intersect_fraction)
+
+        if dist < cutoff_distance or intersect_fraction > 0.2:
+            obj1.set_form_overlap(obj2)
+            return True
+    return False
+
+def get_gc(sequence):
+    """Count GC content."""
+    length = len(sequence)
+    if not length:
+        return 0
+    count_c = sequence.count("c") + sequence.count("C")
+    count_g = sequence.count("g") + sequence.count("G")
+    gc = float(count_c + count_g) / float(length)
+    return float(gc)
+
+def get_int_gc(sequence):
+    """Get GC content from 0 to 100."""
+    gc = get_gc(sequence)
+    return int(100 * round(gc, 2))
+
+def get_shifts_variants(sequence):
+    """ """
+    shifts = set()
+    for i in range(len(sequence)):
+        shifts.add(sequence[i:] + sequence[:i])
+    return list(shifts)
+
+
+REVCOMP_DICTIONARY = dict(list(zip("ATCGNatcgn~[]", "TAGCNtagcn~][")))
+
+
+def get_revcomp(sequence):
+    """Return reverse complementary sequence.
+
+    >>> complementary('AT CG')
+    'CGAT'
+
+    """
+    return "".join(
+        REVCOMP_DICTIONARY.get(nucleotide, "") for nucleotide in reversed(sequence)
+    )
+
+
+def sort_dictionary_by_value(d, reverse=False):
+    """Sort dictionary by value. Retrun list of (v, k) pairs."""
+    result = [(v, k) for k, v in list(d.items())]
+    result.sort(reverse=reverse, key=lambda x: x[0])
+    return result
+
+
+def remove_consensus_redundancy(trf_objs):
+    """Take a minimal sequence from lexicographically sorted rotations of sequence and its reverse complement
+    Example: ACT, underlined - reverse complement seqeunces
+    ACT, AGT, CTA, GTA, TAC, TAG
+    Find all possible multimers, e.g. replace GTAGTAGTA consensus sequence with ACT
+    Return:
+    1) list of sorted TRs
+    2) list of (df, consensus) pairs
+    """
+    # sort by length
+    consensuses = [x.trf_consensus for x in trf_objs]
+    consensuses = list(set(consensuses))
+    consensuses.sort(key=lambda x: len(x))
+    length2consensuses = {}
+    # print "Group monomers by length and GC"
+    for i, monomer in enumerate(consensuses):
+        n = len(monomer)
+        length2consensuses.setdefault(n, {})
+        gc = get_int_gc(monomer)
+        length2consensuses[n].setdefault(gc, [])
+        length2consensuses[n][gc].append(i)
+    # print "Iterate over consensuses"
+    N = len(consensuses)
+    result_rules = {}
+    for i, monomer in enumerate(consensuses):
+        if not monomer:
+            continue
+        # print i, N, "\r",
+        if monomer in result_rules:
+            continue
+        gc = get_int_gc(monomer)
+        base = len(monomer)
+        n = base
+        # maximal consensus length from TRF is 2000 bp
+        variants = set(
+            get_shifts_variants(monomer) + get_shifts_variants(get_revcomp(monomer))
+        )
+        if not variants:
+            raise Exception("Wrong monomer sequence for '%s'" % monomer)
+        lex_consensus = min(variants)
+        while n <= 2020:
+            if n in length2consensuses and gc in length2consensuses[n]:
+                for k in length2consensuses[n][gc]:
+                    monomer_b = consensuses[k]
+                    if monomer_b in result_rules:
+                        continue
+                    s = n // base
+                    v = set()
+                    for p in range(s):
+                        v.add(monomer_b[p * base : (p + 1) * base])
+                    if len(v) > 1:
+                        continue
+                    item = v.pop()
+                    if item in variants:
+                        # if consensuses[k] != lex_consensus:
+                        # print
+                        # print i, base, consensuses[k], "->", lex_consensus
+                        result_rules[consensuses[k]] = lex_consensus
+
+            n += base
+    # print
+    # print "Fix momomers"
+    variants2df = defaultdict(int)
+    for i, trf_obj in enumerate(trf_objs):
+        if not trf_obj.trf_consensus:
+            trf_objs[i] = None
+            continue
+        if trf_obj.trf_consensus in result_rules:
+            variants2df[result_rules[trf_obj.trf_consensus]] += 1
+        else:
+            message = (
+                "Error key with length",
+                len(trf_obj.trf_consensus),
+                trf_obj.trf_consensus,
+            )
+            # print str(trf_obj)
+            # print message
+            raise Exception(message)
+        trf_obj.trf_consensus = result_rules[trf_obj.trf_consensus]
+    # print "Sort families by df..."
+    variants2df = sort_dictionary_by_value(variants2df, reverse=True)
+    trf_objs = [x for x in trf_objs if x is not None]
+    return trf_objs, variants2df
 
 
 class TRFFileIO(AbstractBlockFileIO):
@@ -114,7 +268,29 @@ class TRFFileIO(AbstractBlockFileIO):
 
                     if project:
                         trf_obj.set_project_data(project)
-                    refine_name(trf_obj)
+                    refine_name(trf_id, trf_obj)
+
+                    fw.write(str(trf_obj))
+
+                    trf_id += 1
+        return trf_id
+    
+
+    def refine_old_to_file(self, file_path, output_path, trf_id=0, project=None, verbose=True):
+        """ Parse trf file in tab delimited file."""
+        if trf_id == 0:
+            mode = "w"
+        else:
+            mode = "a"
+        
+        with WiseOpener(output_path, mode) as fw:
+            for trf_obj_set in self.iter_parse(file_path):
+                for trf_obj in trf_obj_set:
+                    trf_obj.trf_id = trf_id
+
+                    if project:
+                        trf_obj.set_project_data(project)
+                    refine_name(trf_id, trf_obj)
 
                     fw.write(str(trf_obj))
 
@@ -247,20 +423,8 @@ class TRFFileIO(AbstractBlockFileIO):
         return obj_set
 
     def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
-        ''' Join overlapping sequences.'''
-        """ Join two overlapped objects.
-        We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
-        """
-        # a ------ 
-        # b    -----
-        if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
-            vector1 = obj1.get_vector()
-            vector2 = obj2.get_vector()
-            dist = get_cosine_distance(vector1, vector2)
-            if dist < cutoff_distance:
-                obj1.set_form_overlap(obj2)
-                return True
-        return False
+        return join_overlapped(obj1, obj2, cutoff_distance=cutoff_distance)
+    
 
 def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
     """ Parse raw TRF output in given folder to output_trf_file."""
