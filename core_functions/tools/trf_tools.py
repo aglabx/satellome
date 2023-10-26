@@ -31,7 +31,7 @@ def trf_search_by_splitting(
     threads=30,
     wdir=".",
     project="NaN",
-    trf_path="/home/akomissarov/libs/trf",
+    trf_path="trf",
     parser_program="./trf_parse_raw.py",
     keep_raw=False,
 ):
