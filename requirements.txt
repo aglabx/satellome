@@ -1,5 +1,6 @@
 PyExp
 pandas
 numpy
-sklearn
+scikit-learn
 pyyaml
+simplejson
