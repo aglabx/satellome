@@ -13,7 +13,7 @@ import satelome
 
 import yaml
 
-satelome_path = os.path.abspath(satelome.__file__)
+satelome_path = satelome.__path__._path[0]
 
 SETTINGS_FILENAME = os.path.join(satelome_path, "settings.yaml")
 NGRAM_LENGTH = 23

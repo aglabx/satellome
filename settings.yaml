@@ -1,4 +1,4 @@
-trseeker:
+satelome:
     # os: linux64
     os: WIN
     root_dir: /root/Dropbox/workspace/trseeker
