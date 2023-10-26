@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# @created: 10.03.2019
+# @created: 26.10.2023
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
@@ -12,6 +12,18 @@ import sys
 
 from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.core_functions.tools.trf_tools import trf_search_by_splitting
+
+
+def get_genome_size(fasta_file):
+    ''' Compute genome size from fasta file.'''
+
+    print("Computing genome size...", end=" ")
+    genome_size = 0
+    for _, seq in sc_iter_fasta_brute(fasta_file):
+        genome_size += len(seq)
+    print(f"{genome_size} bp.")
+    return genome_size
+
 
 if __name__ == "__main__":
 
@@ -33,8 +45,16 @@ if __name__ == "__main__":
     project = args["project"]
     threads = args["threads"]
     trf_path = args["trf"]
-
     genome_size = int(args["genome_size"])
+
+    settings = {
+        "fasta_file": fasta_file,
+        "output_dir": output_dir,
+        "project": project,
+        "threads": threads,
+        "trf_path": trf_path,
+        "genome_size": genome_size,
+    }
 
     if not output_dir.startswith("/"):
         print(f"Error: please provide the full path for output: {output_dir}")
@@ -44,10 +64,7 @@ if __name__ == "__main__":
         os.makedirs(output_dir)
 
     if genome_size == 0:
-        print("Computing genome size...", end=" ")
-        for header, seq in sc_iter_fasta_brute(fasta_file):
-            genome_size += len(seq)
-        print(f"{genome_size} bp.")
+        genome_size = get_genome_size(fasta_file)
 
     code_dir = pathlib.Path(__file__).parent.resolve()
     parser_program = os.path.join(code_dir, "trf_parse_raw.py")
