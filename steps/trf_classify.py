@@ -18,8 +18,6 @@ def classify_trf_data(trf_prefix, output_dir, genome_size):
     base_prefix = trf_prefix
     base_file = os.path.basename(trf_prefix)
 
-    
-
     settings = {
         "folders": {
             "data_gff3": os.path.join(output_dir, "gff3"),
