@@ -22,7 +22,6 @@ def classify_trf_data(trf_prefix, output_dir, genome_size):
             "data_gff3": os.path.join(output_dir, "data_gff3"),
             "reports": os.path.join(output_dir, "reports"),
             "trf_parsed_folder": output_dir,
-            "mathematica": os.path.join(output_dir, "mathematica"),
         },
         "files": {
             "trf_all_file": base_prefix + ".trf",

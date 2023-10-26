@@ -551,9 +551,6 @@ def cf_separate_complex_trs(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    if not os.path.isdir(settings["folders"]["mathematica"]):
-        os.makedirs(settings["folders"]["mathematica"])
-
     trf_complex_file = (
         settings["files"]["trf_complex_file"]
         % project["work_files"]["ref_assembly_name_for_trf"]
