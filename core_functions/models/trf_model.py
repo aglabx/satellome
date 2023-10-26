@@ -234,6 +234,7 @@ class TRModel(AbstractModel):
             self.trf_array,
         ) = trf_parse_line(line)
 
+        self.trf_pmatch = float(self.trf_pmatch)
         self.trf_pvar = int(100 - float(self.trf_pmatch))
 
         try:
@@ -255,7 +256,9 @@ class TRModel(AbstractModel):
 
     def set_form_overlap(self, obj2):
         """Init object with data from overlap with another TRFObj located right to self."""
-        self.trf_pmatch = int(
+
+        
+        self.trf_pmatch = float(
             (
                 self.trf_pmatch * self.trf_array_length
                 + obj2.trf_pmatch * obj2.trf_array_length
@@ -283,7 +286,7 @@ class TRModel(AbstractModel):
         self.trf_n_g = self.trf_array.count("G")
         self.trf_n_t = self.trf_array.count("T")
         self.trf_entropy = max(self.trf_entropy, obj2.trf_entropy)
-        self.trf_pvar = int(100 - float(self.trf_pmatch))
+        self.trf_pvar = float(100 - float(self.trf_pmatch))
         self.trf_array_gc = get_gc(self.trf_array)
         self.trf_consensus_gc = get_gc(self.trf_consensus)
         self.trf_joined = 1

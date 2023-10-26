@@ -351,6 +351,7 @@ class TRFFileIO(AbstractBlockFileIO):
                 # a ------
                 # b    -----
                 if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
+                    # print(obj1.as_dict(), obj2.as_dict())
                     if self._join_overlapped(obj1, obj2, cutoff_distance=0.1):
                         obj_set[b] = None
                     continue
