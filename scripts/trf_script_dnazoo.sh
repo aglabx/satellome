@@ -2,7 +2,7 @@
 
 DIR='/mnt/data/satelome/users/mpopova/dnazoo'
 OUTPUT_DIR='/mnt/data/satelome/users/mpopova/dnazoo_trf_results'
-TRF='/home/mpopova/soft/trf_scripts/trf_search.py'
+TRF='/home/mpopova/soft/trf_scripts/main.py'
 
 for i in $(cat ${DIR}/files_name.txt); do
         gzip -dkn ${DIR}/${i}.fasta.gz;

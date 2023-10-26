@@ -4,7 +4,7 @@
 
 ## Toolset desciption
 
-**trf_search** - from fasta file to trf file
+**main.py** - from fasta file to trf file
 **trf_parse_raw** - from trf file to parsed trf with normalised monomer and joined overlapping repeats 
 
 Hypotesis to check:
