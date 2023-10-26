@@ -10,6 +10,9 @@ import subprocess
 import sys
 import os
 
+from torch import ge
+
+from satelome.core_functions.tools.processing import get_genome_size
 
 if __name__ == "__main__":
 
@@ -48,12 +51,15 @@ if __name__ == "__main__":
         "trf_prefix": trf_prefix,
     }
 
+    if genome_size == 0:
+        genome_size = get_genome_size(fasta_file)
+
     current_file_path = os.path.abspath(__file__)
     current_directory = os.path.dirname(current_file_path)
 
     trf_search_path = os.path.join(current_directory, "trf_search.py")
 
-    command = f"time {trf_search_path} -i {fasta_file} \
+    command = f"time python {trf_search_path} -i {fasta_file} \
                                    -o {output_dir} \
                                    -p {project} \
                                    -t {threads} \
@@ -70,7 +76,7 @@ if __name__ == "__main__":
 
     trf_search_path = os.path.join(current_directory, "trf_classify.py")
 
-    command = f"time {trf_search_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
+    command = f"time python {trf_search_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
     print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:

@@ -13,8 +13,6 @@ import yaml
 from satelome.core_functions.classification_micro import \
     scf_basic_trs_classification
 
-from satelome.core_functions.tools.processing import get_genome_size
-
 def classify_trf_data(trf_prefix, output_dir, genome_size):
 
     base_prefix = trf_prefix
@@ -86,9 +84,6 @@ def main():
     trf_prefix = args.prefix
     output_dir = args.output
     genome_size = args.genome_size
-
-    if genome_size == 0:
-        genome_size = get_genome_size(fasta_file)
 
     print("Refining names...")
     classify_trf_data(trf_prefix, output_dir, genome_size)
