@@ -10,8 +10,6 @@ import subprocess
 import sys
 import os
 
-from torch import ge
-
 from satelome.core_functions.tools.processing import get_genome_size
 
 if __name__ == "__main__":
@@ -36,9 +34,12 @@ if __name__ == "__main__":
     trf_path = args["trf"]
     genome_size = int(args["genome_size"])
 
+
+    input_filename_without_extension = os.path.splitext(fasta_file)[0]
+
     trf_prefix = os.path.join(
         output_dir,
-        os.path.splitext(fasta_file)[0]
+        input_filename_without_extension
     ) 
 
     settings = {
