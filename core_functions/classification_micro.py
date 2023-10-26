@@ -233,7 +233,7 @@ def cf_separate_perfect_microsatellites(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -302,7 +302,7 @@ def cf_separate_microsatellites(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -405,7 +405,7 @@ def cf_separate_true_ssr(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -521,7 +521,7 @@ def cf_separate_fuzzy_ssr(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -619,7 +619,7 @@ def cf_separate_complex_trs(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -679,7 +679,7 @@ def cf_separate_1kb(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -740,7 +740,7 @@ def cf_separate_3kb(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
@@ -801,7 +801,7 @@ def cf_separate_10kb(settings, project):
     pgenome = round(
         100.0
         * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["total_length"],
+        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
         3,
     )
 
