@@ -16,9 +16,9 @@ Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
 """
 
 import os, shutil, tempfile
-from PyExp import sc_iter_filepath_folder
 from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.core_functions.io.trf_file import TRFFileIO
+from satelome.core_functions.io.file_system import iter_filepath_folder
 
 trf_reader = TRFFileIO().iter_parse
 
@@ -64,7 +64,7 @@ def trf_search_by_splitting(fasta_file, threads=30, wdir=".", project="NaN", trf
 
     print(f"Aggregate data to: {output_file}")
     with open(output_file, "w") as fw:
-        for file_path in sc_iter_filepath_folder(folder_path):
+        for file_path in iter_filepath_folder(folder_path):
             if file_path.endswith(".trf"):
                 with open(file_path) as fh:
                     fw.write(fh.read())

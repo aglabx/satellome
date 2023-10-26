@@ -14,7 +14,8 @@ Classes:
 import os
 from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.io.block_file import AbstractBlockFileIO
-from PyExp import sc_iter_filepath_folder, WiseOpener
+from satelome.core_functions.io.file_system import iter_filepath_folder
+from PyExp import WiseOpener
 from satelome.core_functions.settings import load_settings
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.trf_embedings import get_cosine_distance
@@ -432,7 +433,9 @@ def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
     trf_id = 1
     if os.path.isfile(output_trf_file):
         os.remove(output_trf_file)
-    for file_path in sc_iter_filepath_folder(trf_raw_folder, mask="dat"):
+    for file_path in iter_filepath_folder(trf_raw_folder, mask="dat"):
+        if not file_path.endswith(".dat"):
+            continue
         print("Start parse file %s..." % file_path)
         trf_id = reader.parse_to_file(file_path, output_trf_file, trf_id=trf_id, project=project)
 
