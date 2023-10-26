@@ -221,7 +221,7 @@ class TRModel(AbstractModel):
             self.trf_r_ind,
             self.trf_period,
             self.trf_n_copy,
-            trf_l_cons,
+            self.trf_l_cons,
             self.trf_pmatch,
             self.trf_indels,
             self.trf_score,
