@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# @created: 14.02.2023
+# @author: Aleksey Komissarov
+# @contact: ad3002@gmail.com
+
 import math
 
 import numpy as np

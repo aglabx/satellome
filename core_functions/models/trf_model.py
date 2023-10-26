@@ -9,8 +9,10 @@ import re
 
 from PyExp import AbstractModel
 
-from satelome.parsers import (parse_chromosome_name, parse_fasta_head,
-                              trf_parse_head, trf_parse_line)
+from satelome.core_functions.tools.parsers import (parse_chromosome_name,
+                                                   parse_fasta_head,
+                                                   trf_parse_head,
+                                                   trf_parse_line)
 from satelome.trf_embedings import create_vector, token2id, token2revtoken
 
 

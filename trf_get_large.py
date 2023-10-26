@@ -6,7 +6,6 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-import sys
 
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.core_functions.io.tr_file import save_trs_dataset

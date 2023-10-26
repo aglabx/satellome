@@ -11,7 +11,7 @@ import shutil
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.core_functions.io.trf_file import join_overlapped
 from satelome.core_functions.models.trf_model import TRModel
-from satelome.parsers import refine_name
+from satelome.core_functions.tools.parsers import refine_name
 
 
 def refine_names(trf_file):

@@ -21,8 +21,8 @@ from satelome.core_functions.io.file_system import iter_filepath_folder
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.settings import load_settings
+from satelome.core_functions.tools.parsers import refine_name
 from satelome.core_functions.tools.processing import get_revcomp
-from satelome.parsers import refine_name
 from satelome.trf_embedings import get_cosine_distance
 
 settings = load_settings()

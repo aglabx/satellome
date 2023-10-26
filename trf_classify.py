@@ -10,7 +10,8 @@ import os
 
 import yaml
 
-from core_functions.classification_micro import scf_basic_trs_classification
+from satelome.core_functions.classification_micro import \
+    scf_basic_trs_classification
 
 
 def classify_trf_data(trf_prefix, output_dir, total_length):

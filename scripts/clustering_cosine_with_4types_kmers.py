@@ -48,7 +48,9 @@ def make_matrix(fasta):
     for i in range(len(sequences_names)):
         for j in range(len(k_mers)):
             if k_mers[j] in sequences[sequences_names[i]]:
-                matrix[i][j] = len(re.findall(rf'(?={k_mers[j]})', sequences[sequences_names[i]]))
+                matrix[i][j] = len(
+                    re.findall(rf"(?={k_mers[j]})", sequences[sequences_names[i]])
+                )
     distance_matrix = pairwise.cosine_distances(matrix)
     return distance_matrix, sequences_names
 

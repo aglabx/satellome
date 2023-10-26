@@ -8,14 +8,24 @@ for j, trf_obj in enumerate(sc_iter_tab_file(input_file, TRModel)):
     if not last_trf:
         last_trf = trf_obj
         continue
-#     print(last_trf.trf_l_ind, last_trf.trf_r_ind, trf_obj.trf_l_ind, trf_obj.trf_r_ind)
-    if trf_obj.trf_head == last_trf.trf_head and last_trf.trf_r_ind > trf_obj.trf_l_ind and last_trf.trf_r_ind < trf_obj.trf_r_ind:
-#         print(trf_obj)
-#         print(last_trf)
+    #     print(last_trf.trf_l_ind, last_trf.trf_r_ind, trf_obj.trf_l_ind, trf_obj.trf_r_ind)
+    if (
+        trf_obj.trf_head == last_trf.trf_head
+        and last_trf.trf_r_ind > trf_obj.trf_l_ind
+        and last_trf.trf_r_ind < trf_obj.trf_r_ind
+    ):
+        #         print(trf_obj)
+        #         print(last_trf)
         vector1 = trf_obj.get_vector()
         vector2 = last_trf.get_vector()
         dist = get_cosine_distance(vector1, vector2)
-        print(last_trf.trf_l_ind, last_trf.trf_r_ind, trf_obj.trf_l_ind, trf_obj.trf_r_ind, dist)
+        print(
+            last_trf.trf_l_ind,
+            last_trf.trf_r_ind,
+            trf_obj.trf_l_ind,
+            trf_obj.trf_r_ind,
+            dist,
+        )
         print(last_trf.trf_consensus, trf_obj.trf_consensus)
-#         break
+    #         break
     last_trf = trf_obj
