@@ -5,13 +5,15 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-import re
-import pandas as pd
-from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 import math
+import re
 
-CENPB_REGEXP = re.compile(r'.ttcg....a..cggg.')
-TELOMERE_REGEXP = re.compile(r'ttagggttagggttagggttagggttaggg')
+import pandas as pd
+
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
+
+CENPB_REGEXP = re.compile(r".ttcg....a..cggg.")
+TELOMERE_REGEXP = re.compile(r"ttagggttagggttagggttagggttaggg")
 CHRM_REGEXP = re.compile("chromosome\: (.*)")
 
 chm2name = {
@@ -41,6 +43,7 @@ chm2name = {
     "NC_060948.1": "ChrY",
 }
 
+
 def sort_chrm(name):
     v = name.replace("Chr", "")
     print(v)
@@ -50,10 +53,13 @@ def sort_chrm(name):
         return 24
     return int(v)
 
-def scaffold_length_sort_dict(fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None):
-    ''' Function that calculates length of scaffolds 
-        and return table with scaffold data from fasta file
-    '''
+
+def scaffold_length_sort_dict(
+    fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None
+):
+    """Function that calculates length of scaffolds
+    and return table with scaffold data from fasta file
+    """
     scaffold_length = []
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
@@ -66,17 +72,19 @@ def scaffold_length_sort_dict(fasta_file, lenght_cutoff=100000, name_regexp=None
         if chm2name:
             name = chm2name[name]
         scaffold_length.append((name, 1, len(seq)))
-        
+
     scaffold_length.sort(key=lambda x: sort_chrm(x[0]))
-    
-    scaffold_df = pd.DataFrame(scaffold_length, columns=['scaffold', 'start', 'end'])
+
+    scaffold_df = pd.DataFrame(scaffold_length, columns=["scaffold", "start", "end"])
     return scaffold_df
 
 
-def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None):
-    ''' Function that calculates length of scaffolds 
-        and return table with scaffold data from fasta file
-    '''
+def scaffold_length_sort_length(
+    fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None
+):
+    """Function that calculates length of scaffolds
+    and return table with scaffold data from fasta file
+    """
     scaffold_length = []
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
@@ -89,41 +97,116 @@ def scaffold_length_sort_length(fasta_file, lenght_cutoff=100000, name_regexp=No
         if chm2name:
             name = chm2name[name]
         scaffold_length.append((name, 1, len(seq)))
-        
-    scaffold_df = pd.DataFrame(scaffold_length, columns=['scaffold', 'start', 'end'])
-    scaffold_df.sort_values(by=['end'], inplace=True, ascending=False)
+
+    scaffold_df = pd.DataFrame(scaffold_length, columns=["scaffold", "start", "end"])
+    scaffold_df.sort_values(by=["end"], inplace=True, ascending=False)
     return scaffold_df
 
 
 def read_trf_file(trf_file):
-    ''' Function that convert Aleksey script's trf table to csv.
-    '''
-    data = pd.read_csv(trf_file, sep='\t', names=['project', '1', 'id', '2', '3', '4', 'start', 'end', 'period', '5', 'pmatch','6', '7', 'mono', 'array', 'gc', '8', '9', 'scaffold', '10', 'length', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26'], low_memory=False)
-    data.drop(columns=['project', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26'], inplace=True)
-    data['mono*3'] = data['mono']*3
-    data['centromere'] = [1 if CENPB_REGEXP.findall(i) else 0 for i in data['array']]
-    data['telomere'] = [1 if TELOMERE_REGEXP.findall(i) else 0 for i in data['array']]
-    data['final_id'] = [f"{x['scaffold']}_{x['id']}" for i, x in data.iterrows()]
-    data['class_name'] = ["CENPB" if x['centromere'] else "UNK" for i, x in data.iterrows()]
-    data['class_name'] = ["TEL" if x['telomere'] else x["class_name"] for i, x in data.iterrows()]
-    data['family_name'] = None
-    data['locus_name'] = None
-    data['log_length'] = [math.log(x['length']) for i, x in data.iterrows()]
-    data['scaffold'] = [x['scaffold'].split()[0] for i, x in data.iterrows()]
+    """Function that convert Aleksey script's trf table to csv."""
+    data = pd.read_csv(
+        trf_file,
+        sep="\t",
+        names=[
+            "project",
+            "1",
+            "id",
+            "2",
+            "3",
+            "4",
+            "start",
+            "end",
+            "period",
+            "5",
+            "pmatch",
+            "6",
+            "7",
+            "mono",
+            "array",
+            "gc",
+            "8",
+            "9",
+            "scaffold",
+            "10",
+            "length",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+        ],
+        low_memory=False,
+    )
+    data.drop(
+        columns=[
+            "project",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "19",
+            "20",
+            "21",
+            "22",
+            "23",
+            "24",
+            "25",
+            "26",
+        ],
+        inplace=True,
+    )
+    data["mono*3"] = data["mono"] * 3
+    data["centromere"] = [1 if CENPB_REGEXP.findall(i) else 0 for i in data["array"]]
+    data["telomere"] = [1 if TELOMERE_REGEXP.findall(i) else 0 for i in data["array"]]
+    data["final_id"] = [f"{x['scaffold']}_{x['id']}" for i, x in data.iterrows()]
+    data["class_name"] = [
+        "CENPB" if x["centromere"] else "UNK" for i, x in data.iterrows()
+    ]
+    data["class_name"] = [
+        "TEL" if x["telomere"] else x["class_name"] for i, x in data.iterrows()
+    ]
+    data["family_name"] = None
+    data["locus_name"] = None
+    data["log_length"] = [math.log(x["length"]) for i, x in data.iterrows()]
+    data["scaffold"] = [x["scaffold"].split()[0] for i, x in data.iterrows()]
     return data
 
 
 def check_patterns(data):
-    '''
-    '''
-    centromers = data.loc[data['centromere'] == 1]
-    telomers = data.loc[data['telomere'] == 1]
+    """ """
+    centromers = data.loc[data["centromere"] == 1]
+    telomers = data.loc[data["telomere"] == 1]
     return (centromers, telomers)
-    
+
 
 def get_gaps_annotation(fasta_file, lenght_cutoff=100000):
-    ''' Function that finding all gaps.
-    '''
+    """Function that finding all gaps."""
     gaps = []
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
@@ -133,7 +216,7 @@ def get_gaps_annotation(fasta_file, lenght_cutoff=100000):
         gap_start = None
         print(name)
         for i in range(len(seq)):
-            if seq[i] == 'N':
+            if seq[i] == "N":
                 if not in_gap:
                     in_gap = True
                     gap_start = i
@@ -146,9 +229,9 @@ def get_gaps_annotation(fasta_file, lenght_cutoff=100000):
             gaps.append([name, gap_start, i, abs(gap_start - i)])
     return gaps
 
+
 def get_gaps_annotation_re(fasta_file, lenght_cutoff=100000):
-    ''' Function that finding all gaps.
-    '''
+    """Function that finding all gaps."""
     gaps = []
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
@@ -157,6 +240,6 @@ def get_gaps_annotation_re(fasta_file, lenght_cutoff=100000):
         print(name)
         hits = re.findall("N+", seq)
         print(hits)
-        for pos,item in hits:
-            gaps.append((name, pos, pos+len(item)))
+        for pos, item in hits:
+            gaps.append((name, pos, pos + len(item)))
     return gaps

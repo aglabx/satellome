@@ -7,6 +7,7 @@
 
 import os
 
+
 def iter_filepath_folder(folder_path, recursive=True):
     """
     Iterate through all file paths in a given folder.

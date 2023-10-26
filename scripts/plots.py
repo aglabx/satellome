@@ -6,8 +6,8 @@
 # @contact: marinaalexpopova@yandex.ru
 
 import click
-import seaborn as sns
 import matplotlib
+import seaborn as sns
 
 
 def read_fasta(fasta):

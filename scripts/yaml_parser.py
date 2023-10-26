@@ -6,10 +6,11 @@
 # @contact: marinaalexpopova@yandex.ru
 
 
-import click
-import yaml
-import pandas as pd
 import pathlib
+
+import click
+import pandas as pd
+import yaml
 
 
 def read_yaml(file_name):

@@ -11,8 +11,10 @@ TODO: check it.
 import os
 from collections import defaultdict
 
-from satelome.core_functions.models.trf_model import TRModel, TRsClassificationModel
-from satelome.core_functions.io.tab_file import sc_iter_simple_tab_file, sc_iter_tab_file
+from satelome.core_functions.io.tab_file import (sc_iter_simple_tab_file,
+                                                 sc_iter_tab_file)
+from satelome.core_functions.models.trf_model import (TRModel,
+                                                      TRsClassificationModel)
 
 
 def read_trid2ngrams(annotation_ngram_folder, trf_large_file):

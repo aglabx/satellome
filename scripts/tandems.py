@@ -6,8 +6,9 @@
 # @contact: marinaalexpopova@yandex.ru
 
 
-import click
 from collections import defaultdict
+
+import click
 
 
 @click.command()

@@ -6,8 +6,9 @@
 # @contact: marinaalexpopova@yandex.ru
 
 
-import click
 import re
+
+import click
 from Bio import Entrez
 
 

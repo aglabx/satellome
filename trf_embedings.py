@@ -1,7 +1,9 @@
 import math
-from satelome.core_functions.tools.processing import get_revcomp
-from sklearn.metrics.pairwise import cosine_similarity
+
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+from satelome.core_functions.tools.processing import get_revcomp
 
 
 def get_pentatokens():
@@ -95,5 +97,6 @@ def get_disances(df_trs):
     tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
     distances = compute_distances(tr2vector)
     return distances, tr2vector
+
 
 token2id, token2revtoken = get_pentatokens()

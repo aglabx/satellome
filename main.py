@@ -7,8 +7,8 @@
 
 import argparse
 import os
-import sys
 import pathlib
+import sys
 
 from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.core_functions.tools.trf_tools import trf_search_by_splitting
@@ -20,7 +20,9 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output", help="Output folder", required=True)
     parser.add_argument("-p", "--project", help="Project", required=True)
     parser.add_argument("-t", "--threads", help="Threads", required=True)
-    parser.add_argument("--trf", help="Path to trf [trf]", required=False, default="trf")
+    parser.add_argument(
+        "--trf", help="Path to trf [trf]", required=False, default="trf"
+    )
     parser.add_argument(
         "--genome_size", help="Expected genome size", required=False, default=0
     )
@@ -33,8 +35,7 @@ if __name__ == "__main__":
     trf_path = args["trf"]
 
     genome_size = int(args["genome_size"])
-    
-    
+
     if not output_dir.startswith("/"):
         print(f"Error: please provide the full path for output: {output_dir}")
         sys.exit(1)
@@ -54,14 +55,17 @@ if __name__ == "__main__":
     ### PART 1. Running TRF in parallel
 
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
-    output_file = os.path.join(output_dir, fasta_name+".trf")
+    output_file = os.path.join(output_dir, fasta_name + ".trf")
 
     if os.path.isfile(output_file):
         print("TRF output file already exists. Skipping TRF.")
     else:
         print("Running TRF...")
         output_file = trf_search_by_splitting(
-            fasta_file, threads=threads, wdir=output_dir, project=project,
-            trf_path=trf_path, 
+            fasta_file,
+            threads=threads,
+            wdir=output_dir,
+            project=project,
+            trf_path=trf_path,
             parser_program=parser_program,
         )

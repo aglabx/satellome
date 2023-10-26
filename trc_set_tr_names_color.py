@@ -6,8 +6,9 @@
 # @contact: ad3002@gmail.com
 
 import argparse
-from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 import re
+
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 
 # https://convertingcolors.com/hex-color-969696.html?search=Hex(969696)
 # spectral
@@ -57,11 +58,12 @@ COLOR_PALETTE_JCO = {
     "rain": "#4A6990FF",
 }
 
+
 def main(args):
-    ''' Output file format:
-            tr_class name color
-    '''
-    
+    """Output file format:
+    tr_class name color
+    """
+
     header2name = {}
     header2size = {}
     for i, (header, seq) in enumerate(sc_iter_fasta_brute(args.fasta)):
@@ -83,19 +85,20 @@ def main(args):
     with open(args.output, "w") as fh:
         for tr_class, (name, color) in header2name.items():
             fh.write("%s\t%s\t%s\n" % (tr_class, name, color))
-        
+
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Set TRs names and colors and create config file')
-    parser.add_argument('-i', '--trf', help='TRF file', required=True)
-    parser.add_argument('-o', '--output', help='Output file', required=True)
-    parser.add_argument('--manual', help='Ask each TRs', default=False)
+    parser = argparse.ArgumentParser(
+        description="Set TRs names and colors and create config file"
+    )
+    parser.add_argument("-i", "--trf", help="TRF file", required=True)
+    parser.add_argument("-o", "--output", help="Output file", required=True)
+    parser.add_argument("--manual", help="Ask each TRs", default=False)
     args = parser.parse_args()
     return args
 
-if __name__ == '__main__':
-    
+
+if __name__ == "__main__":
+
     args = get_args()
     main(args)
-
-    

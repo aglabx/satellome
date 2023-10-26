@@ -5,18 +5,18 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-import plotly.graph_objects as go
-import plotly.express as px
-from satelome.trf_drawing import (
-    scaffold_length_sort_length,
-    read_trf_file,
-    get_gaps_annotation,
-)
 import os
 from collections import Counter
+
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 from intervaltree import IntervalTree
+
+from satelome.trf_drawing import (get_gaps_annotation, read_trf_file,
+                                  scaffold_length_sort_length)
 from trf_embedings import get_disances
+
 
 class Graph:
 

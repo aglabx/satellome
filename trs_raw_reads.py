@@ -5,15 +5,18 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-import aindex
-import os
 import argparse
-from satelome.core_functions.models.trf_model import TRModel
-from satelome.core_functions.io.tab_file import sc_iter_tab_file
+import os
 import statistics
 
+import aindex
+
+from satelome.core_functions.io.tab_file import sc_iter_tab_file
+from satelome.core_functions.models.trf_model import TRModel
+
+
 def main(args):
-    
+
     fastq_files = args.input
     output_prefix = args.output
     freq_cutoff = args.cutoff
@@ -47,8 +50,13 @@ def main(args):
             print(f"{ii}/{N}", end=" ")
         if trf_obj.trf_array_length < 23:
             continue
-        freqs = [kmer2tf[trf_obj.trf_array[i:i+23]] for i in range(len(trf_obj.trf_array)-23+1)]
-        results.append((trf_obj.trf_id, min(freqs), max(freqs), statistics.median(freqs), freqs))
+        freqs = [
+            kmer2tf[trf_obj.trf_array[i : i + 23]]
+            for i in range(len(trf_obj.trf_array) - 23 + 1)
+        ]
+        results.append(
+            (trf_obj.trf_id, min(freqs), max(freqs), statistics.median(freqs), freqs)
+        )
 
     print("Save results")
     with open(result_file, "w") as fw:
@@ -61,18 +69,40 @@ def main(args):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Compute aindex for raw reads')
-    parser.add_argument('-i', '--input', type=str, help='Fastq files separated by comma', required=True)
-    parser.add_argument('-o', '--output', type=str, help='Output prefix', required=True)
-    parser.add_argument('-c', '--cutoff', type=int, default=1000, help='Minimal frequency of kmer for filtering', required=False)
-    parser.add_argument('--path', type=str, help='Theh full path to compute_aindex.py', default='./compute_aindex.py', required=False)
-    parser.add_argument('-t', '--threads', type=int, default=1, help='Number of threads', required=True)
-    parser.add_argument('-j', '--trf', type=str, default=None, help='TRF file', required=True)
-    parser.add_argument('-r', '--results', type=str, default=None, help='Results file', required=True)
+    parser = argparse.ArgumentParser(description="Compute aindex for raw reads")
+    parser.add_argument(
+        "-i", "--input", type=str, help="Fastq files separated by comma", required=True
+    )
+    parser.add_argument("-o", "--output", type=str, help="Output prefix", required=True)
+    parser.add_argument(
+        "-c",
+        "--cutoff",
+        type=int,
+        default=1000,
+        help="Minimal frequency of kmer for filtering",
+        required=False,
+    )
+    parser.add_argument(
+        "--path",
+        type=str,
+        help="Theh full path to compute_aindex.py",
+        default="./compute_aindex.py",
+        required=False,
+    )
+    parser.add_argument(
+        "-t", "--threads", type=int, default=1, help="Number of threads", required=True
+    )
+    parser.add_argument(
+        "-j", "--trf", type=str, default=None, help="TRF file", required=True
+    )
+    parser.add_argument(
+        "-r", "--results", type=str, default=None, help="Results file", required=True
+    )
     args = parser.parse_args()
     return args
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description='Compute index.')
     # parser.add_argument('-i', help='Fasta, comma separated fastqs or reads', required=True)
     # parser.add_argument('-j', help='JF2 file if exists (None)', required=False, default=None)

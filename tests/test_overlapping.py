@@ -1,5 +1,5 @@
-from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
+from satelome.core_functions.models.trf_model import TRModel
 from satelome.trf_embedings import get_cosine_distance
 
 input_file = "/mnt/data/podgornaya/rana_temporaria/users/akomissarov/trf/GCF_905171775.1_aRanTem1.1_genomic.1kb.trf"

@@ -6,14 +6,15 @@
 # @contact: marinaalexpopova@yandex.ru
 
 
-from itertools import product
-from sklearn.cluster import AgglomerativeClustering
-from collections import defaultdict
-from sklearn.metrics import pairwise
-from datetime import datetime
 import re
-import numpy as np
+from collections import defaultdict
+from datetime import datetime
+from itertools import product
+
 import click
+import numpy as np
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.metrics import pairwise
 
 
 def read_fasta(fasta):

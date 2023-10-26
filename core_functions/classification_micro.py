@@ -22,13 +22,15 @@ import os
 from collections import defaultdict
 
 from satelome.core_functions.io.gff_file import sc_gff3_reader
-from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
+from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.tools.statistics import get_simple_statistics
 
-def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alpha=False):
-    ''' Save TRs dataset as one fasta file.
-    '''
+
+def save_trs_as_fasta(
+    trf_file, fasta_file, project, add_project=False, skip_alpha=False
+):
+    """Save TRs dataset as one fasta file."""
     trf_objs = []
     for trf_obj in sc_iter_tab_file(trf_file, TRModel):
         trf_objs.append(trf_obj)
@@ -39,8 +41,8 @@ def save_trs_as_fasta(trf_file, fasta_file, project, add_project=False, skip_alp
                     continue
             fh_fasta.write(trf_obj.get_fasta_repr(add_project=add_project))
 
-class RepeatCountStatsModel(object):
 
+class RepeatCountStatsModel(object):
     def __init__(self):
         self.max_length = 0
         self.min_length = 0
@@ -816,9 +818,8 @@ def cf_separate_10kb(settings, project):
     return r
 
 
-
 def cf_get_micro_summary_table(settings, project):
-    """ Get summary table for microsatellites """
+    """Get summary table for microsatellites"""
     dataset = project["work_files"]["ref_assembly_name_for_trf"]
 
     input_gff = project["work_files"]["repeats"][dataset]["trevis"]["micro"]["gff_file"]
@@ -828,7 +829,7 @@ def cf_get_micro_summary_table(settings, project):
     )
 
     report_folder = settings["folders"]["reports"]
-    
+
     if not os.path.isdir(report_folder):
         os.makedirs(report_folder)
 

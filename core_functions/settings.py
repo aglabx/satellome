@@ -9,9 +9,10 @@ satelome settings loader.
 """
 import os
 import platform
-import satelome
 
 import yaml
+
+import satelome
 
 satelome_path = satelome.__path__._path[0]
 

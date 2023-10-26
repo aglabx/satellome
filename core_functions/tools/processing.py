@@ -11,13 +11,16 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
-REVCOMP_DICTIONARY = dict(zip('ATCGNatcgn~[]', 'TAGCNtagcn~]['))
+REVCOMP_DICTIONARY = dict(zip("ATCGNatcgn~[]", "TAGCNtagcn~]["))
+
 
 def get_revcomp(sequence):
-    '''Return reverse complementary sequence.
+    """Return reverse complementary sequence.
 
     >>> complementary('AT CG')
     'CGAT'
 
-    '''
-    return ''.join(REVCOMP_DICTIONARY.get(nucleotide, '') for nucleotide in reversed(sequence))
+    """
+    return "".join(
+        REVCOMP_DICTIONARY.get(nucleotide, "") for nucleotide in reversed(sequence)
+    )
