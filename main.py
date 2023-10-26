@@ -35,13 +35,13 @@ if __name__ == "__main__":
     genome_size = int(args["genome_size"])
 
 
-    input_filename_without_extension = os.path.splitext(fasta_file)[0]
+    input_filename_without_extension = os.path.basename(os.path.splitext(fasta_file)[0])
 
     trf_prefix = os.path.join(
         output_dir,
         input_filename_without_extension
     ) 
-
+    
     settings = {
         "fasta_file": fasta_file,
         "output_dir": output_dir,
