@@ -103,14 +103,11 @@ def _trs_separate_something(
     output_gff_file,
     filter_func,
     name_func,
-    output_math_file=None,
     family_table_file=None,
 ):
     """Helper function for extracting subset of TRs from full dataset.
     Additionaly it writes gff and math files (optional).
     """
-    if output_math_file:
-        fh_math = open(output_math_file, "w")
     trf_objs = []
     for i, trf_obj in enumerate(sc_iter_tab_file(input_trf_file, TRModel)):
         trf_objs.append(trf_obj)
@@ -131,9 +128,7 @@ def _trs_separate_something(
                     trf_obj.trf_family, gff_string, mathstr = name_func(trf_obj)
                     fh.write(str(trf_obj))
                     fh_gff.write(gff_string)
-                    if output_math_file:
-                        fh_math.write(mathstr)
-
+                    
                     stats[trf_obj.trf_family].n += 1
                     stats[trf_obj.trf_family].name = trf_obj.trf_family
                     stats[trf_obj.trf_family].max_length = max(
@@ -145,8 +140,6 @@ def _trs_separate_something(
                     stats[trf_obj.trf_family].lengths.append(trf_obj.trf_array_length)
                     stats[trf_obj.trf_family].pmatch.append(trf_obj.trf_pmatch)
                     stats[trf_obj.trf_family].gc.append(100 * trf_obj.trf_array_gc)
-        if output_math_file:
-            fh_gff.close()
         for key in stats:
             print("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
         print("selected %s from %s " % (selected, N))
@@ -551,22 +544,8 @@ def cf_separate_complex_trs(settings, project):
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_complex_file = (
-        settings["files"]["trf_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
-    )
-    gff_complex_file = (
-        settings["files"]["gff_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
-    )
-    clouds_complex_file = (
-        settings["files"]["clouds_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
-    )
-    clouds_png_complex_file = (
-        settings["files"]["clouds_png_complex_file"]
-        % project["work_files"]["ref_assembly_name_for_trf"]
-    )
+    trf_complex_file = settings["files"]["trf_complex_file"]
+    gff_complex_file = settings["files"]["gff_complex_file"]
 
     filter_func = (
         lambda x: len(x.trf_consensus) > 4
@@ -608,8 +587,7 @@ def cf_separate_complex_trs(settings, project):
         trf_complex_file,
         gff_complex_file,
         filter_func,
-        name_func,
-        output_math_file=clouds_complex_file,
+        name_func
     )
     dataset = project["work_files"]["ref_assembly_name_for_trf"]
     n = r["filtered"]
@@ -626,8 +604,7 @@ def cf_separate_complex_trs(settings, project):
         "trf_file": trf_complex_file,
         "gff_file": gff_complex_file,
         "n": n,
-        "pgenome": pgenome,
-        "clouds_complex_file": clouds_complex_file,
+        "pgenome": pgenome
     }
     return r
 

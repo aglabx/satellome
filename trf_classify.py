@@ -16,42 +16,50 @@ from satelome.core_functions.classification_micro import \
 def classify_trf_data(trf_prefix, output_dir, genome_size):
 
     base_prefix = trf_prefix
+    base_file = os.path.basename(trf_prefix)
+
+    
 
     settings = {
         "folders": {
             "data_gff3": os.path.join(output_dir, "data_gff3"),
             "reports": os.path.join(output_dir, "reports"),
             "trf_parsed_folder": output_dir,
+            "fasta": os.path.join(output_dir, "fasta"),
         },
-        "files": {
-            "trf_all_file": base_prefix + ".trf",
-            "trf_micro_file": base_prefix + ".micro.trf",
-            "trf_micro_kmers_file": base_prefix + ".micro.kmers",
-            "trf_pmicro_kmers_file": base_prefix + ".pmicro.kmers",
-            "gff_micro_file": base_prefix + ".micro.gff",
-            "report_micro_file": base_prefix + ".micro.report",
-            "trf_perfect_micro_file": base_prefix + ".pmicro.trf",
-            "gff_pmicro_file": base_prefix + ".pmicro.gff",
-            "report_pmicro_file": base_prefix + ".pmicro.report",
-            "gff_tssr_file": base_prefix + ".tssr.gff",
-            "trf_tssr_file": base_prefix + ".tssr.trf",
-            "report_tssr_file": base_prefix + ".tssr.report",
-            "trf_fssr_file": base_prefix + ".fssr.gff",
-            "report_fssr_file": base_prefix + ".fssr.report",
-            "trf_complex_file": base_prefix + ".complex.%s.trf",
-            "gff_complex_file": base_prefix + ".complex.%s.gff",
-            "clouds_complex_file": base_prefix + ".complex.%s.clouds",
-            "clouds_png_complex_file": base_prefix + ".complex.%s.clouds.png",
-            "trf_1k_file": base_prefix + ".1kb.trf",
-            "gff_1k_file": base_prefix + ".1kb.gff",
-            "trf_1k_fasta_file": base_prefix + ".1kb.fasta",
-            "trf_3k_file": base_prefix + ".3kb.trf",
-            "gff_3k_file": base_prefix + ".3kb.gff",
-            "trf_3k_fasta_file": base_prefix + ".3kb.fasta",
-            "trf_10k_file": base_prefix + ".10kb.trf",
-            "gff_10k_file": base_prefix + ".10kb.gff",
-            "trf_10k_fasta_file": base_prefix + ".10kb.fasta",
-        },
+        "files": {},
+    }
+
+    for folder_path in settings["folders"].values():
+        if not os.path.isdir(folder_path):
+            os.makedirs(folder_path)
+                 
+    settings["files"] = {
+        "trf_all_file": base_prefix + ".trf",
+        
+        "trf_micro_file": base_prefix + ".micro.trf",
+        "trf_perfect_micro_file": base_prefix + ".pmicro.trf",
+        "trf_tssr_file": base_prefix + ".tssr.trf",
+        "trf_complex_file": base_prefix + ".complex.trf",
+    
+        "trf_1k_file": base_prefix + ".1kb.trf",
+        "trf_10k_file": base_prefix + ".10kb.trf",
+        "trf_1k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".1kb.fasta"),
+        "trf_3k_file": base_prefix + ".3kb.trf",
+        "trf_3k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".3kb.fasta"),
+        "trf_10k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".10kb.fasta"),
+        "gff_micro_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".micro.gff"),
+        "report_micro_file": os.path.join(settings["folders"]["reports"], base_file + ".micro.report"),
+        "gff_pmicro_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".pmicro.gff"),
+        "report_pmicro_file":os.path.join(settings["folders"]["reports"], base_file + ".pmicro.report"),
+        "gff_tssr_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".tssr.gff"),
+        "report_tssr_file": os.path.join(settings["folders"]["reports"], base_file + ".tssr.report"),
+        "trf_fssr_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".fssr.gff"),
+        "report_fssr_file": os.path.join(settings["folders"]["reports"], base_file + ".fssr.report"),
+        "gff_complex_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".complex.gff"),
+        "gff_1k_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".1kb.gff"),
+        "gff_3k_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".3kb.gff"),
+        "gff_10k_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".10kb.gff"),
     }
 
     project = {
