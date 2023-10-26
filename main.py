@@ -33,7 +33,10 @@ if __name__ == "__main__":
     trf_path = args["trf"]
     genome_size = int(args["genome_size"])
 
-    trf_prefix = ""
+    trf_prefix = os.path.join(
+        output_dir,
+        os.path.splitext(fasta_file)[0]
+    ) 
 
     settings = {
         "fasta_file": fasta_file,
@@ -65,5 +68,13 @@ if __name__ == "__main__":
         print(f"trf_search.py failed with return code {completed_process.returncode}")
         sys.exit(1)
 
-    command = f"time trf_classify.py -i {trf_prefix} -o {output_dir} -l {genome_size}"
+    trf_search_path = os.path.join(current_directory, "trf_classify.py")
 
+    command = f"time {trf_search_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
+    print(command)
+    completed_process = subprocess.run(command, shell=True)
+    if completed_process.returncode == 0:
+        print("trf_classify.py executed successfully!")
+    else:
+        print(f"trf_classify.py failed with return code {completed_process.returncode}")
+        sys.exit(1)

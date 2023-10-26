@@ -11,6 +11,8 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
+from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
+
 REVCOMP_DICTIONARY = dict(zip("ATCGNatcgn~[]", "TAGCNtagcn~]["))
 
 
@@ -24,3 +26,13 @@ def get_revcomp(sequence):
     return "".join(
         REVCOMP_DICTIONARY.get(nucleotide, "") for nucleotide in reversed(sequence)
     )
+
+def get_genome_size(fasta_file):
+    ''' Compute genome size from fasta file.'''
+
+    print("Computing genome size...", end=" ")
+    genome_size = 0
+    for _, seq in sc_iter_fasta_brute(fasta_file):
+        genome_size += len(seq)
+    print(f"{genome_size} bp.")
+    return genome_size

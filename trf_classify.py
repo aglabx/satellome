@@ -13,8 +13,9 @@ import yaml
 from satelome.core_functions.classification_micro import \
     scf_basic_trs_classification
 
+from satelome.core_functions.tools.processing import get_genome_size
 
-def classify_trf_data(trf_prefix, output_dir, total_length):
+def classify_trf_data(trf_prefix, output_dir, genome_size):
 
     base_prefix = trf_prefix
 
@@ -62,7 +63,7 @@ def classify_trf_data(trf_prefix, output_dir, total_length):
             "ref_assembly_name_for_trf": "dataset",
             "assembly_stats": {
                 "dataset": {
-                    "total_length": total_length,
+                    "genome_size": genome_size,
                 },
             },
         },
@@ -84,10 +85,13 @@ def main():
     args = get_args()
     trf_prefix = args.prefix
     output_dir = args.output
-    total_length = args.total_length
+    genome_size = args.genome_size
+
+    if genome_size == 0:
+        genome_size = get_genome_size(fasta_file)
 
     print("Refining names...")
-    classify_trf_data(trf_prefix, output_dir, total_length)
+    classify_trf_data(trf_prefix, output_dir, genome_size)
 
 
 def get_args():
@@ -106,7 +110,7 @@ def get_args():
     )
     parser.add_argument(
         "-l",
-        "--total_length",
+        "--genome_size",
         type=int,
         help="Total length of the assembly",
         required=True,

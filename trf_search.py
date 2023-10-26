@@ -10,19 +10,8 @@ import os
 import pathlib
 import sys
 
-from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satelome.core_functions.tools.processing import get_genome_size
 from satelome.core_functions.tools.trf_tools import trf_search_by_splitting
-
-
-def get_genome_size(fasta_file):
-    ''' Compute genome size from fasta file.'''
-
-    print("Computing genome size...", end=" ")
-    genome_size = 0
-    for _, seq in sc_iter_fasta_brute(fasta_file):
-        genome_size += len(seq)
-    print(f"{genome_size} bp.")
-    return genome_size
 
 
 if __name__ == "__main__":
