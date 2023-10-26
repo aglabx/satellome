@@ -9,10 +9,13 @@ satelome settings loader.
 """
 import os
 import platform
+import satelome
 
 import yaml
 
-SETTINGS_FILENAME = "settings.yaml"
+satelome_path = os.path.abspath(satelome.__file__)
+
+SETTINGS_FILENAME = os.path.join(satelome_path, "settings.yaml")
 NGRAM_LENGTH = 23
 NGRAM_N = 100000000
 
