@@ -22,7 +22,7 @@ def classify_trf_data(trf_prefix, output_dir, genome_size):
 
     settings = {
         "folders": {
-            "data_gff3": os.path.join(output_dir, "data_gff3"),
+            "data_gff3": os.path.join(output_dir, "gff3"),
             "reports": os.path.join(output_dir, "reports"),
             "trf_parsed_folder": output_dir,
             "fasta": os.path.join(output_dir, "fasta"),
