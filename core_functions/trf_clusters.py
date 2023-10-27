@@ -17,6 +17,9 @@ from satelome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_f
                                   scaffold_length_sort_length)
 from satelome.core_functions.trf_embedings import get_disances
 
+import sys
+sys.setrecursionlimit(20000000)
+
 
 class Graph:
 
