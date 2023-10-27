@@ -6,7 +6,7 @@
 # @contact: ad3002@gmail.com
 
 import math
-
+from tqdm import tqdm
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -74,9 +74,7 @@ def compute_distances(tr2vector):
 def compute_distances_cosine(tr2vector):
     distances = {}
     keys = list(tr2vector.keys())
-    for i, id1 in enumerate(keys):
-        if i % 100 == 0:
-            print(f"Computed {i}/{len(keys)}")
+    for i, id1 in tqdm(enumerate(keys), total=len(keys), desc="Compute distances"):
         for id2 in keys[i:]:
             distances[(id1, id2)] = get_cosine_distance(tr2vector[id1], tr2vector[id2])
             distances[(id2, id1)] = distances[(id1, id2)]
@@ -90,9 +88,7 @@ def get_cosine_distance(vector1, vector2):
 def compute_distances_euclidean(tr2vector):
     distances = {}
     keys = list(tr2vector.keys())
-    for i, id1 in enumerate(keys):
-        if i % 100 == 0:
-            print(f"Computed {i}/{len(keys)}")
+    for i, id1 in tqdm(enumerate(keys), total=len(keys), desc="Compute distances"):
         for id2 in keys[i:]:
             distances[(id1, id2)] = 100 * math.dis(tr2vector[id1], tr2vector[id2])[0][0]
             distances[(id2, id1)] = distances[(id1, id2)]
