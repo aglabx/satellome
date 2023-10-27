@@ -13,9 +13,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 from intervaltree import IntervalTree
 
-from satelome.trf_drawing import (get_gaps_annotation, read_trf_file,
+from satelome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_file,
                                   scaffold_length_sort_length)
-from trf_embedings import get_disances
+from satelome.core_functions.trf_embedings import get_disances
 
 
 class Graph:

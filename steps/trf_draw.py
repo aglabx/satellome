@@ -7,8 +7,7 @@
 
 import argparse
 
-from satelome.trf_clusters import draw_all
-
+from satelome.core_functions.trf_clusters import draw_all
 
 def main():
     """Main function."""
