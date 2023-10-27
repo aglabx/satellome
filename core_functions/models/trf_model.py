@@ -142,7 +142,7 @@ class TRModel(AbstractModel):
         "id",
         "trf_id",
         "trf_type",
-        "trf_family",  # set for alpha in cf_premask_alpha
+        "trf_family",
         "trf_family_prob",
         "trf_l_ind",
         "trf_r_ind",
@@ -308,6 +308,11 @@ class TRModel(AbstractModel):
             self.trf_r_ind,
             self.trf_chr,
         )
+
+    def get_header_string(self):
+        """Get header string for tsv file."""
+        data = '\t'.join(self.dumpable_attributes)
+        return f"#{data}\n"
 
     def get_numerical_repr(self):
         """Get str for Mathematica."""

@@ -105,82 +105,22 @@ def scaffold_length_sort_length(
 
 def read_trf_file(trf_file):
     """Function that convert Aleksey script's trf table to csv."""
+
+    
     data = pd.read_csv(
         trf_file,
         sep="\t",
-        names=[
-            "project",
-            "1",
-            "id",
-            "2",
-            "3",
-            "4",
-            "start",
-            "end",
-            "period",
-            "5",
-            "pmatch",
-            "6",
-            "7",
-            "mono",
-            "array",
-            "gc",
-            "8",
-            "9",
-            "scaffold",
-            "10",
-            "length",
-            "11",
-            "12",
-            "13",
-            "14",
-            "15",
-            "16",
-            "17",
-            "18",
-            "19",
-            "20",
-            "21",
-            "22",
-            "23",
-            "24",
-            "25",
-            "26",
-        ],
         low_memory=False,
     )
-    data.drop(
-        columns=[
-            "project",
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-            "8",
-            "9",
-            "10",
-            "11",
-            "12",
-            "13",
-            "14",
-            "15",
-            "16",
-            "17",
-            "18",
-            "19",
-            "20",
-            "21",
-            "22",
-            "23",
-            "24",
-            "25",
-            "26",
-        ],
-        inplace=True,
-    )
+    data["start"] = data["trf_l_ind"]
+    data["end"] = data["trf_r_ind"]
+    data["period"] = data["trf_period"]
+    data["pmatch"] = data["trf_pmatch"]
+    data["mono"] = data["trf_consensus"]
+    data["array"] = data["trf_array"]
+    data["gc"] = data["trf_array_gc"]
+    data["scaffold"] = data["trf_head"]
+    data["length"] = data["trf_array_length"]
     data["seq"] = data["array"]
     data["mono*3"] = data["mono"] * 3
     data["centromere"] = [1 if CENPB_REGEXP.findall(i) else 0 for i in data["array"]]

@@ -116,7 +116,7 @@ class TabDelimitedFileIO(AbstractFileIO):
 def sc_iter_tab_file(
     input_file,
     data_type,
-    skip_starts_with=None,
+    skip_starts_with="#",
     remove_starts_with=None,
     preprocess_function=None,
     check_function=None,
