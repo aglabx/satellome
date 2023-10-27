@@ -23,7 +23,7 @@ from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.settings import load_settings
 from satelome.core_functions.tools.parsers import refine_name
 from satelome.core_functions.tools.processing import get_revcomp
-from satelome.trf_embedings import get_cosine_distance
+from satelome.core_functions.trf_embedings import get_cosine_distance
 
 settings = load_settings()
 
