@@ -66,7 +66,7 @@ if __name__ == "__main__":
     if os.path.isfile(output_file):
         print("TRF output file already exists. Skipping TRF.")
     else:
-        print("Running TRF...")
+        # print("Running TRF...")
         output_file = trf_search_by_splitting(
             fasta_file,
             threads=threads,
@@ -74,4 +74,5 @@ if __name__ == "__main__":
             project=project,
             trf_path=trf_path,
             parser_program=parser_program,
+            genome_size=genome_size,
         )

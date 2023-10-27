@@ -18,13 +18,29 @@ Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
 import os
 import shutil
 import tempfile
+import subprocess
+from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor
+
 
 from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satelome.core_functions.io.file_system import iter_filepath_folder
 from satelome.core_functions.io.trf_file import TRFFileIO
+from satelome.core_functions.tools.processing import get_genome_size
 
 trf_reader = TRFFileIO().iter_parse
 
+def run_trf(trf_path, fa_file):
+    command = [
+        trf_path, fa_file, "2", "5", "7", "80", "10", "50", "2000", "-l", "20", "-d", "-h", "> /dev/null 2>&1"
+    ]
+    command = " ".join(command)
+    os.system(command)
+
+    # try:
+    #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True, shell=True)
+    # except subprocess.CalledProcessError as e:
+    #     print(f"Error executing TRF for file {fa_file}: {e}")
 
 def trf_search_by_splitting(
     fasta_file,
@@ -34,6 +50,7 @@ def trf_search_by_splitting(
     trf_path="trf",
     parser_program="./trf_parse_raw.py",
     keep_raw=False,
+    genome_size=None,
 ):
     """TRF search by splitting on fasta file in files."""
     folder_path = tempfile.mkdtemp(dir=wdir)
@@ -41,18 +58,22 @@ def trf_search_by_splitting(
     ### 1. Split chromosomes into temp file
     total_length = 0
     next_file = 0
-    for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
-        print(header)
-        file_path = os.path.join(folder_path, "%s.fa" % next_file)
-        with open(file_path, "a") as fw:
-            fw.write("%s\n%s\n" % (header, seq))
-        total_length += len(seq)
-        if total_length > 100000:
-            next_file += 1
-            total_length = 0
+
+    if genome_size is None:
+        genome_size = get_genome_size(fasta_file)
+
+    with tqdm(total=genome_size, desc="Splitting fasta file", dynamic_ncols=True) as pbar:
+        for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
+            file_path = os.path.join(folder_path, "%s.fa" % next_file)
+            with open(file_path, "a") as fw:
+                fw.write("%s\n%s\n" % (header, seq))
+            total_length += len(seq)
+            if total_length > 100000:
+                next_file += 1
+                total_length = 0
+            pbar.update(len(seq))
 
     ### 2. Run TRF
-
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
     output_file = os.path.join(wdir, fasta_name + ".trf")
 
@@ -60,19 +81,35 @@ def trf_search_by_splitting(
 
     os.chdir(folder_path)
 
-    command = f"ls {folder_path} | grep fa | xargs -P {threads} -I [] {trf_path} [] 2 5 7 80 10 50 2000 -l 20 -d -h"
-    print(command)
-    os.system(command)
+    # Get a list of .fa files
+    fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
+
+    # Create a progress bar
+    with tqdm(total=len(fa_files), desc="Running TRF", dynamic_ncols=True) as pbar:
+        # Define a function to be called each time a TRF process completes
+        def update(*args):
+            pbar.update()
+
+        # Using a thread pool to run TRF processes in parallel
+        with ThreadPoolExecutor(max_workers=int(threads)) as executor:
+            for fa_file in fa_files:
+
+                # Submit a new TRF process to the pool and call `update` upon completion
+                executor.submit(run_trf, trf_path, fa_file).add_done_callback(update)
+            
+            # Wait for all TRF processes to complete
+            executor.shutdown(wait=True)
+
+    os.chdir(current_dir)
 
     ### 3. Parse TRF
 
     command = f"ls {folder_path} | grep dat | xargs -P {threads} -I [] {parser_program} -i {folder_path}/[] -o {folder_path}/[].trf -p {project}"
-    print(command)
     os.system(command)
 
     ### 3. Aggregate data
 
-    print(f"Aggregate data to: {output_file}")
+    # print(f"Aggregate data to: {output_file}")
     with open(output_file, "w") as fw:
         for file_path in iter_filepath_folder(folder_path):
             if file_path.endswith(".trf"):

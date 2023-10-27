@@ -12,6 +12,8 @@ import os
 from core_functions.tools.gene_intersect import add_annotation_from_gff
 
 from satelome.core_functions.tools.processing import get_genome_size
+from satelome.core_functions.tools.ncbi import get_taxon_name
+
 
 if __name__ == "__main__":
 
@@ -24,9 +26,11 @@ if __name__ == "__main__":
         "--trf", help="Path to trf [trf]", required=False, default="trf"
     )
     parser.add_argument(
-        "--genome_size", help="Expected genome size", required=False, default=0
+        "--genome_size", help="Expected genome size [will be computed]", required=False, default=0
     )
-    parser.add_argument("--gff", help="Input gff file", required=False, default=None)
+    parser.add_argument("--taxid", help="NCBI taxid, look here https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi", required=True)
+    parser.add_argument("--gff", help="Input gff file [None]", required=False, default=None)
+    parser.add_argument("--srr", help="SRR index for raw reads [None]", required=False, default=None)
     parser.add_argument("-c", "--cutoff", help="Cutoff for large TRs", required=False, default=1000)
     args = vars(parser.parse_args())
 
@@ -38,7 +42,17 @@ if __name__ == "__main__":
     large_cutoff = int(args["cutoff"])
     genome_size = int(args["genome_size"])
     gff_file = args["gff"]
+    minimal_scaffold_length = 1000000
+    drawing_enhancing = 1000000
+    taxid = args["taxid"]
 
+    taxon_name = get_taxon_name(taxid)
+    if taxon_name is None:
+        print(f"Invalid taxid: {taxid}")
+        print(f"Taxon set to 'Unknown'")
+        taxon_name = "Unknown"
+    else:
+        print(f"Taxon name: {taxon_name}")
 
     input_filename_without_extension = os.path.basename(os.path.splitext(fasta_file)[0])
 
@@ -46,6 +60,8 @@ if __name__ == "__main__":
         output_dir,
         input_filename_without_extension
     )
+
+    trf_file = f"{trf_prefix}.trf"
 
     if genome_size == 0:
         genome_size = get_genome_size(fasta_file)
@@ -55,6 +71,7 @@ if __name__ == "__main__":
 
     trf_search_path = os.path.join(current_directory, "steps", "trf_search.py")
     trf_classify_path = os.path.join(current_directory, "steps", "trf_classify.py")
+    trf_draw_path = os.path.join(current_directory, "steps", "trf_draw.py")
     
     settings = {
         "fasta_file": fasta_file,
@@ -69,17 +86,22 @@ if __name__ == "__main__":
         "trf_classify_path": trf_classify_path,
         "gff_file": gff_file,
         "trf_file": f"{trf_prefix}.trf",
+        "minimal_scaffold_length": minimal_scaffold_length,
+        "drawing_enhancing": drawing_enhancing,
+        "taxon_name": taxon_name,
+        "srr": args["srr"],
+        "taxid": taxid,
     }
 
     #TODO: use large_cutoff in code
 
-    command = f"time python {trf_search_path} -i {fasta_file} \
+    command = f"python {trf_search_path} -i {fasta_file} \
                                    -o {output_dir} \
                                    -p {project} \
                                    -t {threads} \
                                    --trf {trf_path} \
                                    --genome_size {genome_size}"
-    print(command)
+    # print(command)
     completed_process = subprocess.run(command, shell=True)
 
     if completed_process.returncode == 0:
@@ -102,11 +124,24 @@ if __name__ == "__main__":
         add_annotation_from_gff(settings["trf_file"], gff_file, report_file)
         print("Annotation added!")
 
-    command = f"time python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
-    print(command)
+    command = f"python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
+    # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
         print("trf_classify.py executed successfully!")
     else:
         print(f"trf_classify.py failed with return code {completed_process.returncode}")
         sys.exit(1)
+
+
+    # command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
+    # print(command)
+    # completed_process = subprocess.run(command, shell=True)
+    # if completed_process.returncode == 0:
+    #     print("trf_draw.py executed successfully!")
+    # else:
+    #     print(f"trf_draw.py failed with return code {completed_process.returncode}")
+    #     sys.exit(1)
+
+
+    
