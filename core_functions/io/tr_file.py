@@ -93,13 +93,15 @@ def save_trs_dataset(trs_dataset, output_file, dataset_id=None):
         trs_dataset = [x[1] for x in trs_dataset]
     if dataset_id is None:
         with open(output_file, "w") as fh:
-            fh.write(trs_dataset[0].get_header_string())
+            if trs_dataset:
+                fh.write(trs_dataset[0].get_header_string())
             for trf_obj in trs_dataset:
                 data = str(trf_obj)
                 fh.write(data)
     else:
         with open(output_file, "a") as fh:
-            fh.write(trs_dataset[0].get_header_string())
+            if trs_dataset:
+                fh.write(trs_dataset[0].get_header_string())
             for trf_obj in trs_dataset:
                 trf_obj.giid = dataset_id
                 data = str(trf_obj)
