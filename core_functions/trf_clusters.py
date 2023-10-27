@@ -99,9 +99,9 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
             else:
                 singl += ids
         items.sort(key=lambda x: len(x))
-        print(
-            i, "->", len(comps), len(singl)
-        )  # print(f"For distance {i} -> total number of components is {len(comps)} and {len(singl)} out of them are singletones")
+        # print(
+        #     i, "->", len(comps), len(singl)
+        # )  # print(f"For distance {i} -> total number of components is {len(comps)} and {len(singl)} out of them are singletones")
         for class_name, d in enumerate(items):
             median_monomer = [x[1] for x in d]
             median_monomer.sort()
@@ -171,9 +171,9 @@ def draw_sankey(
     for i in range(start_cutoff, 0, -1):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
-        print(i, "->", len(comps))
+        # print(i, "->", len(comps))
         if len(comps) == last_n_comp:
-            print("..skipped")
+            # print("..skipped")
             continue
         last_n_comp = len(comps)
 
@@ -240,7 +240,7 @@ def draw_sankey(
 
     for id2INstep, name2size, name2ids, name2id in steps[1:]:
 
-        print(name2size)
+        # print(name2size)
 
         for name in name2size:
             labels.append(name)
@@ -761,14 +761,16 @@ def draw_all(
     gaps_data = get_gaps_annotation(fasta_file, lenght_cutoff=lenght_cutoff)
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
-    print("Gaps distribution:", gaps_lengths)
+    if gaps_lengths:
+        print("Gaps distribution:", gaps_lengths)
 
     gaps_df = pd.DataFrame(gaps_data, columns=["scaffold", "start", "end", "length"])
 
     df_trs["chrm"] = [x["scaffold"] for i, x in df_trs.iterrows()]
 
     chrms = set([x[0] for x in gaps_data])
-    print(chrms)
+    if chrms:
+        print(chrms)
 
     chrm2gapIT = {}
     for chrm in chrms:
