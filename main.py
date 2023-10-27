@@ -14,6 +14,29 @@ from core_functions.tools.gene_intersect import add_annotation_from_gff
 from satelome.core_functions.tools.processing import get_genome_size
 from satelome.core_functions.tools.ncbi import get_taxon_name
 
+def print_logo():
+    print('''
+   ('-.                             ('-.    .-. .-') ) (`-.                      
+  ( OO ).-.                        ( OO ).-.\  ( OO ) ( OO ).                    
+  / . --. /  ,----.     ,--.       / . --. / ;-----.\(_/.  \_)-.                 
+  | \-.  \  '  .-./-')  |  |.-')   | \-.  \  | .-.  | \  `.'  /                  
+.-'-'  |  | |  |_( O- ) |  | OO ).-'-'  |  | | '-' /_) \     /\                  
+ \| |_.'  | |  | .--, \ |  |`-' | \| |_.'  | | .-. `.   \   \ |                  
+  |  .-.  |(|  | '. (_/(|  '---.'  |  .-.  | | |  \  | .'    \_)                 
+  |  | |  | |  '--'  |  |      |   |  | |  | | '--'  //  .'.  \                  
+  `--' `--'  `------'   `------'   `--' `--' `------''--'   '--'                 
+  .-')     ('-.     .-') _     ('-.                        _   .-')       ('-.   
+ ( OO ).  ( OO ).-.(  OO) )  _(  OO)                      ( '.( OO )_   _(  OO)  
+(_)---\_) / . --. //     '._(,------.,--.      .-'),-----. ,--.   ,--.)(,------. 
+/    _ |  | \-.  \ |'--...__)|  .---'|  |.-') ( OO'  .-.  '|   `.'   |  |  .---' 
+\  :` `..-'-'  |  |'--.  .--'|  |    |  | OO )/   |  | |  ||         |  |  |     
+ '..`''.)\| |_.'  |   |  |  (|  '--. |  |`-' |\_) |  |\|  ||  |'.'|  | (|  '--.  
+.-._)   \ |  .-.  |   |  |   |  .--'(|  '---.'  \ |  | |  ||  |   |  |  |  .--'  
+\       / |  | |  |   |  |   |  `---.|      |    `'  '-'  '|  |   |  |  |  `---. 
+ `-----'  `--' `--'   `--'   `------'`------'      `-----' `--'   `--'  `------' 
+''')
+    
+
 
 if __name__ == "__main__":
 
@@ -42,9 +65,11 @@ if __name__ == "__main__":
     large_cutoff = int(args["cutoff"])
     genome_size = int(args["genome_size"])
     gff_file = args["gff"]
-    minimal_scaffold_length = 1000000
+    minimal_scaffold_length = 10000
     drawing_enhancing = 1000000
     taxid = args["taxid"]
+
+    print_logo()
 
     taxon_name = get_taxon_name(taxid)
     if taxon_name is None:
@@ -53,6 +78,7 @@ if __name__ == "__main__":
         taxon_name = "Unknown"
     else:
         print(f"Taxon name: {taxon_name}")
+    taxon_name = taxon_name.replace(" ", "_")
 
     input_filename_without_extension = os.path.basename(os.path.splitext(fasta_file)[0])
 
@@ -61,7 +87,7 @@ if __name__ == "__main__":
         input_filename_without_extension
     )
 
-    trf_file = f"{trf_prefix}.trf"
+    trf_file = f"{trf_prefix}.1kb.trf"
 
     if genome_size == 0:
         genome_size = get_genome_size(fasta_file)
@@ -134,14 +160,14 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    # command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
-    # print(command)
-    # completed_process = subprocess.run(command, shell=True)
-    # if completed_process.returncode == 0:
-    #     print("trf_draw.py executed successfully!")
-    # else:
-    #     print(f"trf_draw.py failed with return code {completed_process.returncode}")
-    #     sys.exit(1)
+    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
+    print(command)
+    completed_process = subprocess.run(command, shell=True)
+    if completed_process.returncode == 0:
+        print("trf_draw.py executed successfully!")
+    else:
+        print(f"trf_draw.py failed with return code {completed_process.returncode}")
+        sys.exit(1)
 
 
     
