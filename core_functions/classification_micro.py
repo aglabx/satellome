@@ -118,6 +118,7 @@ def _trs_separate_something(
     stats = defaultdict(RepeatCountStatsModel)
 
     with open(output_trf_file, "w") as fh:
+        fh.write(trf_objs[0].get_header_string())
         with open(output_gff_file, "w") as fh_gff:
             selected = 0
             total_length = 0

@@ -94,8 +94,10 @@ if __name__ == "__main__":
         output_dir,
         input_filename_without_extension
     )
-
-    trf_file = f"{trf_prefix}.{large_file_suffix}.trf"
+    if large_file_suffix:
+        trf_file = f"{trf_prefix}.{large_file_suffix}.trf"
+    else:
+        trf_file = f"{trf_prefix}.trf"
 
     if genome_size == 0:
         genome_size = get_genome_size(fasta_file)
