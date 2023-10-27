@@ -181,6 +181,7 @@ def read_trf_file(trf_file):
         ],
         inplace=True,
     )
+    data["seq"] = data["array"]
     data["mono*3"] = data["mono"] * 3
     data["centromere"] = [1 if CENPB_REGEXP.findall(i) else 0 for i in data["array"]]
     data["telomere"] = [1 if TELOMERE_REGEXP.findall(i) else 0 for i in data["array"]]
@@ -214,7 +215,7 @@ def get_gaps_annotation(fasta_file, lenght_cutoff=100000):
             continue
         in_gap = False
         gap_start = None
-        print(name)
+        # print(name)
         for i in range(len(seq)):
             if seq[i] == "N":
                 if not in_gap:
