@@ -171,7 +171,7 @@ if __name__ == "__main__":
 
 
     command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
-    print(command)
+    # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
         print("trf_draw.py executed successfully!")
