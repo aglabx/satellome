@@ -55,6 +55,11 @@ if __name__ == "__main__":
     parser.add_argument("--gff", help="Input gff file [None]", required=False, default=None)
     parser.add_argument("--srr", help="SRR index for raw reads [None]", required=False, default=None)
     parser.add_argument("-c", "--cutoff", help="Cutoff for large TRs", required=False, default=1000)
+    ### add minimal_scaffold_length
+    parser.add_argument("-l", "--minimal_scaffold_length", help="Minimal scaffold length", required=False, default=10000)
+    parser.add_argument("-e", "--drawing_enhancing", help="Drawing enhancing", required=False, default=100000)
+
+
     args = vars(parser.parse_args())
 
     fasta_file = args["input"]
@@ -65,8 +70,8 @@ if __name__ == "__main__":
     large_cutoff = int(args["cutoff"])
     genome_size = int(args["genome_size"])
     gff_file = args["gff"]
-    minimal_scaffold_length = 10000
-    drawing_enhancing = 1000000
+    minimal_scaffold_length = int(args["minimal_scaffold_length"])
+    drawing_enhancing = int(args["drawing_enhancing"])
     taxid = args["taxid"]
 
     print_logo()
