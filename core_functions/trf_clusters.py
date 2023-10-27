@@ -644,7 +644,8 @@ def draw_karyotypes(
     names = set([x["family_name"] for i, x in _df_trs.iterrows()])
     for name in names:
         items = _df_trs[_df_trs["family_name"] == name]
-        items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
+        # items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
+        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         fig.add_trace(
             go.Bar(
                 base=items["start"],
@@ -666,7 +667,8 @@ def draw_karyotypes(
         if name == "SING":
             continue
         items = _df_trs[_df_trs["family_name"] == name]
-        items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
+        # items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
+        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         fig.add_trace(
             go.Bar(
                 base=items["start"],
@@ -688,7 +690,7 @@ def draw_karyotypes(
         if name != "SING":
             continue
         items = _df_trs[_df_trs["family_name"] == name]
-        items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
+        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         fig.add_trace(
             go.Bar(
                 base=items["start"],
