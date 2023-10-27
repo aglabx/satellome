@@ -15,6 +15,8 @@ from satelome.core_functions.tools.processing import get_genome_size
 from satelome.core_functions.tools.ncbi import get_taxon_name
 
 def print_logo():
+    '''https://patorjk.com/software/taag/#p=display&f=Ghost&t=AGLABX%0Asatelome
+    '''
     print('''
    ('-.                             ('-.    .-. .-') ) (`-.                      
   ( OO ).-.                        ( OO ).-.\  ( OO ) ( OO ).                    
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     ### add minimal_scaffold_length
     parser.add_argument("-l", "--minimal_scaffold_length", help="Minimal scaffold length", required=False, default=10000)
     parser.add_argument("-e", "--drawing_enhancing", help="Drawing enhancing", required=False, default=100000)
-
+    parser.add_argument("--large_file", help="Suffix for TR file for analysis, it can be '', 1kb, 3kb, 10kb [1kb]", required=False, default="1kb") 
 
     args = vars(parser.parse_args())
 
@@ -73,6 +75,7 @@ if __name__ == "__main__":
     minimal_scaffold_length = int(args["minimal_scaffold_length"])
     drawing_enhancing = int(args["drawing_enhancing"])
     taxid = args["taxid"]
+    large_file_suffix = args["large_file"]
 
     print_logo()
 
@@ -92,7 +95,7 @@ if __name__ == "__main__":
         input_filename_without_extension
     )
 
-    trf_file = f"{trf_prefix}.1kb.trf"
+    trf_file = f"{trf_prefix}.{large_file_suffix}.trf"
 
     if genome_size == 0:
         genome_size = get_genome_size(fasta_file)
