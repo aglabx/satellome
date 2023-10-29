@@ -448,7 +448,7 @@ def draw_karyotypes(
     title_text_ = title_text + "(enlarged gaps)"
     fig = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
     _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff]
-    _gaps_df["length"] = [max(x["length"], enhance) for i, x in _gaps_df.iterrows()]
+    _gaps_df.loc[:, "length"] = [max(x["length"], enhance) for i, x in _gaps_df.iterrows()]
     fig.add_trace(
         go.Bar(
             base=_gaps_df["start"],
@@ -644,7 +644,6 @@ def draw_karyotypes(
     names = set([x["family_name"] for i, x in _df_trs.iterrows()])
     for name in names:
         items = _df_trs[_df_trs["family_name"] == name]
-        # items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         fig.add_trace(
             go.Bar(
@@ -667,7 +666,6 @@ def draw_karyotypes(
         if name == "SING":
             continue
         items = _df_trs[_df_trs["family_name"] == name]
-        # items["length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
         fig.add_trace(
             go.Bar(
@@ -766,8 +764,8 @@ def draw_all(
     gaps_data = get_gaps_annotation(fasta_file, lenght_cutoff=lenght_cutoff)
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
-    if gaps_lengths:
-        print("Gaps distribution:", gaps_lengths)
+    # if gaps_lengths:
+    #     print("Gaps distribution:", gaps_lengths)
 
     gaps_df = pd.DataFrame(gaps_data, columns=["scaffold", "start", "end", "length"])
 
