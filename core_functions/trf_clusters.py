@@ -13,6 +13,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from intervaltree import IntervalTree
 import pickle
+from tqdm import tqdm
 
 from satelome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_file,
                                   scaffold_length_sort_length)
@@ -172,7 +173,7 @@ def draw_sankey(
     last_n_comp = 0
     id2names = {}
 
-    for i in range(start_cutoff, 0, -1):
+    for i in tqdm(range(start_cutoff, 0, -1), desc="Cut distances"):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
         # print(i, "->", len(comps))
