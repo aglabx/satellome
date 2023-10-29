@@ -19,6 +19,7 @@ def main():
     enhance = args.enhance
     taxon = args.taxon
     distance_file = args.distance
+    genome_size = args.genome_size
 
     chm2name = None
 
@@ -29,6 +30,7 @@ def main():
         chm2name,
         output_folder,
         taxon,
+        genome_size,
         lenght_cutoff=lenght_cutoff,
         level=1,
         enhance=enhance,
@@ -52,6 +54,9 @@ def get_args():
         help="Enhance level for TRs visualization",
     )
     parser.add_argument("-t", "--taxon", type=str, default="Unk", help="Taxon name")
+    parser.add_argument(
+        "-s", "--genome_size", type=int, help="Genome size"
+    )
     args = parser.parse_args()
     return args
 

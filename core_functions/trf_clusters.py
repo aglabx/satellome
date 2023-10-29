@@ -288,7 +288,7 @@ def draw_spheres(output_file_name_prefix, title_text, df_trs):
         }
     )
     fig.update_layout(width=800, height=800)
-    output_file_name = output_file_name_prefix + ".3D.png"
+    output_file_name = output_file_name_prefix + ".3D.svg"
     fig.write_image(output_file_name)
 
     fig = px.scatter_3d(
@@ -309,25 +309,25 @@ def draw_spheres(output_file_name_prefix, title_text, df_trs):
         }
     )
     fig.update_layout(width=800, height=800)
-    output_file_name = output_file_name_prefix + ".3D.nosingl.png"
+    output_file_name = output_file_name_prefix + ".3D.nosingl.svg"
     fig.write_image(output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="period", color="family_name", size="log_length")
-    output_file_name = output_file_name_prefix + ".2D.gc_period.png"
+    output_file_name = output_file_name_prefix + ".2D.gc_period.svg"
     fig.write_image(output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="period", color="family_name", size="log_length")
-    output_file_name = output_file_name_prefix + ".2D.gc_period.png"
+    output_file_name = output_file_name_prefix + ".2D.gc_period.svg"
     fig.write_image(output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="pmatch", color="family_name", size="log_length")
-    output_file_name = output_file_name_prefix + ".2D.gc_pmatch.png"
+    output_file_name = output_file_name_prefix + ".2D.gc_pmatch.svg"
     fig.write_image(output_file_name)
 
     fig = px.scatter(
         df_trs, x="pmatch", y="period", color="family_name", size="log_length"
     )
-    output_file_name = output_file_name_prefix + ".2D.period_period.png"
+    output_file_name = output_file_name_prefix + ".2D.period_period.svg"
     fig.write_image(output_file_name)
 
 
@@ -443,7 +443,7 @@ def draw_karyotypes(
             marker_color="rgba(0, 0, 0)",
         )
     )
-    output_file_name = output_file_name_prefix + ".gaps.png"
+    output_file_name = output_file_name_prefix + ".gaps.svg"
     fig.write_image(output_file_name)
 
     ### 2. Enhanced gaps
@@ -461,7 +461,7 @@ def draw_karyotypes(
             marker_color="rgba(0, 0, 0)",
         )
     )
-    output_file_name = output_file_name_prefix + f".gaps.{gap_cutoff}bp.enhanced.png"
+    output_file_name = output_file_name_prefix + f".gaps.{gap_cutoff}bp.enhanced.svg"
     fig.write_image(output_file_name)
 
     ### #3. Enhanced repeats_with_gap
@@ -557,7 +557,7 @@ def draw_karyotypes(
             marker_color="#00FF7F",
         )
     )
-    output_file_name = output_file_name_prefix + ".repeats.with.gaps.enhanced.png"
+    output_file_name = output_file_name_prefix + ".repeats.with.gaps.enhanced.svg"
     fig.write_image(output_file_name)
 
     ### #4. Enhanced TRs without gaps
@@ -575,7 +575,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".repeats.nogaps.enhanced.png"
+    output_file_name = output_file_name_prefix + ".repeats.nogaps.enhanced.svg"
     fig.write_image(output_file_name)
 
     ### #5. Raw all TRs
@@ -594,7 +594,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".raw.png"
+    output_file_name = output_file_name_prefix + ".raw.svg"
     fig.write_image(output_file_name)
 
     ### #6. Raw all TRs no singletons
@@ -615,7 +615,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".nosing.png"
+    output_file_name = output_file_name_prefix + ".nosing.svg"
     fig.write_image(output_file_name)
 
     ### #7. Raw TRs singletons
@@ -636,7 +636,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".sing.png"
+    output_file_name = output_file_name_prefix + ".sing.svg"
     fig.write_image(output_file_name)
 
     ### #8. Raw all TRs (enhanced)
@@ -656,7 +656,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".raw.enhanced.png"
+    output_file_name = output_file_name_prefix + ".raw.enhanced.svg"
     fig.write_image(output_file_name)
 
     ### #9. Raw all TRs no singletons (enhanced)
@@ -678,7 +678,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".nosing.enchanced.png"
+    output_file_name = output_file_name_prefix + ".nosing.enchanced.svg"
     fig.write_image(output_file_name)
 
     ### #10. Raw TRs singletons (enhanced)
@@ -700,7 +700,7 @@ def draw_karyotypes(
                 name=name,
             )
         )
-    output_file_name = output_file_name_prefix + ".sing.enchanced.png"
+    output_file_name = output_file_name_prefix + ".sing.enchanced.svg"
     fig.write_image(output_file_name)
 
 
@@ -711,6 +711,7 @@ def draw_all(
     chm2name,
     output_folder,
     taxon,
+    genome_size,
     lenght_cutoff=10000000,
     level=1,
     enhance=1000000,
@@ -769,7 +770,7 @@ def draw_all(
 
     ### TODO: save distances and tr2vector
 
-    output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.png")
+    output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.svg")
     title_text = f"Tandem repeats flow in {taxon}"
     print("Draw sankey...")
     name2monomers, name2lid, name2ids, id2names = draw_sankey(
@@ -788,7 +789,7 @@ def draw_all(
     draw_spheres(output_file_name_prefix, title_text, df_trs)
 
     print("Draw gaps...")
-    gaps_data = get_gaps_annotation(fasta_file, lenght_cutoff=lenght_cutoff)
+    gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
     # if gaps_lengths:

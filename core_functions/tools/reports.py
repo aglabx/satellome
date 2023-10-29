@@ -15,19 +15,27 @@ def image_to_data_uri(image_path):
         encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
         return f"data:image/png;base64,{encoded_string}"
 
+def svg_to_data_uri(svg_path):
+    """Converts an SVG file to a Base64-encoded data URI."""
+    with open(svg_path, "rb") as svg_file:
+        # Convert binary data to Base64 encoded string
+        encoded_string = base64.b64encode(svg_file.read()).decode('utf-8')
+        return f"data:image/svg+xml;base64,{encoded_string}"
+
 def create_html_report(image_folder, report_file):
 
-    image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.png')]
+    image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.svg')]
 
     images_content = ""
 
     for image in image_files:
-        data_uri = image_to_data_uri(image)
-        im = f'<img src="{data_uri}" alt="Embedded Image">'
+        if image.endswith('.svg'):
+            data_uri = svg_to_data_uri(image)
+        else:
+            data_uri = image_to_data_uri(image)
+        im = f'<img src="{data_uri}" alt="{image}">'
         images_content += im
     
-
-
     html_content = f"""<!DOCTYPE html>
     <html lang="en">
     <head>
@@ -37,7 +45,7 @@ def create_html_report(image_folder, report_file):
         <title>Embedded Image</title>
     </head>
     <body>
-        <img src="{images_content}" alt="Embedded Image">
+        {images_content}
     </body>
     </html>
     """
