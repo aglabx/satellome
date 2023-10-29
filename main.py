@@ -110,6 +110,10 @@ if __name__ == "__main__":
     trf_search_path = os.path.join(current_directory, "steps", "trf_search.py")
     trf_classify_path = os.path.join(current_directory, "steps", "trf_classify.py")
     trf_draw_path = os.path.join(current_directory, "steps", "trf_draw.py")
+
+    output_image_dir = os.path.join(output_dir, "images")
+    if not os.path.exists(output_image_dir):
+        os.makedirs(output_image_dir)
     
     settings = {
         "fasta_file": fasta_file,
@@ -172,7 +176,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
+    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
     # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
