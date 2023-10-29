@@ -7,3 +7,4 @@ simplejson
 intervaltree
 tqdm
 requests
+plotly
