@@ -12,6 +12,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from intervaltree import IntervalTree
+import pickle
 
 from satelome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_file,
                                   scaffold_length_sort_length)
@@ -705,6 +706,7 @@ def draw_karyotypes(
 def draw_all(
     trf_file,
     fasta_file,
+    distance_file,
     chm2name,
     output_folder,
     taxon,
@@ -730,8 +732,31 @@ def draw_all(
         )[:2000]
         print(f"Updated quantity of TRs: 2000")
 
-    print("Computing distances...")
-    distances, tr2vector = get_disances(df_trs)
+    
+    if os.path.isfile(distance_file) and os.path.getsize(distance_file) > 0:
+        print("Loading distances...")
+        distances = {}
+        with open(distance_file) as fh:
+            for line in fh:
+                a, b, d = line.strip().split()
+                distances[(int(a), int(b))] = float(d)
+
+        distance_vectors_file = distance_file + ".vector"
+        with open(distance_vectors_file, 'rb') as f:
+            tr2vector = pickle.load(f)
+
+    else:
+        distances, tr2vector = get_disances(df_trs)
+        distance_vectors_file = distance_file + ".vector"
+        
+        with open(distance_vectors_file, 'wb') as f:
+            pickle.dump(tr2vector, f)
+
+        with open(distance_file, "w") as fh:
+            for (id1, id2), dist in distances.items():
+                fh.write(f"{id1}\t{id2}\t{dist}\n")
+
+
     print("Naming repeats...")
     df_trs, tr2vector, distances, all_distances = name_clusters(
         distances, tr2vector, df_trs, level=level

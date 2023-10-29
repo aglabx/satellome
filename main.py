@@ -111,6 +111,8 @@ if __name__ == "__main__":
     trf_classify_path = os.path.join(current_directory, "steps", "trf_classify.py")
     trf_draw_path = os.path.join(current_directory, "steps", "trf_draw.py")
 
+    distance_file = os.path.join(output_dir, "distances.tsv")
+
     output_image_dir = os.path.join(output_dir, "images")
     if not os.path.exists(output_image_dir):
         os.makedirs(output_image_dir)
@@ -176,7 +178,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}'"
+    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file}"
     # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:

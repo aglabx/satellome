@@ -96,6 +96,7 @@ def compute_distances_euclidean(tr2vector):
 
 
 def get_disances(df_trs):
+    print("Computing distances...")
     token2id, token2revtoken = get_pentatokens()
     tr2vector = fill_vectors(df_trs, token2id, token2revtoken, k=5)
     distances = compute_distances(tr2vector)

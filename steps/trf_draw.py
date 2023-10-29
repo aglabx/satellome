@@ -18,12 +18,14 @@ def main():
     fasta_file = args.fasta
     enhance = args.enhance
     taxon = args.taxon
+    distance_file = args.distance
 
     chm2name = None
 
     draw_all(
         trf_file,
         fasta_file,
+        distance_file,
         chm2name,
         output_folder,
         taxon,
@@ -38,6 +40,7 @@ def get_args():
     parser.add_argument("-f", "--fasta", type=str, help="Fasta file")
     parser.add_argument("-i", "--input", type=str, help="TRF file")
     parser.add_argument("-o", "--output", type=str, help="Output folder")
+    parser.add_argument("-d", "--distance", type=str, help="Distance file")
     parser.add_argument(
         "-c", "--cutoff", type=int, default=1000000, help="Minimal length of scaffold"
     )
