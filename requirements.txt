@@ -8,3 +8,4 @@ intervaltree
 tqdm
 requests
 plotly
+kaleido
