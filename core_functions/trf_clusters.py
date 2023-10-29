@@ -92,7 +92,7 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
     for (id1, id2) in distances:
         G.addEdge(id1, id2, distances[(id1, id2)])
 
-    for i in range(start_cutoff, level - 1, -1):
+    for i in tqdm(range(start_cutoff, level - 1, -1), desc="Naming clusters"):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
         items = []
@@ -733,7 +733,8 @@ def draw_all(
         )[:2000]
         print(f"Updated quantity of TRs: 2000")
 
-    
+    distance_file += f".{len(df_trs)}"
+
     if os.path.isfile(distance_file) and os.path.getsize(distance_file) > 0:
         print("Loading distances...")
         distances = {}
@@ -758,7 +759,7 @@ def draw_all(
                 fh.write(f"{id1}\t{id2}\t{dist}\n")
 
 
-    print("Naming repeats...")
+    # print("Naming repeats...")
     df_trs, tr2vector, distances, all_distances = name_clusters(
         distances, tr2vector, df_trs, level=level
     )

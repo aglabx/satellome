@@ -70,7 +70,7 @@ def filter_hits(hits):
     return hits
 
 
-def _add_annotation(trf_file, gff_file, rm_file=None):
+def _add_annotation(trf_file, gff_file, rm_file):
     ''' Add annotation to TRF file from GFF file.'''
 
     chrm2annotation = {}
