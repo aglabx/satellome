@@ -77,11 +77,13 @@ def _add_annotation(trf_file, gff_file, rm_file=None):
 
     gff_file_lines = count_lines_large_file(gff_file)
 
+    ### TODO: Make it less memory consuming
     for gff_record in tqdm(sc_gff3_reader(gff_file), total=gff_file_lines, desc="Load GFF"):
         chrm = gff_record.seqid
         if chrm not in chrm2annotation:
             chrm2annotation[chrm] = IntervalTree()
         chrm2annotation[chrm].addi(gff_record.start-1, gff_record.end, gff_record.as_dict())
+
 
     if rm_file:
 
