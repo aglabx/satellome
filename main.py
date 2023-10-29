@@ -9,7 +9,8 @@ import argparse
 import subprocess
 import sys
 import os
-from core_functions.tools.gene_intersect import add_annotation_from_gff
+from satelome.core_functions.tools.gene_intersect import add_annotation_from_gff
+from satelome.core_functions.tools.reports import create_html_report
 
 from satelome.core_functions.tools.processing import get_genome_size
 from satelome.core_functions.tools.ncbi import get_taxon_name
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     drawing_enhancing = int(args["drawing_enhancing"])
     taxid = args["taxid"]
     large_file_suffix = args["large_file"]
-    rm_file = args["rm"]
+    repeatmasker_file = args["rm"]
 
     print_logo()
 
@@ -113,6 +114,10 @@ if __name__ == "__main__":
 
     distance_file = os.path.join(output_dir, "distances.tsv")
 
+    html_report_file = os.path.join(output_dir, "reports", "satelome_report.html")
+    if not os.path.exists(os.path.dirname(html_report_file)):
+        os.makedirs(os.path.dirname(html_report_file))
+
     output_image_dir = os.path.join(output_dir, "images")
     if not os.path.exists(output_image_dir):
         os.makedirs(output_image_dir)
@@ -135,6 +140,11 @@ if __name__ == "__main__":
         "taxon_name": taxon_name,
         "srr": args["srr"],
         "taxid": taxid,
+        "distance_file": distance_file,
+        "output_image_dir": output_image_dir,
+        "large_file_suffix": large_file_suffix,
+        "repeatmasker_file": repeatmasker_file,
+        "html_report_file": html_report_file,
     }
 
     #TODO: use large_cutoff in code
@@ -161,11 +171,11 @@ if __name__ == "__main__":
             "reports")
         if not os.path.exists(reports_folder):
             os.makedirs(reports_folder)
-        report_file = os.path.join(
+        annotation_report_file = os.path.join(
             reports_folder,
             "annotation_report.txt"
         )
-        add_annotation_from_gff(settings["trf_file"], gff_file, report_file, rm_file=rm_file)
+        add_annotation_from_gff(settings["trf_file"], gff_file, annotation_report_file, rm_file=repeatmasker_file)
         print("Annotation added!")
 
     command = f"python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
@@ -178,7 +188,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file}"
+    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file} "
     # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
@@ -186,6 +196,8 @@ if __name__ == "__main__":
     else:
         print(f"trf_draw.py failed with return code {completed_process.returncode}")
         sys.exit(1)
+
+    create_html_report(output_image_dir, html_report_file)
 
 
     
