@@ -55,6 +55,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--taxid", help="NCBI taxid, look here https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi", required=True)
     parser.add_argument("--gff", help="Input gff file [None]", required=False, default=None)
+    parser.add_argument("--rm", help="Input RM *.ori.out file [None]", required=False, default=None)
     parser.add_argument("--srr", help="SRR index for raw reads [None]", required=False, default=None)
     parser.add_argument("-c", "--cutoff", help="Cutoff for large TRs", required=False, default=1000)
     ### add minimal_scaffold_length
@@ -76,6 +77,7 @@ if __name__ == "__main__":
     drawing_enhancing = int(args["drawing_enhancing"])
     taxid = args["taxid"]
     large_file_suffix = args["large_file"]
+    rm_file = args["rm"]
 
     print_logo()
 
@@ -157,7 +159,7 @@ if __name__ == "__main__":
             reports_folder,
             "annotation_report.txt"
         )
-        add_annotation_from_gff(settings["trf_file"], gff_file, report_file)
+        add_annotation_from_gff(settings["trf_file"], gff_file, report_file, rm_file=rm_file)
         print("Annotation added!")
 
     command = f"python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"

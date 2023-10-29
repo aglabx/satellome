@@ -31,3 +31,11 @@ def get_genome_size(fasta_file):
     print(f"{genome_size} bp")
     return genome_size
 
+
+def count_lines_large_file(filename, chunk_size=1024*1024):
+    line_count = 0
+    with open(filename, 'rb') as f:
+        while chunk := f.read(chunk_size):
+            line_count += chunk.count(b'\n')
+    return line_count
+
