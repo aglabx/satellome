@@ -11,7 +11,8 @@ from satelome.core_functions.io.tr_file import save_trs_dataset
 from satelome.core_functions.io.tab_file import sc_iter_tab_file
 from satelome.core_functions.models.trf_model import TRModel
 from satelome.core_functions.io.gff_file import sc_gff3_reader
-
+from satelome.core_functions.tools.processing import count_lines_large_file
+from tqdm import tqdm
 
 def categorize_intervals(a, b, feature):
     if a[0] == b[0] and a[1] == b[1]:
@@ -69,20 +70,42 @@ def filter_hits(hits):
     return hits
 
 
-def _add_annotation(trf_file, gff_file):
+def _add_annotation(trf_file, gff_file, rm_file=None):
     ''' Add annotation to TRF file from GFF file.'''
 
     chrm2annotation = {}
 
-    for gff_record in sc_gff3_reader(gff_file):
+    gff_file_lines = count_lines_large_file(gff_file)
+
+    for gff_record in tqdm(sc_gff3_reader(gff_file), total=gff_file_lines, desc="Load GFF"):
         chrm = gff_record.seqid
         if chrm not in chrm2annotation:
             chrm2annotation[chrm] = IntervalTree()
         chrm2annotation[chrm].addi(gff_record.start-1, gff_record.end, gff_record.as_dict())
 
+    if rm_file:
+
+        rm_file_lines = count_lines_large_file(rm_file)
+
+        with open(rm_file) as fh:
+            for line in tqdm(fh, total=rm_file_lines, desc="Load RM"):
+                d = line.split()
+                chrm = d[4]
+                if chrm not in chrm2annotation:
+                    chrm2annotation[chrm] = IntervalTree()
+                start = int(d[5])
+                end = int(d[6])
+                fam = d[10]
+
+                chrm2annotation[chrm].addi(start-1, end, {
+                    "type": f"RM_{fam}",
+                })
+
     trf_id2annotation = {}
 
-    for j, trf_obj in enumerate(sc_iter_tab_file(trf_file, TRModel)):
+    trf_file_lines = count_lines_large_file(trf_file)
+
+    for j, trf_obj in tqdm(enumerate(sc_iter_tab_file(trf_file, TRModel)), total=trf_file_lines, desc="Load TRF"):
 
         chrm = trf_obj.trf_head.split()[0]
         start = trf_obj.trf_l_ind
@@ -110,13 +133,14 @@ def _add_annotation(trf_file, gff_file):
         else:
             trf_id2annotation[trf_key] = None
 
+
     return trf_id2annotation
 
 
-def add_annotation_from_gff(trf_file, gff_file, report_file):
+def add_annotation_from_gff(trf_file, gff_file, report_file, rm_file=None):
     ''' Add annotation to TRF file from GFF file.'''
 
-    trf_id2annotation = _add_annotation(trf_file, gff_file)
+    trf_id2annotation = _add_annotation(trf_file, gff_file, rm_file)
 
     c = Counter()
     for trf_id in trf_id2annotation:
