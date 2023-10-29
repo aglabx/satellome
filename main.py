@@ -9,6 +9,8 @@ import argparse
 import subprocess
 import sys
 import os
+from core_functions.io.tab_file import sc_iter_tab_file
+from core_functions.models.trf_model import TRModel
 from satelome.core_functions.tools.gene_intersect import add_annotation_from_gff
 from satelome.core_functions.tools.reports import create_html_report
 
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     else:
         trf_file = f"{trf_prefix}.trf"
 
-    if genome_size == 0:
+    if not genome_size:
         genome_size = get_genome_size(fasta_file)
 
     current_file_path = os.path.abspath(__file__)
@@ -164,7 +166,14 @@ if __name__ == "__main__":
         print(f"trf_search.py failed with return code {completed_process.returncode}")
         sys.exit(1)
 
-    if gff_file:
+    ### check for annotation
+    was_annotated = False
+    for trf_obj in sc_iter_tab_file(trf_file, TRModel):
+        if trf_obj.trf_ref_annotation is not None:
+            was_annotated = True
+        break
+
+    if gff_file and not was_annotated:
         print("Adding annotation from GFF file...")
         reports_folder = os.path.join(
             output_dir,
@@ -177,6 +186,11 @@ if __name__ == "__main__":
         )
         add_annotation_from_gff(settings["trf_file"], gff_file, annotation_report_file, rm_file=repeatmasker_file)
         print("Annotation added!")
+    else:
+        if was_annotated:
+            print("Annotation was added befeore!")
+        else:
+            print("Please provide GFF file and optionally RM file for annotation!")
 
     command = f"python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
     # print(command)
@@ -188,7 +202,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
 
-    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file} "
+    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file} -s {genome_size} "
     # print(command)
     completed_process = subprocess.run(command, shell=True)
     if completed_process.returncode == 0:
