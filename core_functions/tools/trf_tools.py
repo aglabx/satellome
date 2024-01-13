@@ -32,7 +32,7 @@ trf_reader = TRFFileIO().iter_parse
 
 def run_trf(trf_path, fa_file):
     command = [
-        trf_path, fa_file, "2", "5", "7", "80", "10", "50", "2000", "-l", "20", "-d", "-h", "> /dev/null 2>&1"
+        trf_path, fa_file, "2", "5", "7", "80", "10", "50", "2000", "-l", "200", "-d", "-h", "> /dev/null 2>&1"
     ]
     command = " ".join(command)
     os.system(command)
