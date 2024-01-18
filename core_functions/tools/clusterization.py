@@ -82,6 +82,6 @@ def annotate_components(
             get_flag_string(taxon_dict, flags),
             sizes,
         )
-        annotate_components.append(ac)
+        annotated_components.append(ac)
 
     return annotated_components
