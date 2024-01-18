@@ -9,3 +9,5 @@ tqdm
 requests
 plotly
 kaleido
+editdistance
+networkx
