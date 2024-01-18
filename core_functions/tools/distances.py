@@ -6,29 +6,27 @@
 # @contact: ad3002@gmail.com
 
 import editdistance as ed
-from suffix_trees import STree
 from tqdm import tqdm
 
 from satelome.core_functions.tools.processing import get_revcomp
 
-
-def hamming_sliding_distance(seq1, seq2, lcs_cutoff=0.2):
+def hamming_sliding_distance(seq1, seq2, min_hd=None):
     """Compute Hamming Sliding distance between two sequences."""
-    st = STree.STree([seq1, seq2])
-    suff = st.lcs()
-    if len(suff) / len(seq1) < lcs_cutoff:
-        return len(seq1)
-    pos1 = seq1.find(suff)
-    pos2 = seq2.find(suff)
-    if pos1 > 0:
-        seq1 = seq1[pos1:] + seq1[:pos1]
-    if pos2 > 0:
-        seq2 = seq2[pos2:] + seq2[:pos2]
-    hd = sum([seq1[j] != seq2[j] for j in range(len(seq2))])
-    return hd
+    seq2 = seq2 + seq2
+    if min_hd is None:
+        min_hd = len(seq1)
+    for i in range(len(seq2)-len(seq1)+1):
+        hd = 0
+        for j in range(len(seq1)):
+            if seq1[j] != seq2[i+j]:
+                hd += 1
+                if hd >= min_hd:
+                    break
+        if hd < min_hd:
+            min_hd = hd
+    return min_hd
 
-
-def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2):
+def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1):
     """Compute Hamming Sliding distance between all sequences.
     Compute minimal hamming distance between all sequences considering
     - rotation of tandem repeat motif
@@ -39,6 +37,7 @@ def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2)
     for i, ori_consensus1 in tqdm(enumerate(sequences), total=len(sequences)):
         sh_distances[(seq2id[ori_consensus1], seq2id[ori_consensus1])] = 0.0
         l1 = len(ori_consensus1)
+        
         for consensus2 in sequences[i + 1 :]:
             if (ori_consensus1, consensus2) in computed:
                 continue
@@ -53,15 +52,15 @@ def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2)
                 continue
             key = (seq2id[ori_consensus1], seq2id[consensus2])
 
-            d = hamming_sliding_distance(consensus1, consensus2, lcs_cutoff=lcs_cutoff)
-            d /= len(consensus1)
-            if d <= distance_cutoff:
+            d = hamming_sliding_distance(consensus1, consensus2)
+            if d/len(consensus1) <= distance_cutoff:
+                d = d / len(consensus1)
                 sh_distances[key] = d
                 sh_distances[(seq2id[consensus2], seq2id[ori_consensus1])] = d
             else:
                 consensus1 = get_revcomp(consensus1)
                 d = hamming_sliding_distance(
-                    consensus1, consensus2, lcs_cutoff=lcs_cutoff
+                    consensus1, consensus2, min_hd=d
                 )
                 d /= len(consensus1)
                 if d <= distance_cutoff:
