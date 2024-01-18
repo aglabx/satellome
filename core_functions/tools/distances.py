@@ -29,7 +29,11 @@ def hamming_sliding_distance(seq1, seq2, lcs_cutoff=0.2):
 
 
 def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2):
-    """Compute Hamming Sliding distance between all sequences."""
+    """Compute Hamming Sliding distance between all sequences.
+    Compute minimal hamming distance between all sequences considering
+    - rotation of tandem repeat motif
+    - reverse complement
+    """
     sh_distances = {}
     computed = set()
     for i, ori_consensus1 in tqdm(enumerate(sequences), total=len(sequences)):
@@ -67,7 +71,9 @@ def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2)
 
 
 def compute_edit_distances(sequences, seq2id, distance_cutoff=0.1):
-    """Compute edit distance between all sequences."""
+    """Compute edit distance between all sequences. 
+    Please note that this function is not used in the pipeline.
+    Please note that rotation of sequences is not implemented for this function."""
     distances = {}
     computed = set()
     for i, ori_consensus1 in tqdm(enumerate(sequences), total=len(sequences)):
