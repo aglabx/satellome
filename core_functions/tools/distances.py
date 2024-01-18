@@ -28,7 +28,7 @@ def hamming_sliding_distance(seq1, seq2, lcs_cutoff=0.2):
     return hd
 
 
-def compute_hs_distance(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2):
+def compute_hs_distances(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2):
     """Compute Hamming Sliding distance between all sequences."""
     sh_distances = {}
     computed = set()
@@ -66,7 +66,7 @@ def compute_hs_distance(sequences, seq2id, distance_cutoff=0.1, lcs_cutoff=0.2):
     return sh_distances
 
 
-def compute_edit_distance(sequences, seq2id, distance_cutoff=0.1):
+def compute_edit_distances(sequences, seq2id, distance_cutoff=0.1):
     """Compute edit distance between all sequences."""
     distances = {}
     computed = set()
