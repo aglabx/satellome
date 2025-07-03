@@ -6,6 +6,12 @@ A comprehensive bioinformatics tool for analyzing satellite DNA (tandem repeats)
 
 Satellome integrates Tandem Repeat Finder (TRF) to identify, classify, and visualize repetitive DNA sequences, with a particular focus on centromeric and telomeric regions. It provides a complete pipeline from raw genome sequences to detailed visualizations and reports of tandem repeat patterns.
 
+The tool is designed to work with various genome assembly projects including:
+- T2T (Telomere-to-Telomere) Consortium assemblies
+- DNA Zoo chromosome-length assemblies
+- VGP (Vertebrate Genome Project) assemblies
+- NCBI RefSeq and GenBank assemblies
+
 ## Features
 
 - **Tandem Repeat Detection**: Automated detection using TRF with optimized parameters
