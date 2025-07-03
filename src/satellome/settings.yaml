@@ -1,0 +1,45 @@
+satellome:
+    # os: linux64
+    os: WIN
+    root_dir: /root/Dropbox/workspace/trseeker
+    work_dir: /home
+blast_settings:
+    blast_location:
+    blast_location_NIX: legacy_blast.pl bl2seq
+    blast_location_WIN: c:\Program Files\NCBI\blast-2.2.26+\bin\legacy_blast.pl bl2seq.exe
+    repbase_db_folder: /home/rebase_blast_db/repbase
+    jellyfish_location_new: /home/akomissarov/libs/jellyfish-2.2.0/bin/jellyfish
+    jellyfish_location: /home/akomissarov/libs/jellyfish-1.1.11/bin/jellyfish
+    blast_e: 1e-20
+    blast_b: 20000000
+    blast_v: 20000000
+trf_settings:
+    trf_location: /home/akomissarov/libs/trf409.linux64
+    trf_location_mac: /Users/akomissarov/libs/trf409.macos64
+    trf_location_WIN: e:/trf409.dos.exe
+    trf_match: 2
+    trf_mismatch: 5
+    trf_indel: 7
+    trf_p: 80
+    trf_q: 10
+    trf_threshold: 50
+    trf_length: 2000
+    trf_param_postfix: 2.5.7.80.10.50.2000
+    trf_masked_file: False
+    trf_flanked_data: True
+    trf_data_file: True
+    trf_nohtml: True
+    overlapping_cutoff: 10
+    overlapping_cutoff_proc: 30
+    overlapping_gc_diff: 0.05
+jellyfish_settings:
+    threads: 30
+    hash_size: 10G
+    hash_bits: 10
+    both_strands: "--both-strands"
+    both_strands_new: "--canonical"
+ngrams_settings:
+    ngram_length: 23
+    ngram_m: 10000000
+repeatmasker:
+    path: /home/akomissarov/libs/RepeatMasker/RepeatMasker

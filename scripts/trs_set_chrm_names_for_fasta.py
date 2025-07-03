@@ -8,7 +8,7 @@
 import argparse
 import re
 
-from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
 
 
 def main(args):

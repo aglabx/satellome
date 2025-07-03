@@ -7,8 +7,8 @@
 
 import argparse
 
-from satelome.core_functions.io.tab_file import sc_iter_tab_file
-from satelome.core_functions.models.trf_model import TRModel
+from satellome.core_functions.io.tab_file import sc_iter_tab_file
+from satellome.core_functions.models.trf_model import TRModel
 
 if __name__ == "__main__":
 

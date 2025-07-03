@@ -1,4 +1,4 @@
-# satelome
+# satellome
 
 ## Installation instruction
 
@@ -15,13 +15,13 @@ bash Miniconda3-latest-Linux-x86_64.sh
 ### 2. Create conda environment
 
 ```bash
-conda create -n satelome python=3.9
+conda create -n satellome python=3.9
 ```
 
 ### 3. Activate conda environment
 
 ```bash
-conda activate satelome
+conda activate satellome
 ```
 
 ### 4. Install requirements
@@ -72,9 +72,9 @@ Dataset to make:
 
 ## Project folder
 
-/mnt/data/satelome 
+/mnt/data/satellome 
 
-Project unix group: satelome
+Project unix group: satellome
 
 ```
     ### PART 3. Annotation and naming

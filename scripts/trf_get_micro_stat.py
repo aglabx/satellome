@@ -8,7 +8,7 @@
 import argparse
 from collections import defaultdict
 
-from satelome.core_functions.models.gff3_model import sc_gff3_reader
+from satellome.core_functions.models.gff3_model import sc_gff3_reader
 
 if __name__ == "__main__":
 

@@ -132,3 +132,8 @@ dmypy.json
 
 TRF
 test_dataset
+examples_primates.sh
+.claude
+.vscode
+CLAUDE.md
+examples_primates.sh

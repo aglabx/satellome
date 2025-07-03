@@ -7,7 +7,7 @@
 
 import argparse
 import os
-from satelome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from intervaltree import IntervalTree
 import re
 from tqdm import tqdm
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     fasta_length = os.path.getsize(input_fasta_file)
 
     
-    with tqdm(total=fasta_length, desc="Parse fasta") as pbar:
+    with tqdm(total=fasta_length, desc="Searching") as pbar:
         for header, seq in sc_iter_fasta_brute(input_fasta_file):
             header2length[header] = len(seq)
 
@@ -68,6 +68,7 @@ if __name__ == "__main__":
 
             pbar.update(len(seq)+1)
             pbar.update(len(header)+1)
+        pbar.total = pbar.n
 
 
 
