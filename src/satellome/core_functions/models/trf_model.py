@@ -257,6 +257,10 @@ class TRModel(AbstractModel):
     def set_form_overlap(self, obj2):
         """Init object with data from overlap with another TRFObj located right to self."""
 
+        use_first = False
+        if self.trf_score > obj2.trf_score:
+            use_first = True
+
         
         self.trf_pmatch = float(
             (
@@ -265,8 +269,9 @@ class TRModel(AbstractModel):
             )
             / (self.trf_array_length + obj2.trf_array_length)
         )
-        self.trf_period = min(self.trf_period, obj2.trf_period)
-
+        if not use_first:
+            self.trf_period = obj2.trf_period
+    
         left_flank = obj2.trf_l_ind - self.trf_l_ind
         self.trf_array = (
             self.trf_array + obj2.trf_array[len(self.trf_array) - left_flank :]
@@ -276,8 +281,10 @@ class TRModel(AbstractModel):
         self.trf_array_length = len(self.trf_array)
         assert self.trf_array_length == self.trf_r_ind - self.trf_l_ind + 1
 
-        if obj2.trf_period < self.trf_period:
+        if not use_first:
+            self.trf_period = obj2.trf_period
             self.trf_consensus = obj2.trf_consensus
+            
         self.trf_n_copy = self.trf_array_length / self.trf_period
         self.trf_indels = None
         self.trf_score = None
@@ -285,7 +292,8 @@ class TRModel(AbstractModel):
         self.trf_n_c = self.trf_array.count("C")
         self.trf_n_g = self.trf_array.count("G")
         self.trf_n_t = self.trf_array.count("T")
-        self.trf_entropy = max(self.trf_entropy, obj2.trf_entropy)
+        if not use_first:
+            self.trf_entropy = obj2.trf_entropy
         self.trf_pvar = float(100 - float(self.trf_pmatch))
         self.trf_array_gc = get_gc(self.trf_array)
         self.trf_consensus_gc = get_gc(self.trf_consensus)
