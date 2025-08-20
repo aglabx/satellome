@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 version = None
-for line in open("./src/Satellome/__init__.py"):
+for line in open("./src/satellome/__init__.py"):
     m = re.search("__version__\s*=\s*(.*)", line)
     if m:
         version = m.group(1).strip()[1:-1]  # quotes
@@ -45,7 +45,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'satellome = Satellome.main:run_it',
+            'satellome = satellome.main:main',
         ],
     },
 )

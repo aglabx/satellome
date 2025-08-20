@@ -46,8 +46,7 @@ def print_logo():
     
 
 
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser(description="Parse TRF output.")
     parser.add_argument("-i", "--input", help="Input fasta file", required=True)
     parser.add_argument("-o", "--output", help="Output folder", required=True)
@@ -294,3 +293,7 @@ if __name__ == "__main__":
     print(f"Output directory: {output_dir}")
     print(f"HTML report: {html_report_file}")
     print("="*50)
+
+
+if __name__ == "__main__":
+    main()
