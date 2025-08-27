@@ -21,6 +21,7 @@ The tool is designed to work with various genome assembly projects including:
 - **Parallel Processing**: Efficient handling of multiple genomes
 - **Smart Pipeline**: Automatically skips completed steps (override with `--force`)
 - **Compressed File Support**: Direct processing of .gz compressed FASTA files
+- **K-mer Based Filtering**: Optional k-mer profiling to focus on repeat-rich regions and skip repeat-poor areas
 
 ## Installation
 
@@ -94,6 +95,16 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --trf /path/to/trf
 
 # Parallel processing of multiple genomes
 python scripts/run_satellome_parallel.py -i genomes_list.txt -o results_dir -t 32
+
+# With k-mer filtering to skip repeat-poor regions
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --use_kmer_filter
+
+# Use pre-computed k-mer profile
+varprofiler genome.fasta genome.varprofile.bed 17 100000 25000 20
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --kmer_bed genome.varprofile.bed
+
+# Adjust k-mer threshold (default 90000)
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --use_kmer_filter --kmer_threshold 70000
 ```
 
 ### Parameters
@@ -106,6 +117,9 @@ python scripts/run_satellome_parallel.py -i genomes_list.txt -o results_dir -t 3
 - `--rm`: RepeatMasker output file (optional)
 - `--trf`: Path to TRF binary (default: "trf")
 - `--force`: Force rerun all steps
+- `--use_kmer_filter`: Enable k-mer based filtering of repeat-poor regions
+- `--kmer_threshold`: Threshold for unique k-mers (default: 90000)
+- `--kmer_bed`: Pre-computed k-mer profile BED file from varprofiler
 
 ## Output Structure
 

@@ -69,6 +69,9 @@ def main():
     parser.add_argument("--large_file", help="Suffix for TR file for analysis, it can be '', 1kb, 3kb, 10kb [1kb]", required=False, default="1kb") 
     parser.add_argument("--taxon", help="Taxon name [Unknown]", required=False, default=None)
     parser.add_argument("--force", help="Force rerun all steps even if output files exist", action='store_true', default=False)
+    parser.add_argument("--use_kmer_filter", help="Use k-mer profiling to filter repeat-poor regions", action='store_true', default=False)
+    parser.add_argument("--kmer_threshold", help="Unique k-mer threshold for repeat detection [90000]", required=False, default=90000, type=int)
+    parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
 
     args = vars(parser.parse_args())
 
@@ -87,6 +90,9 @@ def main():
     repeatmasker_file = args["rm"]
     taxon_name = args["taxon"]
     force_rerun = args["force"]
+    use_kmer_filter = args["use_kmer_filter"]
+    kmer_threshold = args["kmer_threshold"]
+    kmer_bed_file = args["kmer_bed"]
 
     print_logo()
 
@@ -185,6 +191,13 @@ def main():
                                        -t {threads} \
                                        --trf {trf_path} \
                                        --genome_size {genome_size}"
+        
+        # Add k-mer filtering options if enabled
+        if use_kmer_filter or kmer_bed_file:
+            command += " --use_kmer_filter"
+            command += f" --kmer_threshold {kmer_threshold}"
+            if kmer_bed_file:
+                command += f" --kmer_bed {kmer_bed_file}"
         # print(command)
         completed_process = subprocess.run(command, shell=True)
 

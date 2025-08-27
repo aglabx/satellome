@@ -51,27 +51,55 @@ def trf_search_by_splitting(
     parser_program="./trf_parse_raw.py",
     keep_raw=False,
     genome_size=None,
+    use_kmer_filter=False,
+    kmer_threshold=90000,
+    kmer_bed_file=None,
 ):
     """TRF search by splitting on fasta file in files."""
     folder_path = tempfile.mkdtemp(dir=wdir)
 
-    ### 1. Split chromosomes into temp file
-    total_length = 0
-    next_file = 0
-
     if genome_size is None:
         genome_size = get_genome_size(fasta_file)
 
-    with tqdm(total=genome_size, desc="Splitting fasta file", dynamic_ncols=True) as pbar:
-        for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
-            file_path = os.path.join(folder_path, "%s.fa" % next_file)
-            with open(file_path, "a") as fw:
-                fw.write("%s\n%s\n" % (header, seq))
-            total_length += len(seq)
-            if total_length > 100000:
-                next_file += 1
-                total_length = 0
-            pbar.update(len(seq))
+    # Check if we should use smart k-mer based splitting
+    if use_kmer_filter or kmer_bed_file:
+        try:
+            from satellome.core_functions.tools.kmer_splitting import split_genome_smart
+            print("Using k-mer based smart splitting...")
+            fa_files = split_genome_smart(
+                fasta_file,
+                folder_path,
+                project,
+                threads=int(threads),
+                kmer_threshold=kmer_threshold,
+                use_kmer_filter=use_kmer_filter,
+                kmer_bed_file=kmer_bed_file
+            )
+            # Convert to just filenames for later processing
+            fa_files = [os.path.basename(f) for f in fa_files]
+        except ImportError:
+            print("Warning: kmer_splitting module not available, falling back to standard splitting")
+            use_kmer_filter = False
+        except Exception as e:
+            print(f"Warning: k-mer splitting failed ({e}), falling back to standard splitting")
+            use_kmer_filter = False
+    
+    # Fall back to standard splitting if k-mer filtering not used or failed
+    if not use_kmer_filter and not kmer_bed_file:
+        ### 1. Split chromosomes into temp file
+        total_length = 0
+        next_file = 0
+
+        with tqdm(total=genome_size, desc="Splitting fasta file", dynamic_ncols=True) as pbar:
+            for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
+                file_path = os.path.join(folder_path, "%s.fa" % next_file)
+                with open(file_path, "a") as fw:
+                    fw.write("%s\n%s\n" % (header, seq))
+                total_length += len(seq)
+                if total_length > 100000:
+                    next_file += 1
+                    total_length = 0
+                pbar.update(len(seq))
 
     ### 2. Run TRF
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])

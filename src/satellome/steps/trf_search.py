@@ -28,6 +28,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--genome_size", help="Expected genome size", required=False, default=0
     )
+    parser.add_argument(
+        "--use_kmer_filter", help="Use k-mer profiling to filter repeat-poor regions", 
+        action='store_true', default=False
+    )
+    parser.add_argument(
+        "--kmer_threshold", help="Unique k-mer threshold for repeat detection [90000]", 
+        required=False, default=90000, type=int
+    )
+    parser.add_argument(
+        "--kmer_bed", help="Pre-computed k-mer profile BED file", 
+        required=False, default=None
+    )
     args = vars(parser.parse_args())
 
     fasta_file = args["input"]
@@ -36,6 +48,9 @@ if __name__ == "__main__":
     threads = args["threads"]
     trf_path = args["trf"]
     genome_size = int(args["genome_size"])
+    use_kmer_filter = args["use_kmer_filter"]
+    kmer_threshold = args["kmer_threshold"]
+    kmer_bed_file = args["kmer_bed"]
 
     settings = {
         "fasta_file": fasta_file,
@@ -76,4 +91,7 @@ if __name__ == "__main__":
             trf_path=trf_path,
             parser_program=parser_program,
             genome_size=genome_size,
+            use_kmer_filter=use_kmer_filter,
+            kmer_threshold=kmer_threshold,
+            kmer_bed_file=kmer_bed_file,
         )
