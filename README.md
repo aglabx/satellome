@@ -20,6 +20,7 @@ The tool is designed to work with various genome assembly projects including:
 - **Annotation Integration**: Supports GFF3 and RepeatMasker annotations
 - **Parallel Processing**: Efficient handling of multiple genomes
 - **Smart Pipeline**: Automatically skips completed steps (override with `--force`)
+- **Compressed File Support**: Direct processing of .gz compressed FASTA files
 
 ## Installation
 
@@ -97,7 +98,7 @@ python scripts/run_satellome_parallel.py -i genomes_list.txt -o results_dir -t 3
 
 ### Parameters
 
-- `-i, --input`: Input FASTA file (required)
+- `-i, --input`: Input FASTA file (supports .fa, .fasta, .fa.gz, .fasta.gz)
 - `-o, --output`: Output directory (required)
 - `-p, --project`: Project name (required)
 - `-t, --threads`: Number of threads (default: 1)
@@ -188,12 +189,11 @@ open results/scerevisiae_report.html
 
 ### 3. Analyzing DNA Zoo Assemblies
 ```bash
-# Download a DNA Zoo assembly (example: Aardvark)
-wgethttps://dnazoo.s3.wasabisys.com/Acinonyx_jubatus/aciJub1_HiC.fasta.gz
-gzip -d aciJub1_HiC.fasta.gz
+# Download a DNA Zoo assembly (example: Cheetah)
+wget https://dnazoo.s3.wasabisys.com/Acinonyx_jubatus/aciJub1_HiC.fasta.gz
 
-# Run satellome on DNA Zoo assembly
-satellome -i aciJub1_HiC.fasta \
+# Run satellome directly on compressed file (no need to decompress!)
+satellome -i aciJub1_HiC.fasta.gz \
           -o dnazoo_results \
           -p cheetah \
           -t 8

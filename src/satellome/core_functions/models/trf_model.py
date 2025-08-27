@@ -258,7 +258,10 @@ class TRModel(AbstractModel):
         """Init object with data from overlap with another TRFObj located right to self."""
 
         use_first = False
-        if self.trf_score > obj2.trf_score:
+        # Convert scores to float for comparison, handle None values
+        score1 = float(self.trf_score) if self.trf_score is not None else 0
+        score2 = float(obj2.trf_score) if obj2.trf_score is not None else 0
+        if score1 > score2:
             use_first = True
 
         
