@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include requirements.txt
+include src/satellome/settings.yaml
+recursive-include src/satellome *.yaml *.yml
+recursive-include scripts *.py *.sh
+recursive-include tests *.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store

@@ -14,7 +14,7 @@ for line in open("./src/satellome/__init__.py"):
 assert version
 
 setup(
-    name="Satellome",
+    name="satellome",
     version=version,
     packages=find_packages('src'),
     package_dir={'': 'src'},
@@ -22,7 +22,7 @@ setup(
     python_requires=">=3.6",
     include_package_data=True,
     scripts=[],
-    license="BSD",
+    license="MIT",
     url="https://github.com/aglabx/Satellome",
     author="Aleksey Komissarov",
     author_email="ad3002@gmail.com",
@@ -38,7 +38,6 @@ setup(
         "Development Status :: 4 - Beta",
         "Environment :: Console",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Topic :: Scientific/Engineering :: Bio-Informatics",

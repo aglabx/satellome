@@ -110,16 +110,23 @@ python scripts/run_satellome_parallel.py -i genomes_list.txt -o results_dir -t 3
 
 ```
 output_dir/
-├── project_name_trf_raw.trf          # Raw TRF output
-├── project_name_trf_parsed.trf       # Parsed and normalized TRF
-├── project_name.micro.trf            # Microsatellites
-├── project_name.complex.trf          # Complex repeats
-├── project_name.pmicro.trf           # Potential microsatellites
-├── project_name.tssr.trf             # Tandem simple sequence repeats
-├── project_name_karyotype.png        # Karyotype visualization
-├── project_name_3d_plot.html         # Interactive 3D visualization
-├── project_name_report.html          # Comprehensive HTML report
-└── project_name_distances.tsv        # Distance matrix for clustering
+├── genome_name.trf                   # Main TRF output file
+├── genome_name.1kb.trf               # Repeats >1kb
+├── genome_name.3kb.trf               # Repeats >3kb
+├── genome_name.10kb.trf              # Repeats >10kb
+├── genome_name.micro.trf             # Microsatellites (1-9 bp monomers)
+├── genome_name.complex.trf           # Complex repeats (>9 bp monomers)
+├── genome_name.pmicro.trf            # Potential microsatellites
+├── genome_name.tssr.trf              # Tandem simple sequence repeats
+├── genome_name.*.gff3                # GFF3 format files for each category
+├── genome_name.*.fa                  # FASTA files with repeat sequences
+├── distances.tsv.*                   # Distance matrices with various extensions
+├── images/
+│   ├── *.png                         # Karyotype and other visualizations
+│   └── *.svg                         # Vector graphics versions
+└── reports/
+    ├── satellome_report.html         # Comprehensive HTML report
+    └── annotation_report.txt         # Annotation intersection report (if GFF provided)
 ```
 
 ## Classification System
@@ -179,6 +186,19 @@ satellome -i ncbi_dataset/data/GCF_000146045.2/GCF_000146045.2_R64_genomic.fna \
 open results/scerevisiae_report.html
 ```
 
+### 3. Analyzing DNA Zoo Assemblies
+```bash
+# Download a DNA Zoo assembly (example: Aardvark)
+wgethttps://dnazoo.s3.wasabisys.com/Acinonyx_jubatus/aciJub1_HiC.fasta.gz
+gzip -d aciJub1_HiC.fasta.gz
+
+# Run satellome on DNA Zoo assembly
+satellome -i aciJub1_HiC.fasta \
+          -o dnazoo_results \
+          -p cheetah \
+          -t 8
+```
+
 ## Configuration
 
 The pipeline uses `settings.yaml` for tool parameters. Key settings include:
@@ -216,7 +236,7 @@ analysis in T2T genome assemblies. [Publication details]
 
 ## License
 
-This project is licensed under the BSD License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
@@ -228,3 +248,5 @@ This project is licensed under the BSD License - see the [LICENSE](LICENSE) file
 
 - [Tandem Repeat Finder](https://github.com/Benson-Genomics-Lab/TRF) by Gary Benson
 - [T2T Consortium](https://www.genome.gov/about-nhgri/telomere-to-telomere) for inspiring this work
+- [DNA Zoo](https://www.dnazoo.org/) for providing chromosome-length assemblies
+- [Vertebrate Genome Project](https://vertebrategenomesproject.org/) for high-quality reference genomes

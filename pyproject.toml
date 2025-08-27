@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["satellome", "satellome.core_functions", "satellome.core_functions.io", 
+           "satellome.core_functions.models", "satellome.core_functions.tools", 
+           "satellome.steps"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+satellome = ["settings.yaml", "*.yaml", "*.yml"]
+
+[project]
+name = "satellome"
+version = "1.0.0"
+description = "A comprehensive tool for satellite DNA analysis in T2T genome assemblies"
+readme = "README.md"
+authors = [
+    { name = "Aleksey Komissarov", email = "ad3002@gmail.com" }
+]
+license = "MIT"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "PyExp",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "pyyaml",
+    "simplejson",
+    "intervaltree",
+    "tqdm",
+    "requests",
+    "plotly",
+    "kaleido",
+    "editdistance",
+    "networkx",
+]
+requires-python = ">=3.6"
+
+[project.urls]
+Homepage = "https://github.com/aglabx/satellome"
+Documentation = "https://github.com/aglabx/satellome/wiki"
+Repository = "https://github.com/aglabx/satellome"
+Issues = "https://github.com/aglabx/satellome/issues"
+
+[project.scripts]
+satellome = "satellome.main:main"
