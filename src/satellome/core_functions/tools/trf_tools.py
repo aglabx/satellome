@@ -61,12 +61,16 @@ def trf_search_by_splitting(
     if genome_size is None:
         genome_size = get_genome_size(fasta_file)
 
+    # Initialize fa_files list
+    fa_files = []
+    used_smart_splitting = False
+    
     # Check if we should use smart k-mer based splitting
     if use_kmer_filter or kmer_bed_file:
         try:
             from satellome.core_functions.tools.kmer_splitting import split_genome_smart
             print("Using k-mer based smart splitting...")
-            fa_files = split_genome_smart(
+            output_files = split_genome_smart(
                 fasta_file,
                 folder_path,
                 project,
@@ -76,7 +80,8 @@ def trf_search_by_splitting(
                 kmer_bed_file=kmer_bed_file
             )
             # Convert to just filenames for later processing
-            fa_files = [os.path.basename(f) for f in fa_files]
+            fa_files = [os.path.basename(f) for f in output_files]
+            used_smart_splitting = True
         except ImportError:
             print("Warning: kmer_splitting module not available, falling back to standard splitting")
             use_kmer_filter = False
@@ -85,7 +90,7 @@ def trf_search_by_splitting(
             use_kmer_filter = False
     
     # Fall back to standard splitting if k-mer filtering not used or failed
-    if not use_kmer_filter and not kmer_bed_file:
+    if not used_smart_splitting:
         ### 1. Split chromosomes into temp file
         total_length = 0
         next_file = 0
@@ -109,8 +114,9 @@ def trf_search_by_splitting(
 
     os.chdir(folder_path)
 
-    # Get a list of .fa files
-    fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
+    # If fa_files is empty (no smart splitting), get list of .fa files
+    if not fa_files:
+        fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
 
     # Create a progress bar
     with tqdm(total=len(fa_files), desc="Running TRF", dynamic_ncols=True) as pbar:
