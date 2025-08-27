@@ -64,8 +64,8 @@ if __name__ == "__main__":
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
     output_file = os.path.join(output_dir, fasta_name + ".trf")
 
-    if os.path.isfile(output_file):
-        print("TRF output file already exists. Skipping TRF.")
+    if os.path.isfile(output_file) and os.path.getsize(output_file) > 0:
+        print(f"TRF output file already exists ({os.path.getsize(output_file):,} bytes). Skipping TRF.")
     else:
         # print("Running TRF...")
         output_file = trf_search_by_splitting(

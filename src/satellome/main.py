@@ -169,10 +169,10 @@ def main():
 
     #TODO: use large_cutoff in code
 
-    # Step 1: TRF Search - check if main TRF file exists
+    # Step 1: TRF Search - check if main TRF file exists and is not empty
     main_trf_file = f"{trf_prefix}.trf"
-    if os.path.exists(main_trf_file) and not force_rerun:
-        print(f"TRF search already completed! Found {main_trf_file}")
+    if os.path.exists(main_trf_file) and os.path.getsize(main_trf_file) > 0 and not force_rerun:
+        print(f"TRF search already completed! Found {main_trf_file} ({os.path.getsize(main_trf_file):,} bytes)")
         print("Use --force to rerun this step")
     else:
         if force_rerun and os.path.exists(main_trf_file):
@@ -227,7 +227,8 @@ def main():
     pmicro_trf_file = f"{trf_prefix}.pmicro.trf"
     tssr_trf_file = f"{trf_prefix}.tssr.trf"
     
-    # Check if main classification files exist
+    # Check if main classification files exist and are not empty
+    # Note: some classification files can be empty if no repeats of that type found
     classification_complete = (
         os.path.exists(micro_trf_file) and 
         os.path.exists(complex_trf_file) and
