@@ -75,7 +75,8 @@ mv trf409.macosx trf
 ### Basic Command
 
 ```bash
-satellome -i genome.fasta -o output_dir -p project_name -t 8
+# Note: Output directory must be an absolute path
+satellome -i genome.fasta -o /absolute/path/to/output_dir -p project_name -t 8
 ```
 
 ### Advanced Options
@@ -90,8 +91,8 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --rm repeatmasker.o
 # Force rerun all steps
 satellome -i genome.fasta -o output_dir -p project_name -t 8 --force
 
-# Custom TRF binary path
-satellome -i genome.fasta -o output_dir -p project_name -t 8 --trf /path/to/trf
+# Custom TRF binary path (if not in PATH)
+satellome -i genome.fasta -o /absolute/path/to/output_dir -p project_name -t 8 --trf /path/to/trf409.macosx
 
 # Parallel processing of multiple genomes
 python scripts/run_satellome_parallel.py -i genomes_list.txt -o results_dir -t 32
@@ -105,12 +106,15 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --kmer_bed genome.v
 
 # Adjust k-mer threshold (default 90000)
 satellome -i genome.fasta -o output_dir -p project_name -t 8 --use_kmer_filter --kmer_threshold 70000
+
+# Continue with partial results if some TRF runs fail
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --continue-on-error
 ```
 
 ### Parameters
 
 - `-i, --input`: Input FASTA file (supports .fa, .fasta, .fa.gz, .fasta.gz)
-- `-o, --output`: Output directory (required)
+- `-o, --output`: Output directory (required, must be an absolute path)
 - `-p, --project`: Project name (required)
 - `-t, --threads`: Number of threads (default: 1)
 - `--gff`: GFF3 annotation file (optional)
@@ -120,6 +124,7 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --use_kmer_filter -
 - `--use_kmer_filter`: Enable k-mer based filtering of repeat-poor regions
 - `--kmer_threshold`: Threshold for unique k-mers (default: 90000)
 - `--kmer_bed`: Pre-computed k-mer profile BED file from varprofiler
+- `--continue-on-error`: Continue pipeline even if some TRF runs fail (results may be incomplete)
 
 ## Output Structure
 
@@ -169,6 +174,10 @@ python scripts/trf_to_coordinates.py -i repeats.trf -o coordinates.txt
 
 ### Analysis Tools
 ```bash
+# Check TRF consistency - verify all large scaffolds have results
+python scripts/check_trf_consistency.py -f genome.fasta -t output_dir/genome.trf
+python scripts/check_trf_consistency.py -f genome.fasta -t output_dir/genome.trf -s 500000 -o report.txt
+
 # Extract large tandem repeats
 python scripts/trf_get_large.py -i repeats.trf -m 1000 -o large_repeats.trf
 

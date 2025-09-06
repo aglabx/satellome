@@ -30,17 +30,111 @@ from satellome.core_functions.tools.processing import get_genome_size
 
 trf_reader = TRFFileIO().iter_parse
 
-def run_trf(trf_path, fa_file):
-    command = [
-        trf_path, fa_file, "2", "5", "7", "80", "10", "50", "2000", "-l", "200", "-d", "-h", "> /dev/null 2>&1"
-    ]
-    command = " ".join(command)
-    os.system(command)
+def restore_coordinates_in_line(trf_line):
+    """
+    Restore original coordinates from chunk coordinates in TRF output line.
+    
+    Handles headers like: chr10__127750000_127925000 80932 91887
+    Should restore to: chr10 208682932 208693887
+    
+    Args:
+        trf_line: TRF output line with modified header
+    
+    Returns:
+        TRF line with restored coordinates
+    """
+    if not trf_line.strip():
+        return trf_line
+        
+    parts = trf_line.strip().split('\t')
+    if len(parts) < 3:
+        return trf_line
+    
+    # Check if header contains coordinate info
+    header = parts[0]
+    if '__' in header:
+        # Split the header to get base name and coordinates
+        # Format: chr10__127750000_127925000
+        base_parts = header.split('__')
+        if len(base_parts) == 2:
+            base_header = base_parts[0]
+            coord_info = base_parts[1]
+            
+            # Parse the chunk coordinates
+            if '_' in coord_info:
+                coords = coord_info.split('_')
+                if len(coords) >= 2:
+                    try:
+                        chunk_start = int(coords[0])
+                        # Note: coords[1] is the chunk_end, which we don't need
+                        
+                        # Adjust TRF coordinates
+                        trf_start = int(parts[1])
+                        trf_end = int(parts[2])
+                        
+                        # Update the parts with restored coordinates
+                        parts[0] = base_header
+                        parts[1] = str(trf_start + chunk_start)
+                        parts[2] = str(trf_end + chunk_start)
+                        
+                        return '\t'.join(parts) + '\n'
+                    except (ValueError, IndexError):
+                        # If parsing fails, return original line
+                        pass
+    
+    return trf_line
 
-    # try:
-    #     subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, check=True, shell=True)
-    # except subprocess.CalledProcessError as e:
-    #     print(f"Error executing TRF for file {fa_file}: {e}")
+def run_trf(trf_path, fa_file, max_retries=3):
+    """Run TRF on a single file with retry logic.
+    
+    Args:
+        trf_path: Path to TRF binary
+        fa_file: Input FASTA file
+        max_retries: Maximum number of retry attempts
+        
+    Returns:
+        True if successful, raises exception on failure
+    """
+    # Ensure we use absolute paths
+    fa_file_abs = os.path.abspath(fa_file)
+    
+    command = [
+        trf_path, fa_file_abs, "2", "5", "7", "80", "10", "50", "2000", "-l", "200", "-d", "-h"
+    ]
+    
+    for attempt in range(max_retries):
+        try:
+            # Run TRF - NOTE: TRF versions before 4.10.0 return non-zero on success!
+            # They return the number of tandem repeats found, not 0
+            # Suppress both stdout and stderr to avoid spam
+            result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+            
+            # Check if TRF actually failed by looking for the output .dat file
+            expected_dat_file = fa_file_abs + ".2.5.7.80.10.50.2000.dat"
+            if os.path.exists(expected_dat_file):
+                # Success - .dat file was created
+                return True
+            
+            # Check if TRF was killed by signal
+            if result.returncode < 0:
+                # Negative return code usually means killed by signal
+                error_msg = f"TRF was killed (signal {-result.returncode}) for file {fa_file}"
+                if attempt < max_retries - 1:
+                    print(f"WARNING: {error_msg}, retrying (attempt {attempt + 2}/{max_retries})...")
+                    # Small delay before retry
+                    import time
+                    time.sleep(2)
+                    continue
+                else:
+                    print(f"ERROR: {error_msg} after {max_retries} attempts")
+                    raise subprocess.CalledProcessError(result.returncode, command)
+                    
+        except FileNotFoundError:
+            print(f"TRF binary not found at: {trf_path}")
+            raise
+            
+    # Should not reach here
+    raise RuntimeError(f"TRF failed for {fa_file} after {max_retries} attempts")
 
 def trf_search_by_splitting(
     fasta_file,
@@ -54,6 +148,7 @@ def trf_search_by_splitting(
     use_kmer_filter=False,
     kmer_threshold=90000,
     kmer_bed_file=None,
+    abort_on_error=True,
 ):
     """TRF search by splitting on fasta file in files."""
     folder_path = tempfile.mkdtemp(dir=wdir)
@@ -79,8 +174,8 @@ def trf_search_by_splitting(
                 use_kmer_filter=use_kmer_filter,
                 kmer_bed_file=kmer_bed_file
             )
-            # Convert to just filenames for later processing
-            fa_files = [os.path.basename(f) for f in output_files]
+            # Keep full paths for now, will convert to basenames after changing directory
+            fa_files = output_files
             used_smart_splitting = True
         except ImportError:
             print("Warning: kmer_splitting module not available, falling back to standard splitting")
@@ -94,8 +189,9 @@ def trf_search_by_splitting(
         ### 1. Split chromosomes into temp file
         total_length = 0
         next_file = 0
-
-        with tqdm(total=genome_size, desc="Splitting fasta file", dynamic_ncols=True) as pbar:
+        
+        print(f"Splitting genome into ~100kb chunks...")
+        with tqdm(total=genome_size, desc="Splitting fasta file", unit=" bp", unit_scale=True, unit_divisor=1000, dynamic_ncols=True) as pbar:
             for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
                 file_path = os.path.join(folder_path, "%s.fa" % next_file)
                 with open(file_path, "a") as fw:
@@ -105,6 +201,10 @@ def trf_search_by_splitting(
                     next_file += 1
                     total_length = 0
                 pbar.update(len(seq))
+        
+        # Get list of created files for processing
+        fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
+        print(f"Created {len(fa_files)} chunks")
 
     ### 2. Run TRF
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
@@ -114,29 +214,74 @@ def trf_search_by_splitting(
 
     os.chdir(folder_path)
 
+    # Convert full paths to basenames after changing directory
+    if used_smart_splitting and fa_files:
+        fa_files = [os.path.basename(f) for f in fa_files]
+    
     # If fa_files is empty (no smart splitting), get list of .fa files
     if not fa_files:
         fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
 
+    # Track failed files
+    failed_files = []
+    successful_files = 0
+    
     # Create a progress bar
     with tqdm(total=len(fa_files), desc="Running TRF", dynamic_ncols=True) as pbar:
-        # Define a function to be called each time a TRF process completes
-        def update(*args):
-            pbar.update()
-
         # Using a thread pool to run TRF processes in parallel
         with ThreadPoolExecutor(max_workers=int(threads)) as executor:
+            # Submit all tasks and collect futures
+            futures = {}
             for fa_file in fa_files:
-
-                # Submit a new TRF process to the pool and call `update` upon completion
-                executor.submit(run_trf, trf_path, fa_file).add_done_callback(update)
+                future = executor.submit(run_trf, trf_path, fa_file)
+                futures[future] = fa_file
             
-            # Wait for all TRF processes to complete
-            executor.shutdown(wait=True)
+            # Process completed futures
+            from concurrent.futures import as_completed
+            for future in as_completed(futures):
+                fa_file = futures[future]
+                try:
+                    # Get result (will raise exception if TRF failed)
+                    result = future.result()
+                    successful_files += 1
+                except Exception as e:
+                    print(f"\nERROR: TRF failed for {fa_file}: {e}")
+                    failed_files.append(fa_file)
+                finally:
+                    pbar.update()
+    
+    # Check if any files failed
+    if failed_files:
+        print(f"\n❌ TRF failed for {len(failed_files)} out of {len(fa_files)} files:")
+        for f in failed_files[:10]:  # Show first 10 failed files
+            print(f"  - {f}")
+        if len(failed_files) > 10:
+            print(f"  ... and {len(failed_files) - 10} more")
+        
+        if abort_on_error:
+            # Abort the pipeline
+            print("\nAborting pipeline due to TRF failures. Please investigate the errors and try again.")
+            print("Tip: You can try reducing the number of threads or increasing system resources.")
+            os.chdir(current_dir)
+            if not keep_raw:
+                shutil.rmtree(folder_path)
+            raise RuntimeError(f"TRF failed for {len(failed_files)} files. Pipeline aborted.")
+        else:
+            # Continue with partial results
+            print(f"\n⚠️  WARNING: Continuing with partial results ({successful_files}/{len(fa_files)} files processed)")
+            print("The analysis may be incomplete!")
+    
+    print(f"✅ TRF completed successfully for all {successful_files} files")
 
     os.chdir(current_dir)
 
     ### 3. Parse TRF
+    
+    # Check if TRF produced any .dat files
+    dat_files = [f for f in os.listdir(folder_path) if f.endswith('.dat')]
+    
+    if len(dat_files) == 0:
+        print("WARNING: No .dat files found! TRF may have failed to run properly.")
 
     command = f"ls {folder_path} | grep dat | xargs -P {threads} -I [] {parser_program} -i {folder_path}/[] -o {folder_path}/[].trf -p {project}"
     os.system(command)
@@ -148,7 +293,12 @@ def trf_search_by_splitting(
         for file_path in iter_filepath_folder(folder_path):
             if file_path.endswith(".trf"):
                 with open(file_path) as fh:
-                    fw.write(fh.read())
+                    # If using smart splitting, restore original coordinates
+                    if used_smart_splitting:
+                        for line in fh:
+                            fw.write(restore_coordinates_in_line(line))
+                    else:
+                        fw.write(fh.read())
 
     os.chdir(current_dir)
 

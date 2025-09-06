@@ -169,7 +169,7 @@ def merge_overlapping_regions(
 
 def split_genome_smart(
     fasta_file: str,
-    wdir: str,
+    folder_path: str,  # Changed from wdir to folder_path - should be the temp directory
     project: str,
     threads: int = 20,
     kmer_threshold: int = 90000,
@@ -183,18 +183,18 @@ def split_genome_smart(
     
     Args:
         fasta_file: Input FASTA file
-        wdir: Working directory
+        folder_path: Temporary folder path for output files
         project: Project name
         threads: Number of threads
         kmer_threshold: Threshold for unique k-mers
         chunk_size: Size of chunks in bp
         overlap_size: Overlap between chunks in bp
         use_kmer_filter: Whether to use k-mer filtering
+        kmer_bed_file: Pre-computed BED file path
     
     Returns:
         List of output file paths
     """
-    folder_path = tempfile.mkdtemp(dir=wdir)
     output_files = []
     
     # Step 1: Run k-mer profiling if enabled
@@ -232,35 +232,57 @@ def split_genome_smart(
     # Step 2: Split sequences into chunks
     file_counter = 0
     
-    print("Splitting genome into chunks...")
+    # First pass to count total base pairs to process
+    total_bp_to_process = 0
+    sequences = []
+    # Read sequences without extra output
     for header, seq in sc_iter_fasta_brute(fasta_file):
+        sequences.append((header, seq))
         chrom = header.split()[0].replace(">", "")
-        seq_len = len(seq)
-        
         if use_kmer_filter and chrom in repeat_regions:
-            # Use k-mer guided splitting
-            regions_to_process = repeat_regions[chrom]
+            # Count only repeat-rich regions
+            for start, end in repeat_regions[chrom]:
+                total_bp_to_process += (end - start)
         else:
-            # Process entire chromosome
-            regions_to_process = [(0, seq_len)]
-        
-        for region_start, region_end in regions_to_process:
-            # Skip very small regions
-            if region_end - region_start < 1000:
-                continue
+            # Count entire sequence
+            total_bp_to_process += len(seq)
+    
+    # Process sequences with progress bar
+    if use_kmer_filter:
+        print(f"Processing {len(sequences)} sequences, focusing on {total_bp_to_process:,} bp in repeat-rich regions")
+    else:
+        print(f"Processing {len(sequences)} sequences, total {total_bp_to_process:,} bp")
+    with tqdm(total=total_bp_to_process, desc="Splitting genome into chunks", unit=" bp", unit_scale=True, unit_divisor=1000, dynamic_ncols=True) as pbar:
+        for header, seq in sequences:
+            chrom = header.split()[0].replace(">", "")
+            seq_len = len(seq)
             
-            # Extract region sequence (entire repeat-rich region, no chunking)
-            region_seq = seq[region_start:region_end]
+            if use_kmer_filter and chrom in repeat_regions:
+                # Use k-mer guided splitting
+                regions_to_process = repeat_regions[chrom]
+            else:
+                # Process entire chromosome
+                regions_to_process = [(0, seq_len)]
             
-            # Save to file
-            output_file = os.path.join(folder_path, f"{file_counter:05d}.fa")
-            with open(output_file, 'w') as fw:
-                # Modify header to include original coordinates
-                new_header = f"{header}__{region_start}_{region_end}"
-                fw.write(f"{new_header}\n{region_seq}\n")
-            
-            output_files.append(output_file)
-            file_counter += 1
+            for region_start, region_end in regions_to_process:
+                # Skip very small regions
+                if region_end - region_start < 1000:
+                    pbar.update(region_end - region_start)  # Update progress even for skipped regions
+                    continue
+                
+                # Extract region sequence (entire repeat-rich region, no chunking)
+                region_seq = seq[region_start:region_end]
+                
+                # Save to file
+                output_file = os.path.join(folder_path, f"{file_counter:05d}.fa")
+                with open(output_file, 'w') as fw:
+                    # Modify header to include original coordinates
+                    new_header = f"{header}__{region_start}_{region_end}"
+                    fw.write(f"{new_header}\n{region_seq}\n")
+                
+                output_files.append(output_file)
+                file_counter += 1
+                pbar.update(region_end - region_start)  # Update progress bar
     
     print(f"Created {len(output_files)} chunks")
     if use_kmer_filter:

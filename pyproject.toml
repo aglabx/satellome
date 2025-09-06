@@ -13,13 +13,13 @@ satellome = ["settings.yaml", "*.yaml", "*.yml"]
 
 [project]
 name = "satellome"
-version = "1.1.0"
+version = "1.1.1"
 description = "A comprehensive tool for satellite DNA analysis in T2T genome assemblies"
 readme = "README.md"
 authors = [
     { name = "Aleksey Komissarov", email = "ad3002@gmail.com" }
 ]
-license = "MIT"
+license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",

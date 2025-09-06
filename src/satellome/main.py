@@ -49,11 +49,11 @@ def print_logo():
 def main():
     parser = argparse.ArgumentParser(description="Parse TRF output.")
     parser.add_argument("-i", "--input", help="Input fasta file", required=True)
-    parser.add_argument("-o", "--output", help="Output folder", required=True)
+    parser.add_argument("-o", "--output", help="Output folder (must be an absolute path, e.g., /home/user/output)", required=True)
     parser.add_argument("-p", "--project", help="Project", required=True)
     parser.add_argument("-t", "--threads", help="Threads", required=True)
     parser.add_argument(
-        "--trf", help="Path to trf [trf]", required=False, default="trf"
+        "--trf", help="Path to TRF binary (default: trf in PATH)", required=False, default="trf"
     )
     parser.add_argument(
         "--genome_size", help="Expected genome size [will be computed from fasta]", required=False, default=0
@@ -72,6 +72,7 @@ def main():
     parser.add_argument("--use_kmer_filter", help="Use k-mer profiling to filter repeat-poor regions", action='store_true', default=False)
     parser.add_argument("--kmer_threshold", help="Unique k-mer threshold for repeat detection [90000]", required=False, default=90000, type=int)
     parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
+    parser.add_argument("--continue-on-error", help="Continue pipeline even if some TRF runs fail (results may be incomplete)", action='store_true', default=False)
 
     args = vars(parser.parse_args())
 
@@ -93,13 +94,38 @@ def main():
     use_kmer_filter = args["use_kmer_filter"]
     kmer_threshold = args["kmer_threshold"]
     kmer_bed_file = args["kmer_bed"]
+    continue_on_error = args["continue_on_error"]
 
     print_logo()
+
+    # Check if output directory is an absolute path FIRST
+    if not os.path.isabs(output_dir):
+        print(f"Error: please provide the full path for output: {output_dir}")
+        print(f"Example: /home/user/output or {os.path.abspath(output_dir)}")
+        sys.exit(1)
 
     print(f"Starting Satellome analysis...")
     print(f"Project: {project}")
     print(f"Input: {fasta_file}")
     print(f"Output: {output_dir}")
+    
+    # Check if TRF is available
+    import shutil
+    if trf_path == "trf":
+        trf_found = shutil.which(trf_path)
+        if trf_found:
+            print(f"TRF binary: {trf_found}")
+        else:
+            print(f"WARNING: TRF not found in PATH. Please install TRF or provide path with --trf")
+            print("Download TRF from: https://tandem.bu.edu/trf/trf.html")
+    else:
+        # Check if the provided path exists
+        if os.path.exists(trf_path) and os.access(trf_path, os.X_OK):
+            print(f"TRF binary: {trf_path}")
+        else:
+            print(f"ERROR: TRF not found or not executable at: {trf_path}")
+            sys.exit(1)
+    
     if force_rerun:
         print("⚠️  Force rerun mode: All steps will be executed even if outputs exist")
     else:
@@ -198,6 +224,10 @@ def main():
             command += f" --kmer_threshold {kmer_threshold}"
             if kmer_bed_file:
                 command += f" --kmer_bed {kmer_bed_file}"
+        
+        # Add continue-on-error option if enabled
+        if continue_on_error:
+            command += " --continue-on-error"
         # print(command)
         completed_process = subprocess.run(command, shell=True)
 

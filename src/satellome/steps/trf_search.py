@@ -40,6 +40,10 @@ if __name__ == "__main__":
         "--kmer_bed", help="Pre-computed k-mer profile BED file", 
         required=False, default=None
     )
+    parser.add_argument(
+        "--continue-on-error", help="Continue pipeline even if some TRF runs fail", 
+        action='store_true', default=False
+    )
     args = vars(parser.parse_args())
 
     fasta_file = args["input"]
@@ -51,6 +55,13 @@ if __name__ == "__main__":
     use_kmer_filter = args["use_kmer_filter"]
     kmer_threshold = args["kmer_threshold"]
     kmer_bed_file = args["kmer_bed"]
+    continue_on_error = args["continue_on_error"]
+
+    # Check if output directory is an absolute path FIRST
+    if not os.path.isabs(output_dir):
+        print(f"Error: please provide the full path for output: {output_dir}")
+        print(f"Example: /home/user/output or {os.path.abspath(output_dir)}")
+        sys.exit(1)
 
     settings = {
         "fasta_file": fasta_file,
@@ -60,10 +71,6 @@ if __name__ == "__main__":
         "trf_path": trf_path,
         "genome_size": genome_size,
     }
-
-    if not output_dir.startswith("/"):
-        print(f"Error: please provide the full path for output: {output_dir}")
-        sys.exit(1)
 
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
@@ -94,4 +101,5 @@ if __name__ == "__main__":
             use_kmer_filter=use_kmer_filter,
             kmer_threshold=kmer_threshold,
             kmer_bed_file=kmer_bed_file,
+            abort_on_error=not continue_on_error,
         )

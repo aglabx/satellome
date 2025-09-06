@@ -151,7 +151,7 @@ def _draw_sankey(output_file_name, title_text, labels, source, target, value):
     fig.write_image(output_file_name, engine="kaleido")
 
 
-def draw_sankey(
+def _deprecated_draw_sankey(
     output_file_name,
     title_text,
     df_trs,
@@ -268,7 +268,7 @@ def draw_sankey(
     return name2monomers, name2lid, name2trs, id2names
 
 
-def draw_spheres(output_file_name_prefix, title_text, df_trs):
+def _deprecated_draw_spheres(output_file_name_prefix, title_text, df_trs):
 
     fig = px.scatter_3d(
         df_trs,
@@ -920,25 +920,14 @@ def draw_all(
 
     ### TODO: save distances and tr2vector
 
-    output_file_name = os.path.join(output_folder, f"{taxon}.trs_flow.svg")
-    title_text = f"Tandem repeats flow in {taxon}"
-    print("Draw sankey...")
-    name2monomers, name2lid, name2ids, id2names = draw_sankey(
-        output_file_name,
-        title_text,
-        df_trs,
-        tr2vector,
-        distances,
-        all_distances,
-        skip_singletons=True,
-    )
+    # Deprecated drawing functions removed - these visualizations are no longer generated
+    # The data structures are preserved for potential future use
+    name2monomers = {}
+    name2lid = {}
+    name2ids = {}
+    id2names = {}
 
-    print("Draw spheres...")
-    output_file_name_prefix = os.path.join(output_folder, f"{taxon}.spheres")
-    title_text = f"Tandem repeats distribution in {taxon}"
-    draw_spheres(output_file_name_prefix, title_text, df_trs)
-
-    print("Draw gaps...")
+    # Draw gaps visualization
     
     # Create gaps cache file path
     gaps_cache_file = os.path.join(output_folder, f"{taxon}.gaps.pkl")
@@ -1046,9 +1035,8 @@ def draw_all(
 
     ### TODO: save gaps
 
-    print("Draw karyotypes...")
+    # Draw karyotypes
     num_scaffolds = len(scaffold_df)
-    print(f"Number of scaffolds/chromosomes to draw: {num_scaffolds}")
     
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
     title_text = f"Tandem repeats in {taxon}"
