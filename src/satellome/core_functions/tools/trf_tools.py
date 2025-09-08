@@ -21,6 +21,7 @@ import tempfile
 import subprocess
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
+import sys
 
 
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
@@ -283,7 +284,9 @@ def trf_search_by_splitting(
     if len(dat_files) == 0:
         print("WARNING: No .dat files found! TRF may have failed to run properly.")
 
-    command = f"ls {folder_path} | grep dat | xargs -P {threads} -I [] {parser_program} -i {folder_path}/[] -o {folder_path}/[].trf -p {project}"
+    # Use the current Python interpreter to execute the parser script to avoid permission issues
+    python_exe = sys.executable
+    command = f"ls {folder_path} | grep dat | xargs -P {threads} -I [] {python_exe} {parser_program} -i {folder_path}/[] -o {folder_path}/[].trf -p {project}"
     os.system(command)
 
     ### 3. Aggregate data
