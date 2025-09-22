@@ -26,11 +26,12 @@ from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
 
 
-def get_scaffold_lengths(fasta_file):
+def get_scaffold_lengths(fasta_file, match_first_word=True):
     """Get lengths of all scaffolds/contigs from FASTA file.
     
     Args:
         fasta_file: Path to input FASTA file
+        match_first_word: If True, use only first word of header (default: True)
         
     Returns:
         Dictionary mapping scaffold name to length
@@ -39,37 +40,66 @@ def get_scaffold_lengths(fasta_file):
     
     print(f"Reading scaffold lengths from {fasta_file}...")
     for header, sequence in sc_iter_fasta_brute(fasta_file):
-        # Extract scaffold name from header
-        scaffold_name = header.replace(">", "").split()[0]
+        # Remove '>' and strip whitespace
+        scaffold_name = header.replace(">", "").strip()
+        
+        if match_first_word:
+            # Take only first word (like: NC_060925.1 from "NC_060925.1 Siniperca chuatsi chromosome 1")
+            scaffold_name = scaffold_name.split()[0] if scaffold_name else scaffold_name
+        
         scaffold_lengths[scaffold_name] = len(sequence)
     
     return scaffold_lengths
 
 
-def get_trf_scaffolds(trf_file):
+def get_trf_scaffolds(trf_file, match_first_word=True, debug=False):
     """Get all scaffolds that have TRF results.
     
     Args:
         trf_file: Path to TRF output file
+        match_first_word: If True, use only first word of scaffold name (default: True)
+        debug: If True, show debug information
         
     Returns:
         Dictionary mapping scaffold name to number of tandem repeats
     """
     scaffold_trf_counts = defaultdict(int)
     total_trs = 0
+    debug_first_5 = []
     
     print(f"Reading TRF results from {trf_file}...")
+    
+    # Use TRModel to parse the file properly
     for trf_obj in sc_iter_tab_file(trf_file, TRModel):
-        scaffold_name = trf_obj.trf_gi  # or trf_obj.trf_chr depending on format
+        # trf_head contains the header from FASTA (19th column in TRF file)
+        # trf_gi might be parsed from trf_head but could be "Unknown" if parsing fails
+        scaffold_name = trf_obj.trf_head if hasattr(trf_obj, 'trf_head') else 'Unknown'
+        
+        if match_first_word and scaffold_name and scaffold_name != 'Unknown':
+            # Take only first word (to match FASTA parsing)
+            scaffold_name = scaffold_name.split()[0]
+        
         scaffold_trf_counts[scaffold_name] += 1
         total_trs += 1
+        
+        # Collect first 5 scaffold names for debugging
+        if debug and len(debug_first_5) < 5 and scaffold_name not in [x[0] for x in debug_first_5]:
+            original_name = trf_obj.trf_head if hasattr(trf_obj, 'trf_head') else 'Unknown'
+            debug_first_5.append((scaffold_name, original_name))
     
     print(f"Found {total_trs:,} tandem repeats across {len(scaffold_trf_counts):,} scaffolds")
+    
+    # Debug: show first few scaffold names from TRF
+    if debug and debug_first_5:
+        print(f"Debug - First scaffold names from TRF (trf_head field):")
+        for processed, original in debug_first_5[:3]:
+            print(f"  - Processed: '{processed}' (Original trf_head: '{original}')")
     
     return scaffold_trf_counts
 
 
-def check_consistency(fasta_file, trf_file, min_scaffold_size=1000000, min_expected_trs=1):
+def check_consistency(fasta_file, trf_file, min_scaffold_size=1000000, min_expected_trs=1, 
+                     match_first_word=True, debug=False):
     """Check consistency between FASTA input and TRF output.
     
     Args:
@@ -77,15 +107,34 @@ def check_consistency(fasta_file, trf_file, min_scaffold_size=1000000, min_expec
         trf_file: Path to TRF output file
         min_scaffold_size: Minimum scaffold size to check (default: 1Mb)
         min_expected_trs: Minimum expected number of TRs for large scaffolds
+        match_first_word: If True, match only first word of scaffold names (default: True)
+        debug: If True, show debug information
         
     Returns:
         Tuple of (missing_scaffolds, low_tr_scaffolds, statistics)
     """
     # Get scaffold lengths from FASTA
-    scaffold_lengths = get_scaffold_lengths(fasta_file)
+    scaffold_lengths = get_scaffold_lengths(fasta_file, match_first_word=match_first_word)
     
     # Get TRF results
-    scaffold_trf_counts = get_trf_scaffolds(trf_file)
+    scaffold_trf_counts = get_trf_scaffolds(trf_file, match_first_word=match_first_word, debug=debug)
+    
+    # Debug: show first few scaffold names from FASTA
+    if debug:
+        print(f"\nDebug - First scaffold names from FASTA:")
+        for name in list(scaffold_lengths.keys())[:3]:
+            print(f"  - '{name}' (length: {scaffold_lengths[name]:,} bp)")
+    
+    # Check if there's a mismatch in scaffold name format
+    fasta_scaffolds = set(scaffold_lengths.keys())
+    trf_scaffolds = set(scaffold_trf_counts.keys())
+    
+    # Find scaffolds that are in FASTA but not in TRF (potential naming mismatch)
+    only_in_fasta = fasta_scaffolds - trf_scaffolds
+    if only_in_fasta and len(only_in_fasta) < len(fasta_scaffolds):
+        print(f"\n⚠️  Warning: {len(only_in_fasta)} scaffolds from FASTA not found in TRF results.")
+        print("  This might be a scaffold naming mismatch issue.")
+        print(f"  Example FASTA scaffolds not in TRF: {list(only_in_fasta)[:3]}")
     
     # Analyze consistency
     missing_scaffolds = []  # Scaffolds with no TRF results
@@ -265,6 +314,18 @@ def main():
         help="Output report file [optional]", 
         default=None
     )
+    parser.add_argument(
+        "--no-match-first-word",
+        help="Use full scaffold names instead of just first word",
+        action="store_true",
+        default=False
+    )
+    parser.add_argument(
+        "--debug",
+        help="Show debug information about scaffold name matching",
+        action="store_true",
+        default=False
+    )
     
     args = parser.parse_args()
     
@@ -283,7 +344,9 @@ def main():
             args.fasta, 
             args.trf, 
             args.min_size,
-            args.min_trs
+            args.min_trs,
+            match_first_word=not args.no_match_first_word,
+            debug=args.debug
         )
         
         # Print report to console
