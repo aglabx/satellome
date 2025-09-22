@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 import argparse
 import subprocess
 
-import os
+from satellome import __version__
 from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
 from satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
@@ -47,7 +47,16 @@ def print_logo():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Parse TRF output.")
+    parser = argparse.ArgumentParser(description="Satellome - Tandem Repeat Analysis Pipeline")
+    
+    # Version argument (handle it first)
+    parser.add_argument(
+        "-v", "--version",
+        action="version",
+        version=f"satellome v{__version__}",
+        help="Show version information and exit"
+    )
+    
     parser.add_argument("-i", "--input", help="Input fasta file", required=True)
     parser.add_argument("-o", "--output", help="Output folder (must be an absolute path, e.g., /home/user/output)", required=True)
     parser.add_argument("-p", "--project", help="Project", required=True)
@@ -73,6 +82,7 @@ def main():
     parser.add_argument("--kmer_threshold", help="Unique k-mer threshold for repeat detection [90000]", required=False, default=90000, type=int)
     parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
     parser.add_argument("--continue-on-error", help="Continue pipeline even if some TRF runs fail (results may be incomplete)", action='store_true', default=False)
+    parser.add_argument("--keep-trf", help="Keep original TRF files before filtering (saved with .original suffix)", action='store_true', default=False)
 
     args = vars(parser.parse_args())
 
@@ -95,6 +105,7 @@ def main():
     kmer_threshold = args["kmer_threshold"]
     kmer_bed_file = args["kmer_bed"]
     continue_on_error = args["continue_on_error"]
+    keep_trf = args["keep_trf"]
 
     print_logo()
 
@@ -288,6 +299,8 @@ def main():
         else:
             print("Running TRF classification...")
         command = f"python {trf_classify_path} -i {trf_prefix} -o {output_dir} -l {genome_size}"
+        if keep_trf:
+            command += " --keep-trf"
         # print(command)
         completed_process = subprocess.run(command, shell=True)
         if completed_process.returncode == 0:
