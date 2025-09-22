@@ -286,8 +286,36 @@ def trf_search_by_splitting(
 
     # Use the current Python interpreter to execute the parser script to avoid permission issues
     python_exe = sys.executable
-    command = f"ls {folder_path} | grep dat | xargs -P {threads} -I [] {python_exe} {parser_program} -i {folder_path}/[] -o {folder_path}/[].trf -p {project}"
-    os.system(command)
+
+    # Process .dat files in parallel using subprocess for better security and error handling
+    import glob
+    import concurrent.futures
+
+    dat_files = glob.glob(os.path.join(folder_path, "*.dat"))
+
+    def process_dat_file(dat_file):
+        """Process a single .dat file."""
+        output_file_path = f"{dat_file}.trf"
+        cmd = [
+            python_exe,
+            parser_program,
+            "-i", dat_file,
+            "-o", output_file_path,
+            "-p", project
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            return dat_file, True, result.stdout
+        except subprocess.CalledProcessError as e:
+            return dat_file, False, f"Error: {e.stderr}"
+
+    # Process files in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(threads)) as executor:
+        futures = [executor.submit(process_dat_file, dat_file) for dat_file in dat_files]
+        for future in concurrent.futures.as_completed(futures):
+            dat_file, success, output = future.result()
+            if not success:
+                print(f"Warning: Failed to process {dat_file}: {output}")
 
     ### 3. Aggregate data
 
