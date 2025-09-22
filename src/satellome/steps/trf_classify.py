@@ -8,13 +8,17 @@
 import argparse
 import os
 import sys
-sys.path.append("/home/akomissarov/Dropbox/workspace/PyBioSnippets/satellome/src")
 import yaml
+
+# Add parent directories to path for module imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+sys.path.insert(0, parent_dir)
 
 from satellome.core_functions.classification_micro import \
     scf_basic_trs_classification
 
-def classify_trf_data(trf_prefix, output_dir, genome_size):
+def classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf=False):
 
     base_prefix = trf_prefix
     base_file = os.path.basename(trf_prefix)
@@ -77,6 +81,15 @@ def classify_trf_data(trf_prefix, output_dir, genome_size):
 
     results_file = os.path.join(output_dir, "results.yaml")
 
+    # Keep original TRF file if requested
+    if keep_trf:
+        import shutil
+        original_trf = settings["files"]["trf_all_file"]
+        backup_trf = original_trf.replace(".trf", ".original.trf")
+        if os.path.exists(original_trf) and not os.path.exists(backup_trf):
+            print(f"Saving original TRF file as {backup_trf}")
+            shutil.copy2(original_trf, backup_trf)
+
     print("Classifying TRF results...")
     settings, project = scf_basic_trs_classification(settings, project)
 
@@ -90,9 +103,10 @@ def main():
     trf_prefix = args.prefix
     output_dir = args.output
     genome_size = args.genome_size
+    keep_trf = args.keep_trf
 
     print("Refining names...")
-    classify_trf_data(trf_prefix, output_dir, genome_size)
+    classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf)
 
 
 def get_args():
@@ -115,6 +129,12 @@ def get_args():
         type=int,
         help="Total length of the assembly",
         required=True,
+    )
+    parser.add_argument(
+        "--keep-trf",
+        action="store_true",
+        help="Keep original TRF file before filtering (saved with .original suffix)",
+        default=False
     )
     args = parser.parse_args()
     return args
