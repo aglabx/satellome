@@ -239,8 +239,12 @@ class TRModel(AbstractModel):
 
         try:
             self.trf_l_ind = int(self.trf_l_ind)
-        except:
-            print("Error:", self)
+        except (ValueError, TypeError) as e:
+            import sys
+            print(f"Error converting trf_l_ind to int: {e}", file=sys.stderr)
+            print(f"Object data: {self}", file=sys.stderr)
+            # Set a default value or re-raise the exception
+            self.trf_l_ind = 0  # or raise
 
         self.trf_r_ind = int(self.trf_r_ind)
         self.trf_period = int(self.trf_period)

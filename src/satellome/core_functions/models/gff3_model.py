@@ -182,14 +182,16 @@ class Gff3FileIO(TabDelimitedFileIO):
                                         for ref in v.split(",")
                                     ]
                                 )
-                            except:
-                                print(v)
+                            except (ValueError, IndexError, AttributeError) as e:
+                                import sys
+                                print(f"Error parsing GFF3 attribute value: {v}, error: {e}", file=sys.stderr)
                         _features[k] = v
                 data["attributes"] = _features
                 obj = Gff3Model()
                 try:
                     obj.set_with_dict(data)
-                except:
-                    print("Can't parse features for %s" % str(data))
+                except (AttributeError, KeyError, TypeError) as e:
+                    import sys
+                    print(f"Can't parse features for {data}: {e}", file=sys.stderr)
                     continue
                 yield obj

@@ -9,7 +9,11 @@ import argparse
 import os
 import pathlib
 import sys
-sys.path.append("/home/akomissarov/Dropbox/workspace/PyBioSnippets/satellome/src")
+
+# Add parent directories to path for module imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+sys.path.insert(0, parent_dir)
 
 from satellome.core_functions.tools.processing import get_genome_size
 from satellome.core_functions.tools.trf_tools import trf_search_by_splitting

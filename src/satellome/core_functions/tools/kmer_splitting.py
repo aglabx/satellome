@@ -323,7 +323,8 @@ def restore_coordinates(trf_line: str) -> str:
                 parts[2] = str(trf_end + chunk_start)
                 
                 return '\t'.join(parts) + '\n'
-            except:
-                pass
+            except (ValueError, IndexError) as e:
+                import sys
+                print(f"Warning: Failed to restore coordinates in line: {e}", file=sys.stderr)
     
     return trf_line

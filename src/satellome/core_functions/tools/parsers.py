@@ -146,7 +146,9 @@ def parse_chromosome_name(head):
         if mit:
             return "MT"
         return "?"
-    except:
+    except (AttributeError, IndexError, TypeError) as e:
+        import sys
+        print(f"Error parsing chromosome name from {head}: {e}", file=sys.stderr)
         return "?"
 
 
@@ -167,10 +169,10 @@ def trf_parse_param(line):
     try:
         res = re.compile("Parameters: ([\d ]*)", re.S).findall(line)[0]
         return res
-    except:
-        res = "Unknown"
-        print(("Failed parse param: %s" % (line)))
-        return res
+    except (IndexError, AttributeError) as e:
+        import sys
+        print(f"Failed parse param: {line}, error: {e}", file=sys.stderr)
+        return "Unknown"
 
 
 def trf_parse_head(line):
@@ -182,10 +184,10 @@ def trf_parse_head(line):
             return res[0]
         if res2:
             return res2[0]
-    except:
-        res = "Unknown"
-        print(("Failed parse head: %s" % (line)))
-        return res
+    except (IndexError, AttributeError) as e:
+        import sys
+        print(f"Failed parse head: {line}, error: {e}", file=sys.stderr)
+        return "Unknown"
 
 
 def get_wgs_prefix_from_ref(ref):

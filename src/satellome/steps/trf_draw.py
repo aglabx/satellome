@@ -7,7 +7,13 @@
 
 import argparse
 import sys
-sys.path.append("/home/akomissarov/Dropbox/workspace/PyBioSnippets/satellome/src")
+import os
+
+# Add parent directories to path for module imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(os.path.dirname(current_dir))
+sys.path.insert(0, parent_dir)
+
 from satellome.core_functions.trf_clusters import draw_all
 
 def main():
