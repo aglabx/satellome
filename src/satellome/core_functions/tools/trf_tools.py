@@ -22,6 +22,8 @@ import subprocess
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 import sys
+import glob
+import concurrent.futures
 
 
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
@@ -288,9 +290,7 @@ def trf_search_by_splitting(
     python_exe = sys.executable
 
     # Process .dat files in parallel using subprocess for better security and error handling
-    import glob
-    import concurrent.futures
-
+    
     dat_files = glob.glob(os.path.join(folder_path, "*.dat"))
 
     def process_dat_file(dat_file):

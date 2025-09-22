@@ -186,7 +186,58 @@ python scripts/trf_get_micro_stat.py -i repeats.trf -o micro_stats.txt
 
 # Check telomeric repeats
 python scripts/check_telomeres.py -i genome.fasta -t repeats.trf
+
+# Check TRF results consistency
+python scripts/check_trf_consistency.py -f genome.fna -t genome.trf
+
+# Batch check TRF consistency for multiple genomes
+python scripts/batch_check_trf_consistency.py reptiles mammals birds
 ```
+
+### Quality Control Scripts
+
+#### check_trf_consistency.py
+Verifies that TRF analysis completed successfully for all contigs/scaffolds above a certain size threshold.
+
+```bash
+# Basic usage
+python scripts/check_trf_consistency.py -f genome.fna -t genome.trf
+
+# With custom minimum scaffold size (default: 1Mb)
+python scripts/check_trf_consistency.py -f genome.fna -t genome.trf -s 500000
+
+# With debug information for troubleshooting
+python scripts/check_trf_consistency.py -f genome.fna -t genome.trf --debug
+
+# Save detailed report
+python scripts/check_trf_consistency.py -f genome.fna -t genome.trf -o report.txt
+```
+
+#### batch_check_trf_consistency.py
+Batch process multiple genome assemblies to check TRF consistency.
+
+```bash
+# Check multiple directories
+python scripts/batch_check_trf_consistency.py reptiles mammals birds
+
+# Auto-skip failed assemblies
+python scripts/batch_check_trf_consistency.py reptiles --auto-skip
+
+# Show assemblies that need TRF analysis
+python scripts/batch_check_trf_consistency.py reptiles --check-missing
+
+# With progress tracking and debug info
+python scripts/batch_check_trf_consistency.py reptiles --debug --verbose
+
+# Save summary report
+python scripts/batch_check_trf_consistency.py reptiles -o consistency_report.txt
+```
+
+**Interactive mode options:**
+- `[s]` Skip - continue to next assembly
+- `[d]` Delete - remove TRF directory and re-run TRF
+- `[v]` View - show TRF directory contents
+- `[q]` Quit - exit the script
 
 ## Example Workflow
 

@@ -476,6 +476,188 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
     return fig, canvas_width, dynamic_height
 
 
+def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use_chrm=False, traces=None):
+    """
+    Helper function to create a bar chart with given traces and save it.
+
+    Args:
+        scaffold_for_plot: Scaffold data for plotting
+        title_suffix: Suffix to add to the title
+        output_file: Output file path
+        use_chrm: Whether to use chromosome names
+        traces: List of trace configurations (dict with trace parameters)
+
+    Returns:
+        None
+    """
+    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_suffix, use_chrm=use_chrm)
+
+    if traces:
+        for trace_config in traces:
+            fig.add_trace(go.Bar(**trace_config))
+
+    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+
+
+def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
+    """
+    Helper function to add tandem repeat families as traces to a figure.
+
+    Args:
+        fig: Plotly figure object
+        df_trs: DataFrame with tandem repeat data
+        names_filter: Optional function to filter family names (e.g., lambda x: x != "SING")
+        enhance: Optional minimum size to enhance small repeats
+
+    Returns:
+        None (modifies fig in place)
+    """
+    names = set(df_trs["family_name"].unique())
+
+    for name in names:
+        if names_filter and not names_filter(name):
+            continue
+
+        items = df_trs[df_trs["family_name"] == name]
+
+        if enhance:
+            items = items.copy()
+            items.loc[:, "length"] = items["length"].apply(lambda x: max(x, enhance))
+
+        fig.add_trace(
+            go.Bar(
+                base=items["start"],
+                x=items["length"],
+                y=items["chrm"],
+                orientation="h",
+                name=name,
+            )
+        )
+
+
+def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffix,
+                            use_chrm=False, names_filter=None, enhance=None):
+    """
+    Helper function to create and save a TR visualization with specified parameters.
+
+    Args:
+        scaffold_for_plot: Scaffold data for plotting
+        title_text: Base title text
+        df_trs: DataFrame with tandem repeat data
+        output_suffix: Suffix for output file
+        use_chrm: Whether to use chromosome names
+        names_filter: Optional function to filter family names
+        enhance: Optional minimum size to enhance small repeats
+
+    Returns:
+        Output file path
+    """
+    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+    _add_tr_families_by_name(fig, df_trs, names_filter=names_filter, enhance=enhance)
+    fig.write_image(output_suffix, engine="kaleido", width=canvas_width, height=canvas_height)
+    return output_suffix
+
+
+def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_with_gap, size, use_chrm):
+    """
+    Helper function to draw repeats with gaps visualization.
+
+    Args:
+        scaffold_for_plot: Scaffold data for plotting
+        title_text: Title text for the plot
+        output_file: Output file path
+        repeats_with_gap: List of repeats with gaps
+        size: Enhancement size
+        use_chrm: Whether to use chromosome names
+    """
+    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+
+    repeats_with_gap_df = pd.DataFrame(
+        repeats_with_gap,
+        columns=["chrm", "start", "end", "family_name", "gap_type", "length"],
+    )
+
+    aN = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "aN") & (repeats_with_gap_df.length < size)
+    ]
+    Na = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "Na") & (repeats_with_gap_df.length < size)
+    ]
+    aNa = repeats_with_gap_df.loc[
+        (repeats_with_gap_df.gap_type == "aNa") & (repeats_with_gap_df.length < size)
+    ]
+
+    # Add aN traces
+    if len(aN) > 0:
+        fig.add_trace(go.Bar(
+            base=aN["start"], x=[size] * len(aN), y=aN["chrm"],
+            orientation="h", name="Tandem Repeat_with gap aN", marker_color="#FF00FF"
+        ))
+        fig.add_trace(go.Bar(
+            base=aN["start"] + size, x=[size] * len(aN), y=aN["chrm"],
+            orientation="h", name="gaps aN", marker_color="#663399"
+        ))
+
+    # Add Na traces
+    if len(Na) > 0:
+        fig.add_trace(go.Bar(
+            base=Na["start"], x=[size] * len(Na), y=Na["chrm"],
+            orientation="h", name="Tandem Repeat_with gap Na", marker_color="#00CED1"
+        ))
+        fig.add_trace(go.Bar(
+            base=Na["start"] + size, x=[size] * len(Na), y=Na["chrm"],
+            orientation="h", name="gaps Na", marker_color="#00BFFF"
+        ))
+
+    # Add aNa traces
+    if len(aNa) > 0:
+        third_size = size * 2 / 3
+        fig.add_trace(go.Bar(
+            base=aNa["start"], x=[third_size] * len(aNa), y=aNa["chrm"],
+            orientation="h", name="Tandem Repeat_with gap aNa", marker_color="#00FF7F"
+        ))
+        fig.add_trace(go.Bar(
+            base=aNa["start"] + third_size, x=[third_size] * len(aNa), y=aNa["chrm"],
+            orientation="h", name="gaps aNa", marker_color="#228B22"
+        ))
+        fig.add_trace(go.Bar(
+            base=aNa["start"] + third_size * 2, x=[third_size] * len(aNa), y=aNa["chrm"],
+            orientation="h", marker_color="#00FF7F"
+        ))
+
+    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+
+
+def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repeats_without_gaps, size, use_chrm):
+    """
+    Helper function to draw repeats without gaps visualization.
+
+    Args:
+        scaffold_for_plot: Scaffold data for plotting
+        title_text: Title text for the plot
+        output_file: Output file path
+        repeats_without_gaps: List of repeats without gaps
+        size: Enhancement size
+        use_chrm: Whether to use chromosome names
+    """
+    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
+
+    names = set([x["family_name"] for x in repeats_without_gaps])
+    for name in names:
+        items = [x for x in repeats_without_gaps if x["family_name"] == name]
+        fig.add_trace(
+            go.Bar(
+                base=[x.get("start") for x in items],
+                x=[max(x.get("length", 0), size) for x in items],
+                y=[x.get("chrm") for x in items],
+                orientation="h",
+                name=name,
+            )
+        )
+
+    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+
+
 def draw_karyotypes(
     output_file_name_prefix,
     title_text,
@@ -488,6 +670,12 @@ def draw_karyotypes(
     enhance=2000000,
     gap_cutoff=1000,
 ):
+    """
+    Draw various karyotype visualizations with tandem repeats and gaps.
+
+    This function creates 10 different visualizations showing gaps and tandem repeats
+    in various configurations (raw, enhanced, with/without singletons, etc.).
+    """
 
     if use_chrm:
         _df_trs = df_trs[df_trs["chrm"].isin(scaffold_for_plot["chrm"])]
@@ -495,277 +683,80 @@ def draw_karyotypes(
         _df_trs = df_trs[df_trs["chrm"].isin(scaffold_for_plot["scaffold"])]
 
     ### 1. Raw gaps
-    title_text_ = title_text + "(raw gaps)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
-    fig.add_trace(
-        go.Bar(
-            base=gaps_df["start"],
-            x=gaps_df["length"],
-            y=gaps_df["scaffold"],
-            orientation="h",
-            name="gaps",
-            marker_color="rgba(0, 0, 0)",
-        )
+    _create_and_save_bar_chart(
+        scaffold_for_plot,
+        title_text + "(raw gaps)",
+        output_file_name_prefix + ".gaps.svg",
+        use_chrm=use_chrm,
+        traces=[{
+            "base": gaps_df["start"],
+            "x": gaps_df["length"],
+            "y": gaps_df["scaffold"],
+            "orientation": "h",
+            "name": "gaps",
+            "marker_color": "rgba(0, 0, 0)",
+        }]
     )
-    output_file_name = output_file_name_prefix + ".gaps.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
 
     ### 2. Enhanced gaps
-    title_text_ = title_text + "(enlarged gaps)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
-    _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff]
-    _gaps_df.loc[:, "length"] = [max(x["length"], enhance) for i, x in _gaps_df.iterrows()]
-    fig.add_trace(
-        go.Bar(
-            base=_gaps_df["start"],
-            x=_gaps_df["length"],
-            y=_gaps_df["scaffold"],
-            orientation="h",
-            name="gaps",
-            marker_color="rgba(0, 0, 0)",
-        )
+    _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff].copy()
+    _gaps_df.loc[:, "length"] = _gaps_df["length"].apply(lambda x: max(x, enhance))
+    _create_and_save_bar_chart(
+        scaffold_for_plot,
+        title_text + "(enlarged gaps)",
+        output_file_name_prefix + f".gaps.{gap_cutoff}bp.enhanced.svg",
+        use_chrm=use_chrm,
+        traces=[{
+            "base": _gaps_df["start"],
+            "x": _gaps_df["length"],
+            "y": _gaps_df["scaffold"],
+            "orientation": "h",
+            "name": "gaps",
+            "marker_color": "rgba(0, 0, 0)",
+        }]
     )
-    output_file_name = output_file_name_prefix + f".gaps.{gap_cutoff}bp.enhanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
 
-    ### #3. Enhanced repeats_with_gap
-    title_text_ = title_text + "(enlarged TRs with gaps)"
-    size = enhance
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text_, use_chrm=use_chrm)
-    repeats_with_gap_df = pd.DataFrame(
+    ### 3. Enhanced repeats_with_gap
+    _draw_repeats_with_gaps(
+        scaffold_for_plot,
+        title_text + "(enlarged TRs with gaps)",
+        output_file_name_prefix + ".repeats.with.gaps.enhanced.svg",
         repeats_with_gap,
-        columns=["chrm", "start", "end", "family_name", "gap_type", "length"],
+        enhance,
+        use_chrm
     )
-    aN = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "aN") & (repeats_with_gap_df.length < size)
+
+    ### 4. Enhanced TRs without gaps
+    _draw_repeats_without_gaps(
+        scaffold_for_plot,
+        title_text + " (TRs without gaps)",
+        output_file_name_prefix + ".repeats.nogaps.enhanced.svg",
+        repeats_without_gaps,
+        enhance,
+        use_chrm
+    )
+
+    ### 5-10. Various TR visualizations
+    visualizations = [
+        # (title_suffix, output_suffix, names_filter, enhance_value)
+        (" (all)", ".raw.svg", None, None),
+        (" (no singletons)", ".nosing.svg", lambda x: x != "SING", None),
+        (" (only singletons)", ".sing.svg", lambda x: x == "SING", None),
+        (" (enlarged, all)", ".raw.enhanced.svg", None, enhance),
+        (" (enlarged, no singletons)", ".nosing.enchanced.svg", lambda x: x != "SING", enhance),
+        (" (enlarged, only singletons)", ".sing.enchanced.svg", lambda x: x == "SING", enhance),
     ]
-    Na = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "Na") & (repeats_with_gap_df.length < size)
-    ]
-    aNa = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "aNa") & (repeats_with_gap_df.length < size)
-    ]
 
-    fig.add_trace(
-        go.Bar(
-            base=aN["start"],
-            x=[size] * len(aN),
-            y=aN["chrm"],
-            orientation="h",
-            name="Tandem Repeat_with gap aN",
-            marker_color="#FF00FF",
+    for title_suffix, output_suffix, names_filter, enhance_value in visualizations:
+        _create_tr_visualization(
+            scaffold_for_plot,
+            title_text + title_suffix,
+            _df_trs,
+            output_file_name_prefix + output_suffix,
+            use_chrm=use_chrm,
+            names_filter=names_filter,
+            enhance=enhance_value
         )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=aN["start"] + size,
-            x=[size] * len(aN),
-            y=aN["chrm"],
-            orientation="h",
-            name="gaps aN",
-            marker_color="#663399",
-        )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=Na["start"],
-            x=[size] * len(Na),
-            y=Na["chrm"],
-            orientation="h",
-            name="Tandem Repeat_with gap Na",
-            marker_color="#00CED1",
-        )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=Na["start"] + size,
-            x=[size] * len(Na),
-            y=Na["chrm"],
-            orientation="h",
-            name="gaps Na",
-            marker_color="#00BFFF",
-        )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=aNa["start"],
-            x=[size * 2 / 3] * len(aNa),
-            y=aNa["chrm"],
-            orientation="h",
-            name="Tandem Repeat_with gap aNa",
-            marker_color="#00FF7F",
-        )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=aNa["start"] + (size * 2 / 3),
-            x=[size * 2 / 3] * len(aNa),
-            y=aNa["chrm"],
-            orientation="h",
-            name="gaps aNa",
-            marker_color="#228B22",
-        )
-    )
-
-    fig.add_trace(
-        go.Bar(
-            base=aNa["start"] + +size * 2 / 3 + +size * 2 / 3,
-            x=[size * 2 / 3] * len(aNa),
-            y=aNa["chrm"],
-            orientation="h",
-            marker_color="#00FF7F",
-        )
-    )
-    output_file_name = output_file_name_prefix + ".repeats.with.gaps.enhanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #4. Enhanced TRs without gaps
-    _title_text = title_text + " (TRs without gaps)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for x in repeats_without_gaps])
-    for name in names:
-        items = [x for x in repeats_without_gaps if x["family_name"] == name]
-        fig.add_trace(
-            go.Bar(
-                base=[x.start for x in repeats_without_gaps],
-                x=[max(x.length, size) for x in repeats_without_gaps],
-                y=[x.chrm for x in repeats_without_gaps],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".repeats.nogaps.enhanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #5. Raw all TRs
-
-    _title_text = title_text + " (all)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        items = _df_trs[_df_trs["family_name"] == name]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".raw.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #6. Raw all TRs no singletons
-
-    _title_text = title_text + " (no singletons)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        if name == "SING":
-            continue
-        items = _df_trs[_df_trs["family_name"] == name]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".nosing.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #7. Raw TRs singletons
-
-    _title_text = title_text + " (no singletons)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        if name != "SING":
-            continue
-        items = _df_trs[_df_trs["family_name"] == name]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".sing.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #8. Raw all TRs (enhanced)
-
-    _title_text = title_text + " (enlarged, all)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        items = _df_trs[_df_trs["family_name"] == name]
-        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".raw.enhanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #9. Raw all TRs no singletons (enhanced)
-
-    _title_text = title_text + " (enlarged, no singletons)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        if name == "SING":
-            continue
-        items = _df_trs[_df_trs["family_name"] == name]
-        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".nosing.enchanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
-
-    ### #10. Raw TRs singletons (enhanced)
-
-    _title_text = title_text + " (enlarged, only singletons)"
-    fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, _title_text, use_chrm=use_chrm)
-    names = set([x["family_name"] for i, x in _df_trs.iterrows()])
-    for name in names:
-        if name != "SING":
-            continue
-        items = _df_trs[_df_trs["family_name"] == name]
-        items.loc[:, "length"] = [max(x["length"], enhance) for i, x in items.iterrows()]
-        fig.add_trace(
-            go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
-                orientation="h",
-                name=name,
-            )
-        )
-    output_file_name = output_file_name_prefix + ".sing.enchanced.svg"
-    fig.write_image(output_file_name, engine="kaleido", width=canvas_width, height=canvas_height)
 
 
 def _sort_chromosomes_intelligent(scaffold_items):
@@ -884,36 +875,36 @@ def draw_all(
         )[:2000]
         print(f"Updated quantity of TRs: 2000")
 
-    distance_file += f".{len(df_trs)}"
+    # distance_file += f".{len(df_trs)}"
 
-    if os.path.isfile(distance_file) and os.path.getsize(distance_file) > 0:
-        print("Loading distances...")
-        distances = {}
-        with open(distance_file) as fh:
-            for line in fh:
-                a, b, d = line.strip().split()
-                distances[(int(a), int(b))] = float(d)
+    # if os.path.isfile(distance_file) and os.path.getsize(distance_file) > 0:
+    #     print("Loading distances...")
+    #     distances = {}
+    #     with open(distance_file) as fh:
+    #         for line in fh:
+    #             a, b, d = line.strip().split()
+    #             distances[(int(a), int(b))] = float(d)
 
-        distance_vectors_file = distance_file + ".vector"
-        with open(distance_vectors_file, 'rb') as f:
-            tr2vector = pickle.load(f)
+    #     distance_vectors_file = distance_file + ".vector"
+    #     with open(distance_vectors_file, 'rb') as f:
+    #         tr2vector = pickle.load(f)
 
-    else:
-        distances, tr2vector = get_disances(df_trs)
-        distance_vectors_file = distance_file + ".vector"
+    # else:
+    #     distances, tr2vector = get_disances(df_trs)
+    #     distance_vectors_file = distance_file + ".vector"
         
-        with open(distance_vectors_file, 'wb') as f:
-            pickle.dump(tr2vector, f)
+    #     with open(distance_vectors_file, 'wb') as f:
+    #         pickle.dump(tr2vector, f)
 
-        with open(distance_file, "w") as fh:
-            for (id1, id2), dist in distances.items():
-                fh.write(f"{id1}\t{id2}\t{dist}\n")
+    #     with open(distance_file, "w") as fh:
+    #         for (id1, id2), dist in distances.items():
+    #             fh.write(f"{id1}\t{id2}\t{dist}\n")
 
 
-    # print("Naming repeats...")
-    df_trs, tr2vector, distances, all_distances = name_clusters(
-        distances, tr2vector, df_trs, level=level
-    )
+    # # print("Naming repeats...")
+    # df_trs, tr2vector, distances, all_distances = name_clusters(
+    #     distances, tr2vector, df_trs, level=level
+    # )
 
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
