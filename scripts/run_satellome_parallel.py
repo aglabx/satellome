@@ -15,6 +15,15 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import time
 from datetime import datetime, timedelta
 from tqdm import tqdm
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 def decompress_genome(gz_file, temp_dir, min_free_gb=500):
@@ -192,7 +201,7 @@ def main():
     
     # Validate input directory
     if not os.path.isdir(args.input_dir):
-        print(f"Error: Input directory {args.input_dir} does not exist")
+        logger.error(f"Input directory {args.input_dir} does not exist")
         sys.exit(1)
     
     # Create output and temp directories
@@ -214,24 +223,24 @@ def main():
     genome_files = sorted(list(set(genome_files)))
     
     if not genome_files:
-        print(f"No FASTA files found in {args.input_dir}")
-        print(f"Looking for: {', '.join(fasta_patterns)}")
+        logger.error(f"No FASTA files found in {args.input_dir}")
+        logger.error(f"Looking for: {', '.join(fasta_patterns)}")
         sys.exit(1)
     
-    print(f"Found {len(genome_files)} genome files")
-    print(f"Will run {args.jobs} parallel jobs with {args.threads} threads each")
-    print(f"Total CPU usage: {args.jobs * args.threads} threads")
+    logger.info(f"Found {len(genome_files)} genome files")
+    logger.info(f"Will run {args.jobs} parallel jobs with {args.threads} threads each")
+    logger.info(f"Total CPU usage: {args.jobs * args.threads} threads")
     
     if args.dry_run:
-        print("\nDry run - files that would be processed:")
+        logger.info("\nDry run - files that would be processed:")
         for f in sorted(genome_files):
-            print(f"  - {os.path.basename(f)}")
+            logger.info(f"  - {os.path.basename(f)}")
         return
     
     # Run analyses in parallel
-    print(f"\nStarting parallel analysis...")
-    print(f"Output directory: {args.output_dir}")
-    print(f"Temporary directory: {args.temp_dir}\n")
+    logger.info(f"\nStarting parallel analysis...")
+    logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Temporary directory: {args.temp_dir}\n")
     
     results = []
     completed = 0
@@ -322,30 +331,30 @@ def main():
     
     # Summary
     total_elapsed = time.time() - start_time
-    print("\n" + "="*70)
-    print("SUMMARY")
-    print("="*70)
+    logger.info("\n" + "="*70)
+    logger.info("SUMMARY")
+    logger.info("="*70)
     
     successful = [r for r in results if r[1]]
     failed = [r for r in results if not r[1]]
     
-    print(f"Total genomes processed: {len(results)}")
-    print(f"Successful: {len(successful)} ({len(successful)/len(results)*100:.1f}%)")
-    print(f"Failed: {len(failed)} ({len(failed)/len(results)*100:.1f}%)")
-    print(f"Total time: {str(timedelta(seconds=int(total_elapsed)))}")
-    print(f"Average time per genome: {total_time/len(successful):.1f}s" if successful else "N/A")
+    logger.info(f"Total genomes processed: {len(results)}")
+    logger.info(f"Successful: {len(successful)} ({len(successful)/len(results)*100:.1f}%)")
+    logger.info(f"Failed: {len(failed)} ({len(failed)/len(results)*100:.1f}%)")
+    logger.info(f"Total time: {str(timedelta(seconds=int(total_elapsed)))}")
+    logger.info(f"Average time per genome: {total_time/len(successful):.1f}s" if successful else "N/A")
     
     if failed:
-        print("\nFailed genomes:")
+        logger.warning("\nFailed genomes:")
         for genome_id, _, error in failed:
-            print(f"  - {genome_id}: {error}")
-        
+            logger.warning(f"  - {genome_id}: {error}")
+
         # Write failed list to file
         failed_file = os.path.join(args.output_dir, "failed_genomes.txt")
         with open(failed_file, 'w') as f:
             for genome_id, _, error in failed:
                 f.write(f"{genome_id}\t{error}\n")
-        print(f"\nFailed genomes list saved to: {failed_file}")
+        logger.info(f"\nFailed genomes list saved to: {failed_file}")
     
     # Write success list to file
     if successful:
@@ -353,15 +362,15 @@ def main():
         with open(success_file, 'w') as f:
             for genome_id, _, message in successful:
                 f.write(f"{genome_id}\t{message}\n")
-        print(f"Successful genomes list saved to: {success_file}")
+        logger.info(f"Successful genomes list saved to: {success_file}")
     
     # Clean up temp directory
     try:
         shutil.rmtree(args.temp_dir)
     except (OSError, PermissionError) as e:
-        print(f"Warning: Could not remove temp directory {args.temp_dir}: {e}")
+        logger.warning(f"Could not remove temp directory {args.temp_dir}: {e}")
     
-    print("\nAnalysis complete!")
+    logger.info("\nAnalysis complete!")
 
 
 if __name__ == '__main__':

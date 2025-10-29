@@ -29,13 +29,4 @@ if __name__ == "__main__":
         if trf_obj.trf_array_length > cutoff:
             i += 1
             trf_objs.append(trf_obj)
-            print(
-                i,
-                j,
-                trf_obj.trf_array_length,
-                trf_obj.trf_consensus,
-                trf_obj.trf_head,
-                trf_obj.trf_l_ind,
-            )
-    print
     save_trs_dataset(trf_objs, output_file)

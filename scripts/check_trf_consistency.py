@@ -17,6 +17,15 @@ import argparse
 import sys
 import os
 from collections import defaultdict
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path to import satellome modules
 sys.path.append(os.path.join(os.path.dirname(__file__), "../src"))
@@ -38,7 +47,7 @@ def get_scaffold_lengths(fasta_file, match_first_word=True):
     """
     scaffold_lengths = {}
     
-    print(f"Reading scaffold lengths from {fasta_file}...")
+    logger.info(f"Reading scaffold lengths from {fasta_file}...")
     for header, sequence in sc_iter_fasta_brute(fasta_file):
         # Remove '>' and strip whitespace
         scaffold_name = header.replace(">", "").strip()
@@ -67,7 +76,7 @@ def get_trf_scaffolds(trf_file, match_first_word=True, debug=False):
     total_trs = 0
     debug_first_5 = []
     
-    print(f"Reading TRF results from {trf_file}...")
+    logger.info(f"Reading TRF results from {trf_file}...")
     
     # Use TRModel to parse the file properly
     for trf_obj in sc_iter_tab_file(trf_file, TRModel):
@@ -87,13 +96,13 @@ def get_trf_scaffolds(trf_file, match_first_word=True, debug=False):
             original_name = trf_obj.trf_head if hasattr(trf_obj, 'trf_head') else 'Unknown'
             debug_first_5.append((scaffold_name, original_name))
     
-    print(f"Found {total_trs:,} tandem repeats across {len(scaffold_trf_counts):,} scaffolds")
+    logger.info(f"Found {total_trs:,} tandem repeats across {len(scaffold_trf_counts):,} scaffolds")
     
     # Debug: show first few scaffold names from TRF
     if debug and debug_first_5:
-        print(f"Debug - First scaffold names from TRF (trf_head field):")
+        logger.debug(f"Debug - First scaffold names from TRF (trf_head field):")
         for processed, original in debug_first_5[:3]:
-            print(f"  - Processed: '{processed}' (Original trf_head: '{original}')")
+            logger.debug(f"  - Processed: '{processed}' (Original trf_head: '{original}')")
     
     return scaffold_trf_counts
 
@@ -121,9 +130,9 @@ def check_consistency(fasta_file, trf_file, min_scaffold_size=1000000, min_expec
     
     # Debug: show first few scaffold names from FASTA
     if debug:
-        print(f"\nDebug - First scaffold names from FASTA:")
+        logger.debug(f"\nDebug - First scaffold names from FASTA:")
         for name in list(scaffold_lengths.keys())[:3]:
-            print(f"  - '{name}' (length: {scaffold_lengths[name]:,} bp)")
+            logger.debug(f"  - '{name}' (length: {scaffold_lengths[name]:,} bp)")
     
     # Check if there's a mismatch in scaffold name format
     fasta_scaffolds = set(scaffold_lengths.keys())
@@ -132,9 +141,9 @@ def check_consistency(fasta_file, trf_file, min_scaffold_size=1000000, min_expec
     # Find scaffolds that are in FASTA but not in TRF (potential naming mismatch)
     only_in_fasta = fasta_scaffolds - trf_scaffolds
     if only_in_fasta and len(only_in_fasta) < len(fasta_scaffolds):
-        print(f"\n⚠️  Warning: {len(only_in_fasta)} scaffolds from FASTA not found in TRF results.")
-        print("  This might be a scaffold naming mismatch issue.")
-        print(f"  Example FASTA scaffolds not in TRF: {list(only_in_fasta)[:3]}")
+        logger.warning(f"\n⚠️  Warning: {len(only_in_fasta)} scaffolds from FASTA not found in TRF results.")
+        logger.warning("  This might be a scaffold naming mismatch issue.")
+        logger.warning(f"  Example FASTA scaffolds not in TRF: {list(only_in_fasta)[:3]}")
     
     # Analyze consistency
     missing_scaffolds = []  # Scaffolds with no TRF results
@@ -189,53 +198,53 @@ def print_report(missing_scaffolds, low_tr_scaffolds, statistics):
         low_tr_scaffolds: List of scaffolds with few TRs
         statistics: Dictionary with statistics
     """
-    print("\n" + "="*60)
-    print("TRF CONSISTENCY CHECK REPORT")
-    print("="*60)
+    logger.info("\n" + "="*60)
+    logger.info("TRF CONSISTENCY CHECK REPORT")
+    logger.info("="*60)
     
     # Print statistics
-    print("\n📊 Overall Statistics:")
-    print(f"  Total scaffolds: {statistics['total_scaffolds']:,}")
-    print(f"  Total genome size: {statistics['total_genome_size']:,} bp")
-    print(f"  Large scaffolds (>={statistics['min_scaffold_size']:,} bp): {statistics['large_scaffolds']:,}")
-    print(f"  Large scaffolds size: {statistics['large_genome_size']:,} bp")
-    print(f"  Scaffolds with TRs: {statistics['scaffolds_with_trs']:,}")
-    print(f"  Small scaffolds skipped: {statistics['small_scaffolds_skipped']:,}")
+    logger.info("\n📊 Overall Statistics:")
+    logger.info(f"  Total scaffolds: {statistics['total_scaffolds']:,}")
+    logger.info(f"  Total genome size: {statistics['total_genome_size']:,} bp")
+    logger.info(f"  Large scaffolds (>={statistics['min_scaffold_size']:,} bp): {statistics['large_scaffolds']:,}")
+    logger.info(f"  Large scaffolds size: {statistics['large_genome_size']:,} bp")
+    logger.info(f"  Scaffolds with TRs: {statistics['scaffolds_with_trs']:,}")
+    logger.info(f"  Small scaffolds skipped: {statistics['small_scaffolds_skipped']:,}")
     
     # Report issues
     if missing_scaffolds or low_tr_scaffolds:
-        print("\n⚠️  POTENTIAL ISSUES DETECTED:")
-        
+        logger.warning("\n⚠️  POTENTIAL ISSUES DETECTED:")
+
         if missing_scaffolds:
-            print(f"\n❌ {len(missing_scaffolds)} large scaffold(s) with NO tandem repeats detected:")
+            logger.error(f"\n❌ {len(missing_scaffolds)} large scaffold(s) with NO tandem repeats detected:")
             for scaffold in missing_scaffolds[:10]:  # Show first 10
-                print(f"    - {scaffold['name']}: {scaffold['length']:,} bp")
+                logger.error(f"    - {scaffold['name']}: {scaffold['length']:,} bp")
             if len(missing_scaffolds) > 10:
-                print(f"    ... and {len(missing_scaffolds) - 10} more")
-        
+                logger.error(f"    ... and {len(missing_scaffolds) - 10} more")
+
         if low_tr_scaffolds:
-            print(f"\n⚠️  {len(low_tr_scaffolds)} large scaffold(s) with suspiciously few tandem repeats:")
+            logger.warning(f"\n⚠️  {len(low_tr_scaffolds)} large scaffold(s) with suspiciously few tandem repeats:")
             for scaffold in low_tr_scaffolds[:10]:  # Show first 10
-                print(f"    - {scaffold['name']}: {scaffold['length']:,} bp, only {scaffold['tr_count']} TR(s)")
+                logger.warning(f"    - {scaffold['name']}: {scaffold['length']:,} bp, only {scaffold['tr_count']} TR(s)")
             if len(low_tr_scaffolds) > 10:
-                print(f"    ... and {len(low_tr_scaffolds) - 10} more")
-        
-        print("\n🔍 Possible causes:")
-        print("  1. TRF failed to process some files (check for signal 6 errors)")
-        print("  2. Some scaffolds genuinely have no/few tandem repeats")
-        print("  3. TRF parameters may need adjustment for this genome")
-        print("  4. Incomplete TRF run (use --continue-on-error with caution)")
-        
-        print("\n💡 Recommendations:")
-        print("  1. Check TRF logs for errors")
-        print("  2. Re-run TRF for missing scaffolds with --force flag")
-        print("  3. Consider adjusting TRF parameters if needed")
-        print("  4. Manually inspect problematic scaffolds")
+                logger.warning(f"    ... and {len(low_tr_scaffolds) - 10} more")
+
+        logger.info("\n🔍 Possible causes:")
+        logger.info("  1. TRF failed to process some files (check for signal 6 errors)")
+        logger.info("  2. Some scaffolds genuinely have no/few tandem repeats")
+        logger.info("  3. TRF parameters may need adjustment for this genome")
+        logger.info("  4. Incomplete TRF run (use --continue-on-error with caution)")
+
+        logger.info("\n💡 Recommendations:")
+        logger.info("  1. Check TRF logs for errors")
+        logger.info("  2. Re-run TRF for missing scaffolds with --force flag")
+        logger.info("  3. Consider adjusting TRF parameters if needed")
+        logger.info("  4. Manually inspect problematic scaffolds")
         
         return False  # Consistency check failed
     else:
-        print("\n✅ CONSISTENCY CHECK PASSED")
-        print("All large scaffolds have tandem repeats detected!")
+        logger.info("\n✅ CONSISTENCY CHECK PASSED")
+        logger.info("All large scaffolds have tandem repeats detected!")
         return True  # Consistency check passed
 
 
@@ -280,7 +289,7 @@ def save_report(missing_scaffolds, low_tr_scaffolds, statistics, output_file):
         else:
             f.write("RESULT: PASSED - All large scaffolds have tandem repeats\n")
     
-    print(f"\n📄 Detailed report saved to: {output_file}")
+    logger.info(f"\n📄 Detailed report saved to: {output_file}")
 
 
 def main():
@@ -331,11 +340,11 @@ def main():
     
     # Check input files exist
     if not os.path.exists(args.fasta):
-        print(f"Error: FASTA file not found: {args.fasta}")
+        logger.error(f"FASTA file not found: {args.fasta}")
         sys.exit(1)
-    
+
     if not os.path.exists(args.trf):
-        print(f"Error: TRF file not found: {args.trf}")
+        logger.error(f"TRF file not found: {args.trf}")
         sys.exit(1)
     
     # Run consistency check
@@ -360,7 +369,7 @@ def main():
         sys.exit(0 if passed else 1)
         
     except Exception as e:
-        print(f"Error during consistency check: {e}")
+        logger.error(f"Error during consistency check: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(2)

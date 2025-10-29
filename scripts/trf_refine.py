@@ -28,16 +28,10 @@ def refine_names(trf_file):
         # check overlapped
         if last_head is not None:
             if trf_obj.trf_l_ind < last_end and last_head == trf_obj.trf_head:
-                # print(str(data[-1]))
-                # print(str(trf_obj))
                 if join_overlapped(data[-1], trf_obj, cutoff_distance=0.1):
                     last_head = trf_obj.trf_head
                     last_end = trf_obj.trf_r_ind
-                    # print(str(data[-1]))
-                    # print("Joined")
                     continue
-
-                # input("?")
 
         last_head = trf_obj.trf_head
         last_end = trf_obj.trf_r_ind

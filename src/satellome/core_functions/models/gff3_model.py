@@ -10,9 +10,12 @@
 
 import collections
 import csv
+import logging
 import sys
 
-from PyExp import AbstractModel
+from satellome.core_functions.models.abstract_model import AbstractModel
+
+logger = logging.getLogger(__name__)
 
 from satellome.core_functions.io.tab_file import TabDelimitedFileIO
 
@@ -183,15 +186,13 @@ class Gff3FileIO(TabDelimitedFileIO):
                                     ]
                                 )
                             except (ValueError, IndexError, AttributeError) as e:
-                                import sys
-                                print(f"Error parsing GFF3 attribute value: {v}, error: {e}", file=sys.stderr)
+                                logger.error(f"Error parsing GFF3 attribute value: {v}, error: {e}")
                         _features[k] = v
                 data["attributes"] = _features
                 obj = Gff3Model()
                 try:
                     obj.set_with_dict(data)
                 except (AttributeError, KeyError, TypeError) as e:
-                    import sys
-                    print(f"Can't parse features for {data}: {e}", file=sys.stderr)
+                    logger.error(f"Can't parse features for {data}: {e}")
                     continue
                 yield obj

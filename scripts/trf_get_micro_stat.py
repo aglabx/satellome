@@ -51,5 +51,4 @@ if __name__ == "__main__":
                 round(100.0 * nmicro_s[name] / micro_s[name], 2),
                 round(100.0 * pmicro_s[name] / micro_s[name], 2),
             )
-            print(s.strip())
             fh.write(s)

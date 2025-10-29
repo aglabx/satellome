@@ -69,7 +69,6 @@ def main(args):
     for i, (header, seq) in enumerate(sc_iter_fasta_brute(args.fasta)):
         if len(seq) < args.cutoff:
             continue
-        print(header)
         name = "chr%s" % i
         suggest = re.findall(r"chromosome (\d+)", header)
         if suggest:
@@ -80,7 +79,6 @@ def main(args):
             name = input(f"Set name ({name})?") or name
         header2name[header] = name
         header2size[header] = len(seq)
-        print(f"Set name {name} with length ({len(seq)} bp)")
 
     with open(args.output, "w") as fh:
         for tr_class, (name, color) in header2name.items():

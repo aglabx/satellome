@@ -15,7 +15,10 @@ Function for various parsing tasks.
 - trf_parse_param(line) -> string
 - trf_parse_head(line) -> string  
 """
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def parse_fasta_head(fa_head):
@@ -121,7 +124,6 @@ def parse_fasta_head(fa_head):
         return list(match)
     else:
         match = ("Unknown", "Unknown", "Unknown")
-        # print "Failed parse sequence head: %s" % (fa_head)
         return list(match)
 
 
@@ -147,8 +149,7 @@ def parse_chromosome_name(head):
             return "MT"
         return "?"
     except (AttributeError, IndexError, TypeError) as e:
-        import sys
-        print(f"Error parsing chromosome name from {head}: {e}", file=sys.stderr)
+        logger.error(f"Error parsing chromosome name from {head}: {e}")
         return "?"
 
 
@@ -160,7 +161,7 @@ def trf_parse_line(line):
     if groups and len(groups) == 15:
         return list(groups)
     else:
-        print(("Failed parse ta: %s" % (line)))
+        logger.error(f"Failed parse ta: {line}")
         return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "0", "0"]
 
 
@@ -170,8 +171,7 @@ def trf_parse_param(line):
         res = re.compile("Parameters: ([\d ]*)", re.S).findall(line)[0]
         return res
     except (IndexError, AttributeError) as e:
-        import sys
-        print(f"Failed parse param: {line}, error: {e}", file=sys.stderr)
+        logger.error(f"Failed parse param: {line}, error: {e}")
         return "Unknown"
 
 
@@ -185,8 +185,7 @@ def trf_parse_head(line):
         if res2:
             return res2[0]
     except (IndexError, AttributeError) as e:
-        import sys
-        print(f"Failed parse head: {line}, error: {e}", file=sys.stderr)
+        logger.error(f"Failed parse head: {line}, error: {e}")
         return "Unknown"
 
 

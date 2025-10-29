@@ -28,6 +28,4 @@ if __name__ == "__main__":
                 trf_obj.trf_family,
                 trf_obj.trf_consensus * 3,
             )
-            print(i, s)
             fh.write(s)
-        print()

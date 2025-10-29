@@ -6,9 +6,12 @@
 # @contact: ad3002@gmail.com
 
 import argparse
+import logging
 import os
 import pathlib
 import sys
+
+logger = logging.getLogger(__name__)
 
 # Add parent directories to path for module imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,8 +66,8 @@ if __name__ == "__main__":
 
     # Check if output directory is an absolute path FIRST
     if not os.path.isabs(output_dir):
-        print(f"Error: please provide the full path for output: {output_dir}")
-        print(f"Example: /home/user/output or {os.path.abspath(output_dir)}")
+        logger.error(f"Error: please provide the full path for output: {output_dir}")
+        logger.error(f"Example: /home/user/output or {os.path.abspath(output_dir)}")
         sys.exit(1)
 
     settings = {
@@ -91,9 +94,8 @@ if __name__ == "__main__":
     output_file = os.path.join(output_dir, fasta_name + ".trf")
 
     if os.path.isfile(output_file) and os.path.getsize(output_file) > 0:
-        print(f"TRF output file already exists ({os.path.getsize(output_file):,} bytes). Skipping TRF.")
+        logger.info(f"TRF output file already exists ({os.path.getsize(output_file):,} bytes). Skipping TRF.")
     else:
-        # print("Running TRF...")
         output_file = trf_search_by_splitting(
             fasta_file,
             threads=threads,

@@ -29,4 +29,3 @@ if __name__ == "__main__":
                 trf_obj.trf_r_ind,
             )
             fh.write(s)
-        print()

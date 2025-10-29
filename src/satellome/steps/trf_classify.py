@@ -6,9 +6,12 @@
 # @contact: ad3002@gmail.com
 
 import argparse
+import logging
 import os
 import sys
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # Add parent directories to path for module imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -87,13 +90,13 @@ def classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf=False):
         original_trf = settings["files"]["trf_all_file"]
         backup_trf = original_trf.replace(".trf", ".original.trf")
         if os.path.exists(original_trf) and not os.path.exists(backup_trf):
-            print(f"Saving original TRF file as {backup_trf}")
+            logger.info(f"Saving original TRF file as {backup_trf}")
             shutil.copy2(original_trf, backup_trf)
 
-    print("Classifying TRF results...")
+    logger.info("Classifying TRF results...")
     settings, project = scf_basic_trs_classification(settings, project)
 
-    print("Saving results...")
+    logger.info("Saving results...")
     with open(results_file, "w") as fh:
         yaml.dump(project, fh, default_flow_style=False)
 
@@ -105,7 +108,7 @@ def main():
     genome_size = args.genome_size
     keep_trf = args.keep_trf
 
-    print("Refining names...")
+    logger.info("Refining names...")
     classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf)
 
 

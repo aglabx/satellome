@@ -5,8 +5,11 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
+import logging
 from collections import Counter
 from intervaltree import IntervalTree
+
+logger = logging.getLogger(__name__)
 from satellome.core_functions.io.tr_file import save_trs_dataset
 from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
@@ -44,8 +47,6 @@ def interval_length(interval):
 
 def filter_hits(hits):
 
-    # print(hits)
-
     features = [x[2] for x in hits]
 
     hits = [x for x in hits if x[2] != "region"]
@@ -64,9 +65,6 @@ def filter_hits(hits):
 
     if len(hits) <= 1:
         return hits
-    # else:
-    #     print(hits)
-    #     input("?")
     return hits
 
 
@@ -118,10 +116,9 @@ def _add_annotation(trf_file, gff_file, rm_file):
         assert start < end, (start, end)
 
         if chrm not in chrm2annotation:
-            print("No annotation for %s" % chrm)
+            logger.info(f"No annotation for {chrm}")
             continue
         if chrm2annotation[chrm][start:end]:
-            # print(trf_obj.as_dict())
             hits = [[x[0], x[1], x[-1]["type"]] for x in chrm2annotation[chrm][start:end]]
             for hit in hits:
                 hit.append(categorize_intervals((start, end), (hit[0], hit[1]), hit[2]))

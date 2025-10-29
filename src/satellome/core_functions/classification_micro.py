@@ -142,10 +142,7 @@ def _trs_separate_something(
                     stats[trf_obj.trf_family].lengths.append(trf_obj.trf_array_length)
                     stats[trf_obj.trf_family].pmatch.append(trf_obj.trf_pmatch)
                     stats[trf_obj.trf_family].gc.append(100 * trf_obj.trf_array_gc)
-        # for key in stats:
-        #     print("%s\t%s\t%s" % (key, stats[key].n, stats[key].max_length))
-        # print("selected %s from %s " % (selected, N))
-
+        
         if family_table_file:
             _save_families_to_file(stats, family_table_file)
 
@@ -848,5 +845,4 @@ def cf_get_micro_summary_table(settings, project):
         fh.write(s)
         for d in data:
             s = "%s\t%s\t%s\t%s\t%s\n" % d
-            # print(s.strip())
             fh.write(s)

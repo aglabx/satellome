@@ -36,7 +36,6 @@ def repeat_clusters(file_path, out_path):
                 repeats[repeat[1]] += repeat[2]
                 repeat = [0, "Unknown", 0]
             line = file.readline()
-    print(total)
     with open(out_path, "w") as file:
         for key in repeats.keys():
             file.write(f"{key}: {repeats[key]}\n")

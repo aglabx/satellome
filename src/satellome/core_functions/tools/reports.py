@@ -6,7 +6,10 @@
 # @contact: ad3002@gmail.com
 
 import base64
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 def image_to_data_uri(image_path):
     """Converts an image to a Base64-encoded data URI."""
@@ -53,5 +56,5 @@ def create_html_report(image_folder, report_file):
     with open(report_file, 'w') as file:
         file.write(html_content)
 
-    print("HTML file with embedded image created successfully!")
-    print(f"File: {report_file}")
+    logger.info("HTML file with embedded image created successfully!")
+    logger.info(f"File: {report_file}")

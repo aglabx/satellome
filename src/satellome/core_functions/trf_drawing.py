@@ -5,6 +5,7 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
+import logging
 import math
 import re
 
@@ -12,6 +13,8 @@ import pandas as pd
 from tqdm import tqdm
 
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
+
+logger = logging.getLogger(__name__)
 
 CENPB_REGEXP = re.compile(r".ttcg....a..cggg.")
 TELOMERE_REGEXP = re.compile(r"ttagggttagggttagggttagggttaggg")
@@ -47,7 +50,7 @@ chm2name = {
 
 def sort_chrm(name):
     v = name.replace("Chr", "")
-    print(v)
+    logger.debug(v)
     if v == "Y":
         return 24
     if v == "X":
@@ -158,7 +161,6 @@ def get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=100000):
                 continue
             in_gap = False
             gap_start = None
-            # print(name)
             for i in range(len(seq)):
                 
                 if seq[i] == "N":
@@ -185,9 +187,9 @@ def get_gaps_annotation_re(fasta_file, genome_size, lenght_cutoff=100000):
             name = header[1:].split()[0]
             if len(seq) < lenght_cutoff:
                 continue
-            print(name)
+            logger.debug(name)
             hits = re.findall("N+", seq)
-            print(hits)
+            logger.debug(hits)
             for pos, item in hits:
                 gaps.append((name, pos, pos + len(item)))
     return gaps

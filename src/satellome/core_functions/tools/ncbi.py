@@ -6,9 +6,12 @@
 # @contact: ad3002@gmail.com
 
 
+import logging
 import requests
 from xml.etree import ElementTree
 import time
+
+logger = logging.getLogger(__name__)
 
 def get_taxon_name(taxid):
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=taxonomy&id={taxid}"
@@ -33,17 +36,17 @@ def get_taxon_name(taxid):
         
         except requests.RequestException as e:
             # Handles any kind of request issues (e.g. network issues, invalid URL, etc.)
-            print(f"Error fetching data from NCBI: {e}")
-            print(f"Attempt {attempts} of 7")
+            logger.warning(f"Error fetching data from NCBI: {e}")
+            logger.info(f"Attempt {attempts} of 7")
             time.sleep(5)
         except ElementTree.ParseError:
             # Handles issues when parsing the XML
-            print("Error parsing the XML response from NCBI.")
+            logger.error("Error parsing the XML response from NCBI.")
             time.sleep(5)
         except Exception as e:
             # General catch-all for any other exceptions
-            print(f"An unexpected error occurred: {e}")
-            print(f"Attempt {attempts} of 7")
+            logger.error(f"An unexpected error occurred: {e}")
+            logger.info(f"Attempt {attempts} of 7")
             time.sleep(5)
 
     return None  # Return None if any errors occurred
