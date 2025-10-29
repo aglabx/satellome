@@ -113,7 +113,10 @@ def _add_annotation(trf_file, gff_file, rm_file):
 
         trf_key = (trf_obj.trf_id, trf_obj.trf_l_ind, trf_obj.trf_r_ind)
 
-        assert start < end, (start, end)
+        if start >= end:
+            raise ValueError(
+                f"Invalid interval: start ({start}) must be less than end ({end})"
+            )
 
         if chrm not in chrm2annotation:
             logger.info(f"No annotation for {chrm}")

@@ -155,8 +155,10 @@ class AbstractModel(object):
                 dumpable_attributes = self.alt_dumpable_attributes
             else:
                 logger.error(f"Wrong number of fields in data: expected {len(self.dumpable_attributes)}, got {n}. Data: {data}")
-                raise Exception("Wrong number of fields in data.")
-                raise Exception("Wrong number of fields in data.")
+                raise ValueError(
+                        f"Expected {len(self.dumpable_attributes)} fields in {self.__class__.__name__}, "
+                        f"got {n}. Sample data: {data[:50]}..."
+                        )
         for i, value in enumerate(data):
             key = dumpable_attributes[i]
             if value == "None":
