@@ -6,6 +6,7 @@
 # @contact: ad3002@gmail.com
 
 import os
+import logging
 from collections import Counter
 
 import pandas as pd
@@ -15,12 +16,25 @@ from intervaltree import IntervalTree
 import pickle
 from tqdm import tqdm
 
+# Configure logging
+logger = logging.getLogger(__name__)
+
 from satellome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_file,
                                   scaffold_length_sort_length)
 from satellome.core_functions.trf_embedings import get_disances
+from satellome.constants import (
+    CANVAS_WIDTH_DEFAULT, CANVAS_HEIGHT_DEFAULT, CANVAS_HEIGHT_MIN, CANVAS_HEIGHT_MAX,
+    CHROMOSOME_HEIGHT, VERTICAL_SPACER, BASE_HEIGHT,
+    MARGIN_TOP, MARGIN_BOTTOM, MARGIN_LEFT, MARGIN_RIGHT,
+    ENHANCE_DEFAULT, ENHANCE_LARGE, GAP_CUTOFF_DEFAULT, GAP_SEARCH_WINDOW,
+    SAMPLE_SIZE_FOR_CLUSTERING, START_CUTOFF_MAX,
+    TR_CUTOFF_LARGE, MIN_SCAFFOLD_LENGTH_FILTER,
+    SEPARATOR_LINE, TR_SIZE_RANGES, GAP_SIZE_RANGES,
+    RECURSION_LIMIT_DEFAULT
+)
 
 import sys
-sys.setrecursionlimit(20000000)
+sys.setrecursionlimit(RECURSION_LIMIT_DEFAULT)
 
 
 class Graph:
@@ -86,7 +100,7 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
     all_distances = list(distances.values())
     all_distances = list(set(map(int, all_distances)))
     all_distances.sort(reverse=True)
-    start_cutoff = min(int(all_distances[0]), 50)
+    start_cutoff = min(int(all_distances[0]), START_CUTOFF_MAX)
 
     G = Graph(list(tr2vector.keys()))
     for (id1, id2) in distances:
@@ -104,9 +118,6 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
             else:
                 singl += ids
         items.sort(key=lambda x: len(x))
-        # print(
-        #     i, "->", len(comps), len(singl)
-        # )  # print(f"For distance {i} -> total number of components is {len(comps)} and {len(singl)} out of them are singletones")
         for class_name, d in enumerate(items):
             median_monomer = [x[1] for x in d]
             median_monomer.sort()
@@ -176,9 +187,7 @@ def _deprecated_draw_sankey(
     for i in tqdm(range(start_cutoff, 0, -1), desc="Cut distances"):
         G.remove_edges_by_distances(i)
         comps = G.connectedComponents()
-        # print(i, "->", len(comps))
         if len(comps) == last_n_comp:
-            # print("..skipped")
             continue
         last_n_comp = len(comps)
 
@@ -245,8 +254,6 @@ def _deprecated_draw_sankey(
 
     for id2INstep, name2size, name2ids, name2id in steps[1:]:
 
-        # print(name2size)
-
         for name in name2size:
             labels.append(name)
             name2lid[name] = lid
@@ -287,7 +294,7 @@ def _deprecated_draw_spheres(output_file_name_prefix, title_text, df_trs):
             "yanchor": "top",
         }
     )
-    fig.update_layout(width=800, height=800)
+    fig.update_layout(width=CANVAS_WIDTH_DEFAULT, height=CANVAS_HEIGHT_DEFAULT)
     output_file_name = output_file_name_prefix + ".3D.svg"
     fig.write_image(output_file_name, engine="kaleido")
 
@@ -308,7 +315,7 @@ def _deprecated_draw_spheres(output_file_name_prefix, title_text, df_trs):
             "yanchor": "top",
         }
     )
-    fig.update_layout(width=800, height=800)
+    fig.update_layout(width=CANVAS_WIDTH_DEFAULT, height=CANVAS_HEIGHT_DEFAULT)
     output_file_name = output_file_name_prefix + ".3D.nosingl.svg"
     fig.write_image(output_file_name, engine="kaleido")
 
@@ -369,15 +376,16 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
     num_items = len(scaffold_items)
     
     # New sizing logic: minimum 50px per chromosome + 20px spacer
-    chromosome_height = 50  # minimum height per chromosome
-    vertical_spacer = 20    # vertical spacer between chromosomes
-    base_height = 150       # margins, title, etc.
+    # Use constants for chromosome dimensions
+    chromosome_height = CHROMOSOME_HEIGHT
+    vertical_spacer = VERTICAL_SPACER
+    base_height = BASE_HEIGHT
     
     # Calculate total height needed
     dynamic_height = base_height + (num_items * (chromosome_height + vertical_spacer))
     
     # Set reasonable bounds
-    dynamic_height = max(400, min(8000, dynamic_height))
+    dynamic_height = max(CANVAS_HEIGHT_MIN, min(CANVAS_HEIGHT_MAX, dynamic_height))
     
     # Calculate dynamic margins based on scaffold names length if available
     if len(scaffold_items) > 0:
@@ -390,15 +398,15 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
     # Calculate appropriate width - make it wider for better readability
     canvas_width = 1400  # default width, can be adjusted if needed
     
-    print(f"Drawing {num_items} {yaxis_title.lower()}s:")
-    print(f"  Canvas size: {canvas_width}x{dynamic_height}px")
-    print(f"  Left margin: {left_margin}px")
-    print(f"  Height per item: {chromosome_height + vertical_spacer}px")
+    logger.info(f"Drawing {num_items} {yaxis_title.lower()}s:")
+    logger.info(f"  Canvas size: {canvas_width}x{dynamic_height}px")
+    logger.info(f"  Left margin: {left_margin}px")
+    logger.info(f"  Height per item: {chromosome_height + vertical_spacer}px")
     
     # Calculate dynamic font size based on number of items
     if num_items <= 20:
         font_size = 15
-    elif num_items <= 50:
+    elif num_items <= START_CUTOFF_MAX:
         font_size = 12
     else:
         font_size = 10
@@ -461,9 +469,9 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
         margin=dict(
             autoexpand=True,
             l=left_margin,
-            r=20,
-            t=110,
-            b=50,
+            r=MARGIN_RIGHT // 2,  # Use half of standard right margin
+            t=MARGIN_TOP + 10,    # Slightly more than standard
+            b=MARGIN_BOTTOM,
         ),
         showlegend=True,
         plot_bgcolor="white",
@@ -667,8 +675,8 @@ def draw_karyotypes(
     repeats_with_gap,
     repeats_without_gaps,
     use_chrm=False,
-    enhance=2000000,
-    gap_cutoff=1000,
+    enhance=ENHANCE_LARGE,
+    gap_cutoff=GAP_CUTOFF_DEFAULT,
 ):
     """
     Draw various karyotype visualizations with tandem repeats and gaps.
@@ -784,16 +792,16 @@ def _sort_chromosomes_intelligent(scaffold_items):
     
     # If majority are diploid pattern
     if diploid_matches > len(scaffold_items) * 0.6:
-        print("  📋 Detected diploid chromosome pattern - grouping maternal and paternal")
+        logger.info("  📋 Detected diploid chromosome pattern - grouping maternal and paternal")
         return _sort_diploid_chromosomes(scaffold_items)
     
     # If majority are simple chr pattern
     elif simple_matches > len(scaffold_items) * 0.6:
-        print("  📋 Detected simple chromosome pattern - sorting by number")
+        logger.info("  📋 Detected simple chromosome pattern - sorting by number")
         return _sort_simple_chromosomes(scaffold_items)
     
     else:
-        print("  📋 Using size-based chromosome order")
+        logger.info("  📋 Using size-based chromosome order")
         return scaffold_items
 
 def _sort_diploid_chromosomes(scaffold_items):
@@ -819,7 +827,7 @@ def _sort_diploid_chromosomes(scaffold_items):
             return (chr_sort, parent_sort)
         else:
             # Non-matching items go to the end
-            return (10000, 0)
+            return (TR_CUTOFF_LARGE, 0)
     
     return sorted(scaffold_items, key=get_sort_key)
 
@@ -841,70 +849,38 @@ def _sort_simple_chromosomes(scaffold_items):
                 return sex_order.get(chr_num.upper(), 2000)
         else:
             # Non-matching items go to the end
-            return 10000
+            return TR_CUTOFF_LARGE
     
     return sorted(scaffold_items, key=get_sort_key)
+
 def draw_all(
     trf_file,
     fasta_file,
-    distance_file,
     chm2name,
     output_folder,
     taxon,
     genome_size,
     lenght_cutoff=10000000,
-    level=1,
-    enhance=1000000,
+    enhance=ENHANCE_DEFAULT,
     gap_cutoff=1000,
     force_rerun=False,
 ):
 
-    print("Loading chromosomes...")
+    logger.info("Loading chromosomes...")
     scaffold_df = scaffold_length_sort_length(fasta_file, lenght_cutoff=lenght_cutoff)
 
-    print("Loading trs...")
+    logger.info("Loading trs...")
     df_trs = read_trf_file(trf_file)
     df_trs = df_trs.loc[df_trs.period > 5]
-    print(f"Quantity of TRs: {len(df_trs)}")
+    logger.info(f"Quantity of TRs: {len(df_trs)}")
 
-    if len(df_trs) > 1999:
-        print("To many TRs")
-        print("Filtering them...")
+    if len(df_trs) > SAMPLE_SIZE_FOR_CLUSTERING:
+        logger.warning("Too many TRs")
+        logger.info("Filtering them...")
         df_trs = df_trs.sort_values(
             by="length", axis=0, ascending=False, ignore_index=True
         )[:2000]
-        print(f"Updated quantity of TRs: 2000")
-
-    # distance_file += f".{len(df_trs)}"
-
-    # if os.path.isfile(distance_file) and os.path.getsize(distance_file) > 0:
-    #     print("Loading distances...")
-    #     distances = {}
-    #     with open(distance_file) as fh:
-    #         for line in fh:
-    #             a, b, d = line.strip().split()
-    #             distances[(int(a), int(b))] = float(d)
-
-    #     distance_vectors_file = distance_file + ".vector"
-    #     with open(distance_vectors_file, 'rb') as f:
-    #         tr2vector = pickle.load(f)
-
-    # else:
-    #     distances, tr2vector = get_disances(df_trs)
-    #     distance_vectors_file = distance_file + ".vector"
-        
-    #     with open(distance_vectors_file, 'wb') as f:
-    #         pickle.dump(tr2vector, f)
-
-    #     with open(distance_file, "w") as fh:
-    #         for (id1, id2), dist in distances.items():
-    #             fh.write(f"{id1}\t{id2}\t{dist}\n")
-
-
-    # # print("Naming repeats...")
-    # df_trs, tr2vector, distances, all_distances = name_clusters(
-    #     distances, tr2vector, df_trs, level=level
-    # )
+        logger.info(f"Updated quantity of TRs: 2000")
 
     if not os.path.isdir(output_folder):
         os.makedirs(output_folder)
@@ -924,40 +900,37 @@ def draw_all(
     gaps_cache_file = os.path.join(output_folder, f"{taxon}.gaps.pkl")
     
     if os.path.isfile(gaps_cache_file) and os.path.getsize(gaps_cache_file) > 0 and not force_rerun:
-        print("Loading cached gaps data...")
+        logger.info("Loading cached gaps data...")
         with open(gaps_cache_file, 'rb') as f:
             gaps_data = pickle.load(f)
     else:
         if force_rerun and os.path.isfile(gaps_cache_file):
-            print("Force rerun: Computing gaps annotation...")
+            logger.info("Force rerun: Computing gaps annotation...")
         else:
-            print("Computing gaps annotation (this may take a while)...")
+            logger.info("Computing gaps annotation (this may take a while)...")
         gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
-        print("Saving gaps data to cache...")
+        logger.info("Saving gaps data to cache...")
         with open(gaps_cache_file, 'wb') as f:
             pickle.dump(gaps_data, f)
     
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
     if gaps_lengths:
-        print("\n📊 Gaps Distribution Summary:")
-        print("-" * 50)
+        logger.info("\n📊 Gaps Distribution Summary:")
+        logger.info(SEPARATOR_LINE)
         total_gaps = sum(gaps_lengths.values())
         total_gap_length = sum(length * count for length, count in gaps_lengths.items())
         genome_coverage = (total_gap_length / genome_size) * 100
         
-        print(f"Total gaps found: {total_gaps:,}")
-        print(f"Total gap length: {total_gap_length:,} bp ({genome_coverage:.2f}% of genome)")
-        print(f"Average gap size: {total_gap_length // total_gaps:,} bp")
-        
-        # Sort gaps by size for better readability
-        sorted_gaps = sorted(gaps_lengths.items(), key=lambda x: x[0])
-        
-        print("\nGap size distribution:")
+        logger.info(f"Total gaps found: {total_gaps:,}")
+        logger.info(f"Total gap length: {total_gap_length:,} bp ({genome_coverage:.2f}% of genome)")
+        logger.info(f"Average gap size: {total_gap_length // total_gaps:,} bp")
+                
+        logger.info("\nGap size distribution:")
         size_ranges = [
             (1, 100, "Very small (1-100 bp)"),
             (101, 1000, "Small (101-1,000 bp)"),
-            (1001, 10000, "Medium (1-10 kb)"),
+            (1001, TR_CUTOFF_LARGE, "Medium (1-10 kb)"),
             (10001, 100000, "Large (10-100 kb)"),
             (100001, float('inf'), "Very large (>100 kb)")
         ]
@@ -970,11 +943,11 @@ def draw_all(
                                     if min_size <= size <= max_size)
                 percentage = (count / total_gaps) * 100
                 coverage_percentage = (length_in_range / genome_size) * 100
-                print(f"  {label:<25}: {count:>6,} gaps ({percentage:>5.1f}%) - {length_in_range:>10,} bp ({coverage_percentage:>5.2f}% genome)")
+                logger.info(f"  {label:<25}: {count:>6,} gaps ({percentage:>5.1f}%) - {length_in_range:>10,} bp ({coverage_percentage:>5.2f}% genome)")
         
-        print("-" * 50)
+        logger.info(SEPARATOR_LINE)
     else:
-        print("No gaps found in the genome!")
+        logger.info("No gaps found in the genome!")
 
     gaps_df = pd.DataFrame(gaps_data, columns=["scaffold", "start", "end", "length"])
 
@@ -982,7 +955,7 @@ def draw_all(
 
     chrms = set([x[0] for x in gaps_data])
     if chrms:
-        print(chrms)
+        logger.info(chrms)
 
     chrm2gapIT = {}
     for chrm in chrms:
@@ -996,7 +969,7 @@ def draw_all(
     for i, d in df_trs.iterrows():
         if d.chrm not in chrm2gapIT:
             continue
-        found_gaps = chrm2gapIT[d.chrm][d.start - 10000 : d.end + 10000]
+        found_gaps = chrm2gapIT[d.chrm][d.start - GAP_SEARCH_WINDOW : d.end + GAP_SEARCH_WINDOW]
         if not found_gaps:
             repeats_without_gaps.append(d)
             continue
@@ -1011,8 +984,8 @@ def draw_all(
         elif start_gap < d.start:
             gap_type = "Na"
         else:
-            print("Unknown")
-            print(d.family_name, d.start, d.end, start_gap, end_gap)
+            logger.debug("Unknown")
+            logger.debug(f"{d.family_name}, {d.start}, {d.end}, {start_gap}, {end_gap}")
         repeats_with_gap.append(
             [
                 d.chrm,
@@ -1026,11 +999,8 @@ def draw_all(
 
     ### TODO: save gaps
 
-    # Draw karyotypes
-    num_scaffolds = len(scaffold_df)
-    
+    # Draw karyotypes    
     output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
-    title_text = f"Tandem repeats in {taxon}"
     draw_karyotypes(
         output_file_name_prefix,
         taxon,
