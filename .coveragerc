@@ -1,0 +1,57 @@
+# Coverage configuration for Satellome
+# See: https://coverage.readthedocs.io/en/latest/config.html
+
+[run]
+# Source directories to measure
+source = src/satellome
+
+# Files and directories to omit from coverage
+omit =
+    */tests/*
+    */test_*.py
+    */site-packages/*
+    */venv/*
+    */virtualenv/*
+    */__pycache__/*
+    */conftest.py
+    */fixtures/*
+
+[report]
+# Output configuration
+precision = 2
+show_missing = True
+skip_covered = False
+
+# Lines to exclude from coverage reporting
+exclude_lines =
+    # Standard pragma
+    pragma: no cover
+
+    # Don't complain about missing debug-only code
+    def __repr__
+    def __str__
+
+    # Don't complain if tests don't hit defensive assertion code
+    raise AssertionError
+    raise NotImplementedError
+
+    # Don't complain if non-runnable code isn't run
+    if __name__ == .__main__.:
+    if __name__=="__main__":
+
+    # Don't complain about abstract methods
+    @abstractmethod
+    @abc.abstractmethod
+
+    # Don't complain about type checking code
+    if TYPE_CHECKING:
+    if typing.TYPE_CHECKING:
+
+[html]
+# HTML report configuration
+directory = htmlcov
+title = Satellome Test Coverage Report
+
+[xml]
+# XML report configuration (for CI/CD)
+output = coverage.xml
