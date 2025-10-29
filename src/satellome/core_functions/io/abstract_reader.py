@@ -299,7 +299,6 @@ class AbstractFolderIO(object):
     def move_files_by_mask(self, dist_folder):
         for file_path in self.iter_filenames():
             dist_file = os.path.join(dist_folder, os.path.split(file_path)[-1])
-            print("Move: ", file_path, dist_file)
             if os.path.isfile(dist_file):
                 os.remove(dist_file)
                 # TODO: fix me
@@ -308,7 +307,6 @@ class AbstractFolderIO(object):
     def copy_files_by_mask(self, dist_folder):
         for file_path in self.iter_filenames():
             dist_file = os.path.join(dist_folder, os.path.split(file_path)[-1])
-            print("Copy: ", file_path, dist_file)
             if os.path.isfile(dist_file):
                 os.remove(dist_file)
             shutil.copy2(file_path, dist_file)
@@ -388,8 +386,6 @@ def sc_process_folder_to_other(
     assert hasattr(cf, "__call__")
     reader = AbstractFolderIO(folder, mask=mask)
     for text, name, file in reader.iter_file_content_and_names():
-        if verbose:
-            print(file)
         args_dict["name"] = name
         text = cf(text, **args_dict)
         output_file = os.path.join(output_folder, name)

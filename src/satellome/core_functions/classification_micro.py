@@ -113,7 +113,6 @@ def _trs_separate_something(
         trf_objs.append(trf_obj)
     trf_objs.sort(key=lambda x: x.trf_head)
     N = len(trf_objs)
-    # print("Iterate TRs")
 
     stats = defaultdict(RepeatCountStatsModel)
 

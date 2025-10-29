@@ -20,9 +20,6 @@ def refine_names(trf_file):
     last_end = None
     for i, trf_obj in enumerate(sc_iter_tab_file(trf_file, TRModel)):
 
-        if i % 10000 == 0:
-            print(i, end="\r", flush=True)
-
         refine_name(i, trf_obj)
 
         # check overlapped
@@ -43,12 +40,10 @@ def refine_names(trf_file):
             fw.write(obj.get_as_string(obj.dumpable_attributes))
 
     shutil.move(trf_file + ".1", trf_file)
-    print("Done.")
 
 
 def main(args):
     trf_file = args.input
-    print("Refining names and overlapping...")
     refine_names(trf_file)
 
 

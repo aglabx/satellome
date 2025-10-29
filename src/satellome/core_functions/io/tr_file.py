@@ -37,7 +37,6 @@ def read_trid2ngrams(annotation_ngram_folder, trf_large_file):
 def read_trid2meta(file_name):
     """Load trid to full index dictionary as string."""
 
-    print("Load trid to full index dictionary")
     trid2meta = {}
     for trf_obj in sc_iter_tab_file(file_name, TRModel):
         trid2meta[trf_obj.trf_id] = str(trf_obj)

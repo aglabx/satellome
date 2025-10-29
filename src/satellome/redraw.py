@@ -16,6 +16,7 @@ from satellome.core_functions.tools.reports import create_html_report
 
 from satellome.core_functions.tools.processing import get_genome_size
 from satellome.core_functions.tools.ncbi import get_taxon_name
+import logging
 
 if __name__ == "__main__":
 
@@ -116,12 +117,31 @@ if __name__ == "__main__":
         "html_report_file": html_report_file,
     }
 
-    command = f"python {trf_draw_path} -f {fasta_file} -i {trf_file} -o {output_image_dir} -c {minimal_scaffold_length} -e {drawing_enhancing} -t '{taxon_name}' -d {distance_file} -s {genome_size} "
-    completed_process = subprocess.run(command, shell=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout)]
+    )
+
+    command = [
+        sys.executable, trf_draw_path,
+        "-f", fasta_file,
+        "-i", trf_file,
+        "-o", output_image_dir,
+        "-c", str(minimal_scaffold_length),
+        "-e", str(drawing_enhancing),
+        "-t", taxon_name,
+        "-d", distance_file,
+        "-s", str(genome_size)
+    ]
+    logging.info("Running trf_draw.py with command: %s", " ".join(command))
+    completed_process = subprocess.run(command)
     if completed_process.returncode == 0:
-        print("trf_draw.py executed successfully!")
+        logging.info("trf_draw.py executed successfully!")
     else:
-        print(f"trf_draw.py failed with return code {completed_process.returncode}")
+        logging.error("trf_draw.py failed with return code %d", completed_process.returncode)
         sys.exit(1)
 
+    logging.info("Creating HTML report: %s", html_report_file)
     create_html_report(output_image_dir, html_report_file)
+    logging.info("HTML report created successfully.")
