@@ -190,24 +190,3 @@ class AbstractModel(object):
     def __setitem__(self, key, value):
         return setattr(self, key, value)
 
-
-class AbstractMongoModel(object):
-    mongo_key = lambda x: x
-
-    def __init__(self, mongo_db, mongo_collection):
-        mongo_db = ""
-
-    def mongo_add(self):
-        pass
-
-    def mongo_get(self, id):
-        pass
-
-    def mongo_update(self):
-        pass
-
-    def mongo_remove(self):
-        pass
-
-    def mongo_update_fields(self):
-        pass

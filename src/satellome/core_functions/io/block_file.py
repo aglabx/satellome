@@ -11,9 +11,8 @@ Classes:
 - AbstractBlockFileIO(AbstractFileIO)
     
 """
-import gzip
 
-from PyExp import AbstractFileIO
+from satellome.core_functions.io.abstract_reader import AbstractFileIO
 
 
 class AbstractBlockFileIO(AbstractFileIO):

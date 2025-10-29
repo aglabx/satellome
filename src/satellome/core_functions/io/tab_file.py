@@ -14,7 +14,7 @@ import csv
 import os
 import tempfile
 
-from PyExp import AbstractFileIO
+from satellome.core_functions.io.abstract_reader import AbstractFileIO
 
 csv.field_size_limit(1000000000)
 
