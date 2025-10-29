@@ -38,7 +38,6 @@ dependencies = [
     "PyExp",
     "pandas",
     "numpy",
-    "scikit-learn",
     "pyyaml",
     "simplejson",
     "intervaltree",

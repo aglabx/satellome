@@ -8,9 +8,24 @@
 import math
 from tqdm import tqdm
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 
 from satellome.core_functions.tools.processing import get_revcomp
+
+
+def _cosine_similarity_numpy(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Lightweight cosine similarity using NumPy.
+
+    Mimics sklearn.metrics.pairwise.cosine_similarity for two vectors shaped
+    as (1, n). Returns a 1x1 numpy array with the similarity value. If either
+    vector has zero norm, returns 0.0 to avoid division by zero.
+    """
+    va = np.asarray(a, dtype=float).ravel()
+    vb = np.asarray(b, dtype=float).ravel()
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
+    if denom == 0.0:
+        return np.array([[0.0]])
+    sim = float(np.dot(va, vb) / denom)
+    return np.array([[sim]])
 
 
 def get_pentatokens():
@@ -82,7 +97,7 @@ def compute_distances_cosine(tr2vector):
 
 
 def get_cosine_distance(vector1, vector2):
-    return 100 * (1 - cosine_similarity(vector1, vector2)[0][0])
+    return 100 * (1 - _cosine_similarity_numpy(vector1, vector2)[0][0])
 
 
 def compute_distances_euclidean(tr2vector):
