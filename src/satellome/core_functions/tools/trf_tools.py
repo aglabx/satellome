@@ -15,6 +15,7 @@ TRF search wrapper
 Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
 """
 
+import logging
 import os
 import shutil
 import tempfile
@@ -25,11 +26,19 @@ import sys
 import glob
 import concurrent.futures
 
+logger = logging.getLogger(__name__)
+
 
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
 from satellome.core_functions.io.file_system import iter_filepath_folder
 from satellome.core_functions.io.trf_file import TRFFileIO
 from satellome.core_functions.tools.processing import get_genome_size
+from satellome.constants import (
+    TRF_DEFAULT_PARAMS, TRF_FLAGS,
+    KMER_THRESHOLD_DEFAULT,
+    TR_CUTOFF_LARGE,
+    MIN_SCAFFOLD_LENGTH_FILTER
+)
 
 trf_reader = TRFFileIO().iter_parse
 
@@ -89,55 +98,79 @@ def restore_coordinates_in_line(trf_line):
 
 def run_trf(trf_path, fa_file, max_retries=3):
     """Run TRF on a single file with retry logic.
-    
+
     Args:
         trf_path: Path to TRF binary
         fa_file: Input FASTA file
         max_retries: Maximum number of retry attempts
-        
+
     Returns:
         True if successful, raises exception on failure
     """
     # Ensure we use absolute paths
     fa_file_abs = os.path.abspath(fa_file)
-    
-    command = [
-        trf_path, fa_file_abs, "2", "5", "7", "80", "10", "50", "2000", "-l", "200", "-d", "-h"
-    ]
-    
+
+    command = [trf_path, fa_file_abs] + TRF_DEFAULT_PARAMS + TRF_FLAGS
+
+    last_stdout = ""
+    last_stderr = ""
+    last_returncode = None
+
     for attempt in range(max_retries):
         try:
             # Run TRF - NOTE: TRF versions before 4.10.0 return non-zero on success!
             # They return the number of tandem repeats found, not 0
-            # Suppress both stdout and stderr to avoid spam
-            result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
-            
+            # Capture stdout and stderr to provide informative error messages
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  check=False, text=True)
+
+            last_stdout = result.stdout
+            last_stderr = result.stderr
+            last_returncode = result.returncode
+
             # Check if TRF actually failed by looking for the output .dat file
-            expected_dat_file = fa_file_abs + ".2.5.7.80.10.50.2000.dat"
+            trf_params_suffix = ".".join(TRF_DEFAULT_PARAMS)
+            expected_dat_file = fa_file_abs + f".{trf_params_suffix}.dat"
             if os.path.exists(expected_dat_file):
                 # Success - .dat file was created
                 return True
-            
+
             # Check if TRF was killed by signal
             if result.returncode < 0:
                 # Negative return code usually means killed by signal
                 error_msg = f"TRF was killed (signal {-result.returncode}) for file {fa_file}"
                 if attempt < max_retries - 1:
-                    print(f"WARNING: {error_msg}, retrying (attempt {attempt + 2}/{max_retries})...")
+                    logger.warning(f"{error_msg}, retrying (attempt {attempt + 2}/{max_retries})...")
                     # Small delay before retry
                     import time
                     time.sleep(2)
                     continue
                 else:
-                    print(f"ERROR: {error_msg} after {max_retries} attempts")
+                    logger.error(f"{error_msg} after {max_retries} attempts")
                     raise subprocess.CalledProcessError(result.returncode, command)
-                    
+
         except FileNotFoundError:
-            print(f"TRF binary not found at: {trf_path}")
+            logger.error(f"TRF binary not found at: {trf_path}")
             raise
-            
-    # Should not reach here
-    raise RuntimeError(f"TRF failed for {fa_file} after {max_retries} attempts")
+
+    # Build detailed error message with actual TRF output
+    error_details = [
+        f"TRF failed for {fa_file} after {max_retries} attempts",
+        f"Expected output file: {expected_dat_file}",
+        f"Last return code: {last_returncode}",
+    ]
+
+    if last_stderr.strip():
+        error_details.append(f"TRF stderr: {last_stderr.strip()}")
+
+    if last_stdout.strip():
+        error_details.append(f"TRF stdout: {last_stdout.strip()}")
+
+    error_details.append(f"Command: {' '.join(command)}")
+
+    error_message = "\n".join(error_details)
+    logger.error(error_message)
+    raise RuntimeError(error_message)
 
 def trf_search_by_splitting(
     fasta_file,
@@ -149,7 +182,7 @@ def trf_search_by_splitting(
     keep_raw=False,
     genome_size=None,
     use_kmer_filter=False,
-    kmer_threshold=90000,
+    kmer_threshold=KMER_THRESHOLD_DEFAULT,
     kmer_bed_file=None,
     abort_on_error=True,
 ):
@@ -167,7 +200,7 @@ def trf_search_by_splitting(
     if use_kmer_filter or kmer_bed_file:
         try:
             from satellome.core_functions.tools.kmer_splitting import split_genome_smart
-            print("Using k-mer based smart splitting...")
+            logger.info("Using k-mer based smart splitting...")
             output_files = split_genome_smart(
                 fasta_file,
                 folder_path,
@@ -181,10 +214,10 @@ def trf_search_by_splitting(
             fa_files = output_files
             used_smart_splitting = True
         except ImportError:
-            print("Warning: kmer_splitting module not available, falling back to standard splitting")
+            logger.warning("kmer_splitting module not available, falling back to standard splitting")
             use_kmer_filter = False
         except Exception as e:
-            print(f"Warning: k-mer splitting failed ({e}), falling back to standard splitting")
+            logger.warning(f"k-mer splitting failed ({e}), falling back to standard splitting")
             use_kmer_filter = False
     
     # Fall back to standard splitting if k-mer filtering not used or failed
@@ -193,7 +226,7 @@ def trf_search_by_splitting(
         total_length = 0
         next_file = 0
         
-        print(f"Splitting genome into ~100kb chunks...")
+        logger.info("Splitting genome into ~100kb chunks...")
         with tqdm(total=genome_size, desc="Splitting fasta file", unit=" bp", unit_scale=True, unit_divisor=1000, dynamic_ncols=True) as pbar:
             for i, (header, seq) in enumerate(sc_iter_fasta_brute(fasta_file)):
                 file_path = os.path.join(folder_path, "%s.fa" % next_file)
@@ -207,7 +240,7 @@ def trf_search_by_splitting(
         
         # Get list of created files for processing
         fa_files = [f for f in os.listdir(folder_path) if f.endswith('.fa')]
-        print(f"Created {len(fa_files)} chunks")
+        logger.info(f"Created {len(fa_files)} chunks")
 
     ### 2. Run TRF
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
@@ -248,33 +281,33 @@ def trf_search_by_splitting(
                     result = future.result()
                     successful_files += 1
                 except Exception as e:
-                    print(f"\nERROR: TRF failed for {fa_file}: {e}")
+                    logger.error(f"TRF failed for {fa_file}: {e}")
                     failed_files.append(fa_file)
                 finally:
                     pbar.update()
     
     # Check if any files failed
     if failed_files:
-        print(f"\n❌ TRF failed for {len(failed_files)} out of {len(fa_files)} files:")
+        logger.error(f"TRF failed for {len(failed_files)} out of {len(fa_files)} files:")
         for f in failed_files[:10]:  # Show first 10 failed files
-            print(f"  - {f}")
+            logger.error(f"  - {f}")
         if len(failed_files) > 10:
-            print(f"  ... and {len(failed_files) - 10} more")
+            logger.error(f"  ... and {len(failed_files) - 10} more")
         
         if abort_on_error:
             # Abort the pipeline
-            print("\nAborting pipeline due to TRF failures. Please investigate the errors and try again.")
-            print("Tip: You can try reducing the number of threads or increasing system resources.")
+            logger.error("Aborting pipeline due to TRF failures. Please investigate the errors and try again.")
+            logger.info("Tip: You can try reducing the number of threads or increasing system resources.")
             os.chdir(current_dir)
             if not keep_raw:
                 shutil.rmtree(folder_path)
             raise RuntimeError(f"TRF failed for {len(failed_files)} files. Pipeline aborted.")
         else:
             # Continue with partial results
-            print(f"\n⚠️  WARNING: Continuing with partial results ({successful_files}/{len(fa_files)} files processed)")
-            print("The analysis may be incomplete!")
+            logger.warning(f"Continuing with partial results ({successful_files}/{len(fa_files)} files processed)")
+            logger.warning("The analysis may be incomplete!")
     
-    print(f"✅ TRF completed successfully for all {successful_files} files")
+    logger.info(f"TRF completed successfully for all {successful_files} files")
 
     os.chdir(current_dir)
 
@@ -284,7 +317,7 @@ def trf_search_by_splitting(
     dat_files = [f for f in os.listdir(folder_path) if f.endswith('.dat')]
     
     if len(dat_files) == 0:
-        print("WARNING: No .dat files found! TRF may have failed to run properly.")
+        logger.warning("No .dat files found! TRF may have failed to run properly.")
 
     # Use the current Python interpreter to execute the parser script to avoid permission issues
     python_exe = sys.executable
@@ -315,11 +348,10 @@ def trf_search_by_splitting(
         for future in concurrent.futures.as_completed(futures):
             dat_file, success, output = future.result()
             if not success:
-                print(f"Warning: Failed to process {dat_file}: {output}")
+                logger.warning(f"Failed to process {dat_file}: {output}")
 
     ### 3. Aggregate data
 
-    # print(f"Aggregate data to: {output_file}")
     with open(output_file, "w") as fw:
         for file_path in iter_filepath_folder(folder_path):
             if file_path.endswith(".trf"):
@@ -366,7 +398,7 @@ def trf_filter_by_array_length(trf_file, output_file, cutoff):
             if _filter_by_bottom_array_length(obj, cutoff):
                 i += 1
                 fw.write(obj.get_string_repr())
-    print(i)
+    logger.info(f"Filtered {i} tandem repeats by array length")
     return i
 
 
@@ -380,7 +412,7 @@ def trf_filter_by_monomer_length(trf_file, output_file, cutoff):
             if _filter_by_bottom_unit_length(obj, cutoff):
                 i += 1
                 fw.write(obj.get_string_repr())
-    print(i)
+    logger.info(f"Filtered {i} tandem repeats by monomer length")
     return i
 
 
@@ -465,10 +497,10 @@ def count_trs_per_chrs(all_trf_file):
         chr2n[chr] += 1
         if trf_obj.trf_array_length > 3000:
             chr2n_large[chr] += 1
-        if trf_obj.trf_array_length > 10000:
+        if trf_obj.trf_array_length > TR_CUTOFF_LARGE:
             chr2n_xlarge[chr] += 1
     for chr in chr2n:
-        print(chr, chr2n[chr], chr2n_large[chr], chr2n_xlarge[chr])
+        logger.info(f"{chr} {chr2n[chr]} {chr2n_large[chr]} {chr2n_xlarge[chr]}")
 
 
 def count_trf_subset_by_head(trf_file, head_value):
@@ -503,3 +535,183 @@ def fix_chr_names(trf_file, temp_file_name=None, case=None):
     if os.path.isfile(temp_file_name):
         os.remove(trf_file)
         os.rename(temp_file_name, trf_file)
+
+
+def recompute_failed_chromosomes(
+    fasta_file,
+    existing_trf_file,
+    output_dir,
+    project,
+    threads=30,
+    trf_path="trf",
+    parser_program="./trf_parse_raw.py",
+    min_scaffold_size=1000000,
+    match_first_word=True,
+):
+    """Recompute TRF only for chromosomes/contigs that are missing or failed.
+
+    This function:
+    1. Checks which chromosomes are missing from existing TRF results
+    2. Extracts only those chromosomes to a temporary FASTA
+    3. Runs TRF only on the missing chromosomes
+    4. Merges results back into the existing TRF file
+
+    Args:
+        fasta_file: Original FASTA file
+        existing_trf_file: Existing TRF file to check and update
+        output_dir: Output directory for temporary files
+        project: Project name
+        threads: Number of threads
+        trf_path: Path to TRF binary
+        parser_program: Path to TRF parser script
+        min_scaffold_size: Minimum scaffold size to check (default 1Mb)
+        match_first_word: Match only first word of scaffold names
+
+    Returns:
+        True if recomputation was successful, False otherwise
+    """
+    from collections import defaultdict
+    from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
+    from satellome.core_functions.io.tab_file import sc_iter_tab_file
+    from satellome.core_functions.models.trf_model import TRModel
+
+    logger.info("="*60)
+    logger.info("SMART RECOMPUTE MODE: Checking for failed chromosomes...")
+    logger.info("="*60)
+
+    # Step 1: Get scaffold lengths from FASTA
+    logger.info(f"Reading scaffold lengths from {fasta_file}...")
+    scaffold_lengths = {}
+    scaffold_sequences = {}
+
+    for header, sequence in sc_iter_fasta_brute(fasta_file):
+        scaffold_name = header.replace(">", "").strip()
+        original_name = scaffold_name
+
+        if match_first_word:
+            scaffold_name = scaffold_name.split()[0] if scaffold_name else scaffold_name
+
+        scaffold_lengths[scaffold_name] = len(sequence)
+        scaffold_sequences[scaffold_name] = (original_name, sequence)
+
+    logger.info(f"Found {len(scaffold_lengths):,} scaffolds in FASTA")
+
+    # Step 2: Get scaffolds that have TRF results
+    logger.info(f"Reading existing TRF results from {existing_trf_file}...")
+    scaffold_trf_counts = defaultdict(int)
+
+    if os.path.exists(existing_trf_file) and os.path.getsize(existing_trf_file) > 0:
+        for trf_obj in sc_iter_tab_file(existing_trf_file, TRModel):
+            scaffold_name = trf_obj.trf_head if hasattr(trf_obj, 'trf_head') else 'Unknown'
+
+            if match_first_word and scaffold_name and scaffold_name != 'Unknown':
+                scaffold_name = scaffold_name.split()[0]
+
+            scaffold_trf_counts[scaffold_name] += 1
+
+        logger.info(f"Found {sum(scaffold_trf_counts.values()):,} tandem repeats across {len(scaffold_trf_counts):,} scaffolds in existing TRF")
+    else:
+        logger.warning(f"Existing TRF file not found or empty: {existing_trf_file}")
+        logger.info("Will process all chromosomes...")
+
+    # Step 3: Find missing/failed scaffolds (large scaffolds without TRF results)
+    missing_scaffolds = []
+
+    for scaffold_name, length in scaffold_lengths.items():
+        if length < min_scaffold_size:
+            continue
+
+        tr_count = scaffold_trf_counts.get(scaffold_name, 0)
+
+        if tr_count == 0:
+            missing_scaffolds.append(scaffold_name)
+
+    if not missing_scaffolds:
+        logger.info("✅ All large scaffolds have TRF results! Nothing to recompute.")
+        return True
+
+    logger.warning(f"Found {len(missing_scaffolds)} large scaffold(s) with NO tandem repeats:")
+    for scaffold in missing_scaffolds[:10]:
+        logger.warning(f"  - {scaffold}: {scaffold_lengths[scaffold]:,} bp")
+    if len(missing_scaffolds) > 10:
+        logger.warning(f"  ... and {len(missing_scaffolds) - 10} more")
+
+    # Step 4: Create temporary FASTA with only missing scaffolds
+    temp_fasta = os.path.join(output_dir, f"{project}_missing_scaffolds.fasta")
+    logger.info(f"\nCreating temporary FASTA with missing scaffolds: {temp_fasta}")
+
+    with open(temp_fasta, 'w') as fw:
+        for scaffold_name in missing_scaffolds:
+            if scaffold_name in scaffold_sequences:
+                original_name, sequence = scaffold_sequences[scaffold_name]
+                fw.write(f">{original_name}\n")
+                fw.write(f"{sequence}\n")
+
+    logger.info(f"Wrote {len(missing_scaffolds)} scaffolds to temporary FASTA")
+
+    # Step 5: Run TRF on missing scaffolds
+    logger.info("\nRunning TRF on missing scaffolds...")
+    temp_trf_file = os.path.join(output_dir, f"{project}_missing_scaffolds.trf")
+
+    try:
+        # Use trf_search_by_splitting for the missing scaffolds
+        trf_search_by_splitting(
+            fasta_file=temp_fasta,
+            threads=threads,
+            wdir=output_dir,
+            project=f"{project}_missing_scaffolds",
+            trf_path=trf_path,
+            parser_program=parser_program,
+            keep_raw=False,
+            abort_on_error=True,  # Fail if TRF fails again
+        )
+
+        logger.info("✅ TRF completed successfully for missing scaffolds")
+
+    except Exception as e:
+        logger.error(f"❌ TRF failed for missing scaffolds: {e}")
+        logger.error("Cannot proceed with recomputation. Please investigate the errors.")
+        # Clean up temporary files
+        if os.path.exists(temp_fasta):
+            os.remove(temp_fasta)
+        raise
+
+    # Step 6: Merge results
+    if os.path.exists(temp_trf_file) and os.path.getsize(temp_trf_file) > 0:
+        logger.info("\nMerging TRF results...")
+
+        # Count new TRs
+        new_tr_count = 0
+        for _ in sc_iter_tab_file(temp_trf_file, TRModel):
+            new_tr_count += 1
+
+        logger.info(f"Found {new_tr_count:,} new tandem repeats")
+
+        # Create backup of original TRF file
+        backup_file = f"{existing_trf_file}.before_recompute"
+        if os.path.exists(existing_trf_file):
+            shutil.copy2(existing_trf_file, backup_file)
+            logger.info(f"Created backup: {backup_file}")
+
+        # Append new results to existing TRF file
+        with open(existing_trf_file, 'a') as fw:
+            for trf_obj in sc_iter_tab_file(temp_trf_file, TRModel):
+                fw.write(trf_obj.get_string_repr())
+
+        logger.info(f"✅ Merged results into {existing_trf_file}")
+
+        # Clean up temporary files
+        logger.info("\nCleaning up temporary files...")
+        if os.path.exists(temp_fasta):
+            os.remove(temp_fasta)
+        if os.path.exists(temp_trf_file):
+            os.remove(temp_trf_file)
+
+        logger.info("="*60)
+        logger.info("SMART RECOMPUTE COMPLETED SUCCESSFULLY")
+        logger.info("="*60)
+        return True
+
+    else:
+        logger.error(f"❌ Expected TRF output file not found: {temp_trf_file}")
+        return False
