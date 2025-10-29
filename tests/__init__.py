@@ -1,0 +1,1 @@
+"""Satellome test suite."""
