@@ -91,6 +91,9 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --rm repeatmasker.o
 # Force rerun all steps
 satellome -i genome.fasta -o output_dir -p project_name -t 8 --force
 
+# Smart recompute: only process chromosomes that failed TRF analysis
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --recompute-failed
+
 # Custom TRF binary path (if not in PATH)
 satellome -i genome.fasta -o /absolute/path/to/output_dir -p project_name -t 8 --trf /path/to/trf409.macosx
 
@@ -121,6 +124,7 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --continue-on-error
 - `--rm`: RepeatMasker output file (optional)
 - `--trf`: Path to TRF binary (default: "trf")
 - `--force`: Force rerun all steps
+- `--recompute-failed`: Smart recompute - only process chromosomes/contigs that failed TRF analysis (missing from results)
 - `--use_kmer_filter`: Enable k-mer based filtering of repeat-poor regions
 - `--kmer_threshold`: Threshold for unique k-mers (default: 90000)
 - `--kmer_bed`: Pre-computed k-mer profile BED file from varprofiler
@@ -238,6 +242,37 @@ python scripts/batch_check_trf_consistency.py reptiles -o consistency_report.txt
 - `[d]` Delete - remove TRF directory and re-run TRF
 - `[v]` View - show TRF directory contents
 - `[q]` Quit - exit the script
+
+### Smart Recompute Mode
+
+If TRF analysis fails for some chromosomes (e.g., due to memory issues or signal errors), you can use the `--recompute-failed` flag to reprocess only the failed chromosomes without redoing the entire analysis.
+
+**How it works:**
+1. Checks which chromosomes/contigs are missing from existing TRF results
+2. Extracts only those chromosomes to a temporary FASTA file
+3. Runs TRF only on the missing chromosomes
+4. Merges results back into the existing TRF file
+5. Continues with the rest of the pipeline
+
+**Usage example:**
+```bash
+# First, check which chromosomes failed
+python scripts/check_trf_consistency.py -f genome.fna -t output_dir/project.trf
+
+# Then recompute only the failed ones
+satellome -i genome.fasta -o output_dir -p project_name -t 8 --recompute-failed
+```
+
+**When to use:**
+- TRF failed for specific chromosomes (visible in error messages like "TRF failed for 94.fa")
+- `check_trf_consistency.py` reports missing chromosomes
+- You want to save time by not reprocessing successful chromosomes
+
+**Benefits:**
+- Much faster than `--force` (only processes failed chromosomes)
+- Preserves successful results
+- Creates automatic backup before merging (`.before_recompute` suffix)
+- More informative error messages with actual TRF output
 
 ## Example Workflow
 
