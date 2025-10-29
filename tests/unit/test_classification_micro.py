@@ -95,10 +95,10 @@ class TestPerfectMicrosatelliteFilter:
         filter_func = lambda x: x.trf_period < 6 and x.trf_pmatch == 100
         assert filter_func(mock_tr) is False
 
-    @pytest.mark.parametrize("period,expected_class", CLASSIFICATION_TEST_CASES)
-    def test_period_classification(self, period, expected_class):
+    @pytest.mark.parametrize("period,consensus,expected_class", CLASSIFICATION_TEST_CASES)
+    def test_period_classification(self, period, consensus, expected_class):
         """Test period-based classification."""
-        mock_tr = MockTRModel(period=period, pmatch=100.0)
+        mock_tr = MockTRModel(period=period, consensus=consensus, pmatch=100.0)
         filter_func = lambda x: x.trf_period < 6 and x.trf_pmatch == 100
         if expected_class == "micro":
             # Should be filtered as perfect microsatellite
