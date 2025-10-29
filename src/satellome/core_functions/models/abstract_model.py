@@ -6,6 +6,9 @@
 # @contact: ad3002@gmail.com
 
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AbstractModel(object):
@@ -118,13 +121,27 @@ class AbstractModel(object):
                     value = [self.list_attributes_types[key](x) for x in value]
                 setattr(self, key, value)
             except ValueError as e:
-                print(self.dumpable_attributes)
-                print(dictionary.items())
-                raise ValueError(e)
+                logger.error(
+                    f"ValueError while parsing data in {self.__class__.__name__}. "
+                    f"Expected schema: {self.dumpable_attributes}. "
+                    f"Input data: {dict(list(dictionary.items())[:5])}...",  # Show first 5 items
+                    exc_info=True
+                )
+                raise ValueError(
+                    f"Failed to parse data for {self.__class__.__name__}. "
+                    f"Check that all fields match expected types."
+                ) from e
             except TypeError as e:
-                print(self.dumpable_attributes)
-                print(dictionary.items())
-                raise TypeError(e)
+                logger.error(
+                    f"TypeError while parsing data in {self.__class__.__name__}. "
+                    f"Expected schema: {self.dumpable_attributes}. "
+                    f"Input data: {dict(list(dictionary.items())[:5])}...",  # Show first 5 items
+                    exc_info=True
+                )
+                raise TypeError(
+                    f"Failed to parse data for {self.__class__.__name__}. "
+                    f"Check that all fields have correct types."
+                ) from e
 
     def set_with_list(self, data):
         """Set object with list."""
@@ -137,7 +154,8 @@ class AbstractModel(object):
             ):
                 dumpable_attributes = self.alt_dumpable_attributes
             else:
-                print(data)
+                logger.error(f"Wrong number of fields in data: expected {len(self.dumpable_attributes)}, got {n}. Data: {data}")
+                raise Exception("Wrong number of fields in data.")
                 raise Exception("Wrong number of fields in data.")
         for i, value in enumerate(data):
             key = dumpable_attributes[i]

@@ -90,10 +90,11 @@ def restore_coordinates_in_line(trf_line):
                         parts[2] = str(trf_end + chunk_start)
                         
                         return '\t'.join(parts) + '\n'
-                    except (ValueError, IndexError):
-                        # If parsing fails, return original line
-                        pass
-    
+                    except (ValueError, IndexError) as e:
+                        # If parsing fails, log warning and return original line
+                        logger.warning(f"Failed to parse chunk coordinates in TRF line: {e}. Returning original line.")
+                        return trf_line
+
     return trf_line
 
 def run_trf(trf_path, fa_file, max_retries=3):
@@ -216,8 +217,8 @@ def trf_search_by_splitting(
         except ImportError:
             logger.warning("kmer_splitting module not available, falling back to standard splitting")
             use_kmer_filter = False
-        except Exception as e:
-            logger.warning(f"k-mer splitting failed ({e}), falling back to standard splitting")
+        except (OSError, subprocess.CalledProcessError, ValueError, RuntimeError) as e:
+            logger.warning(f"k-mer splitting failed ({type(e).__name__}: {e}), falling back to standard splitting")
             use_kmer_filter = False
     
     # Fall back to standard splitting if k-mer filtering not used or failed
