@@ -10,13 +10,17 @@ Smart genome splitting using varprofiler to identify repeat-rich regions
 and optimize TRF processing.
 """
 
+import logging
 import os
 import subprocess
 import tempfile
 from typing import List, Tuple, Dict
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
+
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satellome.constants import KMER_THRESHOLD_DEFAULT
 
 
 def run_varprofiler(
@@ -55,8 +59,8 @@ def run_varprofiler(
         subprocess.run(command, check=True, capture_output=True)
         return output_bed
     except subprocess.CalledProcessError as e:
-        print(f"Error running varprofiler: {e}")
-        print(f"stderr: {e.stderr.decode()}")
+        logger.error(f"Error running varprofiler: {e}")
+        logger.error(f"stderr: {e.stderr.decode()}")
         raise
 
 
@@ -93,7 +97,7 @@ def parse_kmer_bed(bed_file: str) -> Dict[str, List[Tuple[int, int, int]]]:
 
 def identify_repeat_regions(
     regions: List[Tuple[int, int, int]],
-    threshold: int = 90000,
+    threshold: int = KMER_THRESHOLD_DEFAULT,
     min_region_size: int = 50000
 ) -> List[Tuple[int, int]]:
     """
@@ -172,7 +176,7 @@ def split_genome_smart(
     folder_path: str,  # Changed from wdir to folder_path - should be the temp directory
     project: str,
     threads: int = 20,
-    kmer_threshold: int = 90000,
+    kmer_threshold: int = KMER_THRESHOLD_DEFAULT,
     chunk_size: int = None,  # Not used - we process entire repeat-rich regions
     overlap_size: int = 0,   # No overlap needed
     use_kmer_filter: bool = True,
@@ -202,16 +206,16 @@ def split_genome_smart(
     if use_kmer_filter:
         # Use provided BED file or generate new one
         if kmer_bed_file and os.path.exists(kmer_bed_file):
-            print(f"Using provided k-mer profile: {kmer_bed_file}")
+            logger.info(f"Using provided k-mer profile: {kmer_bed_file}")
             bed_file = kmer_bed_file
         else:
-            print("Running varprofiler to identify repeat-rich regions...")
+            logger.info("Running varprofiler to identify repeat-rich regions...")
             bed_file = os.path.join(folder_path, f"{project}.varprofile.bed")
             
             try:
                 run_varprofiler(fasta_file, bed_file, threads=threads)
             except Exception as e:
-                print(f"Warning: k-mer profiling failed, falling back to standard splitting: {e}")
+                logger.warning(f"k-mer profiling failed, falling back to standard splitting: {e}")
                 use_kmer_filter = False
         
         if use_kmer_filter:
@@ -224,9 +228,9 @@ def split_genome_smart(
                     merged = merge_overlapping_regions(repeat_rich)
                     repeat_regions[chrom] = merged
                 
-                print(f"Identified {sum(len(r) for r in repeat_regions.values())} repeat-rich regions")
+                logger.info(f"Identified {sum(len(r) for r in repeat_regions.values())} repeat-rich regions")
             except Exception as e:
-                print(f"Warning: k-mer profiling failed, falling back to standard splitting: {e}")
+                logger.warning(f"k-mer profiling failed, falling back to standard splitting: {e}")
                 use_kmer_filter = False
     
     # Step 2: Split sequences into chunks
@@ -249,9 +253,9 @@ def split_genome_smart(
     
     # Process sequences with progress bar
     if use_kmer_filter:
-        print(f"Processing {len(sequences)} sequences, focusing on {total_bp_to_process:,} bp in repeat-rich regions")
+        logger.info(f"Processing {len(sequences)} sequences, focusing on {total_bp_to_process:,} bp in repeat-rich regions")
     else:
-        print(f"Processing {len(sequences)} sequences, total {total_bp_to_process:,} bp")
+        logger.info(f"Processing {len(sequences)} sequences, total {total_bp_to_process:,} bp")
     with tqdm(total=total_bp_to_process, desc="Splitting genome into chunks", unit=" bp", unit_scale=True, unit_divisor=1000, dynamic_ncols=True) as pbar:
         for header, seq in sequences:
             chrom = header.split()[0].replace(">", "")
@@ -284,10 +288,10 @@ def split_genome_smart(
                 file_counter += 1
                 pbar.update(region_end - region_start)  # Update progress bar
     
-    print(f"Created {len(output_files)} chunks")
+    logger.info(f"Created {len(output_files)} chunks")
     if use_kmer_filter:
         total_bp = sum(end - start for regions in repeat_regions.values() for start, end in regions)
-        print(f"Total bp in repeat-rich regions: {total_bp:,}")
+        logger.info(f"Total bp in repeat-rich regions: {total_bp:,}")
     
     return output_files
 
@@ -324,7 +328,6 @@ def restore_coordinates(trf_line: str) -> str:
                 
                 return '\t'.join(parts) + '\n'
             except (ValueError, IndexError) as e:
-                import sys
-                print(f"Warning: Failed to restore coordinates in line: {e}", file=sys.stderr)
+                logger.warning(f"Failed to restore coordinates in line: {e}")
     
     return trf_line
