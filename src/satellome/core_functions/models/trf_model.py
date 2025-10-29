@@ -5,26 +5,19 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 
+import logging
 import re
 
-from PyExp import AbstractModel
+from satellome.core_functions.models.abstract_model import AbstractModel
+
+logger = logging.getLogger(__name__)
 
 from satellome.core_functions.tools.parsers import (parse_chromosome_name,
                                                    parse_fasta_head,
                                                    trf_parse_head,
                                                    trf_parse_line)
+from satellome.core_functions.tools.processing import get_gc_content
 from satellome.core_functions.trf_embedings import create_vector, token2id, token2revtoken
-
-
-def get_gc(sequence):
-    """Count GC content."""
-    length = len(sequence)
-    if not length:
-        return 0
-    count_c = sequence.count("c") + sequence.count("C")
-    count_g = sequence.count("g") + sequence.count("G")
-    gc = float(count_c + count_g) / float(length)
-    return float(gc)
 
 
 def clear_sequence(sequence):
@@ -240,9 +233,8 @@ class TRModel(AbstractModel):
         try:
             self.trf_l_ind = int(self.trf_l_ind)
         except (ValueError, TypeError) as e:
-            import sys
-            print(f"Error converting trf_l_ind to int: {e}", file=sys.stderr)
-            print(f"Object data: {self}", file=sys.stderr)
+            logger.error(f"Error converting trf_l_ind to int: {e}")
+            logger.error(f"Object data: {self}")
             # Set a default value or re-raise the exception
             self.trf_l_ind = 0  # or raise
 
@@ -253,8 +245,8 @@ class TRModel(AbstractModel):
         self.trf_consensus = clear_sequence(self.trf_consensus)
         self.trf_array = clear_sequence(self.trf_array)
 
-        self.trf_array_gc = get_gc(self.trf_array)
-        self.trf_consensus_gc = get_gc(self.trf_consensus)
+        self.trf_array_gc = get_gc_content(self.trf_array)
+        self.trf_consensus_gc = get_gc_content(self.trf_consensus)
         self.trf_chr = parse_chromosome_name(self.trf_head)
         self.trf_array_length = len(self.trf_array)
 
@@ -302,13 +294,17 @@ class TRModel(AbstractModel):
         if not use_first:
             self.trf_entropy = obj2.trf_entropy
         self.trf_pvar = float(100 - float(self.trf_pmatch))
-        self.trf_array_gc = get_gc(self.trf_array)
-        self.trf_consensus_gc = get_gc(self.trf_consensus)
+        self.trf_array_gc = get_gc_content(self.trf_array)
+        self.trf_consensus_gc = get_gc_content(self.trf_consensus)
         self.trf_joined = 1
 
     def get_vector(self):
         """Get vector representation of TRF object."""
         return create_vector(token2id, token2revtoken, self.trf_array, k=5)
+
+    def get_string_repr(self):
+        """Get string representation for TRF file."""
+        return str(self)
 
     def get_index_repr(self):
         """Get string for index file."""

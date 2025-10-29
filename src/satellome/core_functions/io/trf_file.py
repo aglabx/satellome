@@ -11,21 +11,21 @@ Classes:
 - TRFFileIO(AbstractBlockFileIO)
 
 """
+import logging
 import os
 from collections import defaultdict
 
-from PyExp import WiseOpener
+from satellome.core_functions.io.abstract_reader import WiseOpener
+
+logger = logging.getLogger(__name__)
 
 from satellome.core_functions.io.block_file import AbstractBlockFileIO
 from satellome.core_functions.io.file_system import iter_filepath_folder
 from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
-from satellome.core_functions.settings import load_settings
 from satellome.core_functions.tools.parsers import refine_name
-from satellome.core_functions.tools.processing import get_revcomp
+from satellome.core_functions.tools.processing import get_revcomp, get_gc_content
 from satellome.core_functions.trf_embedings import get_cosine_distance
-
-settings = load_settings()
 
 
 def join_overlapped(obj1, obj2, cutoff_distance=0.1):
@@ -46,28 +46,15 @@ def join_overlapped(obj1, obj2, cutoff_distance=0.1):
 
         intersect_fraction = middle_part / (left_part + right_part + middle_part)
 
-        # print("DIST", dist, "FRAQ", intersect_fraction)
-
         if dist < cutoff_distance or intersect_fraction > 0.2:
             obj1.set_form_overlap(obj2)
             return True
     return False
 
 
-def get_gc(sequence):
-    """Count GC content."""
-    length = len(sequence)
-    if not length:
-        return 0
-    count_c = sequence.count("c") + sequence.count("C")
-    count_g = sequence.count("g") + sequence.count("G")
-    gc = float(count_c + count_g) / float(length)
-    return float(gc)
-
-
 def get_int_gc(sequence):
     """Get GC content from 0 to 100."""
-    gc = get_gc(sequence)
+    gc = get_gc_content(sequence)
     return int(100 * round(gc, 2))
 
 
@@ -99,34 +86,31 @@ def remove_consensus_redundancy(trf_objs):
     consensuses = [x.trf_consensus for x in trf_objs]
     consensuses = list(set(consensuses))
     consensuses.sort(key=lambda x: len(x))
+    max_consensus_length = max(len(c) for c in consensuses) if consensuses else 2020
     length2consensuses = {}
-    # print "Group monomers by length and GC"
     for i, monomer in enumerate(consensuses):
         n = len(monomer)
         length2consensuses.setdefault(n, {})
         gc = get_int_gc(monomer)
         length2consensuses[n].setdefault(gc, [])
         length2consensuses[n][gc].append(i)
-    # print "Iterate over consensuses"
-    N = len(consensuses)
     result_rules = {}
     for i, monomer in enumerate(consensuses):
         if not monomer:
             continue
-        # print i, N, "\r",
         if monomer in result_rules:
             continue
         gc = get_int_gc(monomer)
         base = len(monomer)
         n = base
-        # maximal consensus length from TRF is 2000 bp
         variants = set(
             get_shifts_variants(monomer) + get_shifts_variants(get_revcomp(monomer))
         )
         if not variants:
             raise Exception("Wrong monomer sequence for '%s'" % monomer)
         lex_consensus = min(variants)
-        while n <= 2020:
+        result_rules[monomer] = lex_consensus
+        while n <= max_consensus_length:
             if n in length2consensuses and gc in length2consensuses[n]:
                 for k in length2consensuses[n][gc]:
                     monomer_b = consensuses[k]
@@ -140,14 +124,9 @@ def remove_consensus_redundancy(trf_objs):
                         continue
                     item = v.pop()
                     if item in variants:
-                        # if consensuses[k] != lex_consensus:
-                        # print
-                        # print i, base, consensuses[k], "->", lex_consensus
                         result_rules[consensuses[k]] = lex_consensus
 
             n += base
-    # print
-    # print "Fix momomers"
     variants2df = defaultdict(int)
     for i, trf_obj in enumerate(trf_objs):
         if not trf_obj.trf_consensus:
@@ -156,16 +135,13 @@ def remove_consensus_redundancy(trf_objs):
         if trf_obj.trf_consensus in result_rules:
             variants2df[result_rules[trf_obj.trf_consensus]] += 1
         else:
-            message = (
-                "Error key with length",
-                len(trf_obj.trf_consensus),
-                trf_obj.trf_consensus,
+            variants = set(
+                get_shifts_variants(trf_obj.trf_consensus) + get_shifts_variants(get_revcomp(trf_obj.trf_consensus))
             )
-            # print str(trf_obj)
-            # print message
-            raise Exception(message)
+            lex_consensus = min(variants) if variants else trf_obj.trf_consensus
+            result_rules[trf_obj.trf_consensus] = lex_consensus
+            variants2df[lex_consensus] += 1
         trf_obj.trf_consensus = result_rules[trf_obj.trf_consensus]
-    # print "Sort families by df..."
     variants2df = sort_dictionary_by_value(variants2df, reverse=True)
     trf_objs = [x for x in trf_objs if x is not None]
     return trf_objs, variants2df
@@ -226,14 +202,11 @@ class TRFFileIO(AbstractBlockFileIO):
         for ii, (head, body, start, next) in enumerate(self.read_online(trf_file)):
             head = head.replace("\t", " ")
             obj_set = []
-            # print(" processing:", head)
             n = body.count("\n")
             for i, line in enumerate(self._gen_data_line(body)):
-                # print("   %s/%s" % (i,n), "\r", end=" ")
                 trf_obj = TRModel()
                 trf_obj.set_raw_trf(head, None, line)
                 obj_set.append(trf_obj)
-            # print(" filtering...")
             if filter:
                 # Filter object set
                 trf_obj_set = self._filter_obj_set(obj_set)
@@ -242,7 +215,6 @@ class TRFFileIO(AbstractBlockFileIO):
             for trf_obj in obj_set:
                 trf_obj.trf_id = trf_id
                 trf_id += 1
-            # print(" fixing monomers...")
             obj_set, variants2df = remove_consensus_redundancy(obj_set)
             yield obj_set
 
@@ -311,8 +283,6 @@ class TRFFileIO(AbstractBlockFileIO):
 
         obj_set.sort(key=lambda x: (x.trf_l_ind, x.trf_r_ind))
         for a in range(0, n):
-            # print("\t%s\%s" % (a,n), "\r", end=" ")
-
             obj1 = obj_set[a]
             if not obj1:
                 continue
@@ -351,7 +321,6 @@ class TRFFileIO(AbstractBlockFileIO):
                 # a ------
                 # b    -----
                 if obj1.trf_r_ind > obj2.trf_l_ind and obj1.trf_r_ind < obj2.trf_r_ind:
-                    # print(obj1.as_dict(), obj2.as_dict())
                     if self._join_overlapped(obj1, obj2, cutoff_distance=0.1):
                         obj_set[b] = None
                     continue
@@ -399,15 +368,13 @@ class TRFFileIO(AbstractBlockFileIO):
 
                         if (
                             overlap_proc_diff
-                            >= settings["trf_settings"]["overlapping_cutoff_proc"]
+                            >= 30
                             and gc_dif
-                            <= settings["trf_settings"]["overlapping_gc_diff"]
+                            <= 0.05
                         ):
                             is_overlapping = True
                             if self._join_overlapped(obj1, obj2):
                                 obj2 = None
-                            # print("overlap: ", overlap, "min_length:", min_length, "overlap_proc_diff:", overlap_proc_diff, "gc_dif:", gc_dif)
-                            # print("JOINED")
                         continue
                     # a ------
                     # b ------
@@ -456,7 +423,7 @@ def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
     for file_path in iter_filepath_folder(trf_raw_folder, mask="dat"):
         if not file_path.endswith(".dat"):
             continue
-        print("Start parse file %s..." % file_path)
+        logger.info("Start parse file %s..." % file_path)
         trf_id = reader.parse_to_file(
             file_path, output_trf_file, trf_id=trf_id, project=project
         )
