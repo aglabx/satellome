@@ -24,7 +24,6 @@ for j, trf_obj in enumerate(sc_iter_tab_file(input_file, TRModel)):
     if not last_trf:
         last_trf = trf_obj
         continue
-    #     print(last_trf.trf_l_ind, last_trf.trf_r_ind, trf_obj.trf_l_ind, trf_obj.trf_r_ind)
     if (
         trf_obj.trf_head == last_trf.trf_head
         and last_trf.trf_r_ind > trf_obj.trf_l_ind
