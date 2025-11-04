@@ -10,3 +10,4 @@ plotly
 kaleido
 editdistance
 networkx
+six

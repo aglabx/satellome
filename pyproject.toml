@@ -47,6 +47,7 @@ dependencies = [
     "kaleido",
     "editdistance",
     "networkx",
+    "six",
 ]
 requires-python = ">=3.6"
 
