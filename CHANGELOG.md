@@ -8,10 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.1] - 2025-01-05
 
 ### Added
-- **Automatic TRF installation on first run**: Modified TRF now installs automatically when satellome runs and TRF is not found
+- **Automatic TRF installation on first run with smart fallback**:
+  - Modified TRF tries to install first (for genomes with chromosomes >2GB)
+  - Falls back to standard TRF if build tools are missing (downloads pre-compiled binary)
+  - Works in any environment - containers, minimal installs, etc.
   - Works with both regular install and editable install (`pip install -e .`)
-  - No manual `--install-trf-large` needed
-  - Seamless user experience - just run `satellome` and TRF installs automatically
+  - No manual installation needed - just run `satellome`
+- **New installer**: `install_trf_standard()` - downloads pre-compiled TRF binary
+  - Available via `--install-trf` flag
+  - No build tools required
+  - Works on Linux and macOS
 
 ### Fixed
 - **Critical bugfix**: Removed broken import fallback pattern in main.py that caused ModuleNotFoundError when package was installed via pip
