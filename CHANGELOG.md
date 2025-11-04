@@ -7,10 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.1] - 2025-01-05
 
+### Added
+- **Automatic TRF installation on first run**: Modified TRF now installs automatically when satellome runs and TRF is not found
+  - Works with both regular install and editable install (`pip install -e .`)
+  - No manual `--install-trf-large` needed
+  - Seamless user experience - just run `satellome` and TRF installs automatically
+
 ### Fixed
 - **Critical bugfix**: Removed broken import fallback pattern in main.py that caused ModuleNotFoundError when package was installed via pip
 - Removed sys.path.append hack that interfered with proper package installation
 - Fixed SyntaxWarning: invalid escape sequences in regex patterns (Python 3.12+ compatibility)
+- Fixed subprocess calls to use correct Python interpreter (sys.executable instead of "python")
+  - Fixes ModuleNotFoundError in subprocesses when system has multiple Python versions
 - Package now imports correctly when installed from PyPI
 
 ### Changed
