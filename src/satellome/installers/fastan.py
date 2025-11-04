@@ -1,0 +1,149 @@
+"""
+FasTAN installer
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+import logging
+from pathlib import Path
+from typing import Optional
+
+from .base import (
+    get_satellome_bin_dir,
+    check_build_dependencies,
+    verify_installation
+)
+
+logger = logging.getLogger(__name__)
+
+FASTAN_REPO = "https://github.com/thegenemyers/FASTAN.git"
+
+
+def install_fastan(force: bool = False) -> bool:
+    """
+    Install FasTAN by cloning and compiling from source.
+
+    Args:
+        force: Force reinstallation even if binary already exists
+
+    Returns:
+        bool: True if installation successful, False otherwise
+    """
+    logger.info("Starting FasTAN installation...")
+
+    # Check if already installed
+    bin_dir = get_satellome_bin_dir()
+    fastan_path = bin_dir / 'fastan'
+
+    if fastan_path.exists() and not force:
+        logger.info(f"FasTAN already installed at {fastan_path}")
+        if verify_installation('fastan'):
+            logger.info("FasTAN installation verified")
+            return True
+        else:
+            logger.warning("Existing FasTAN binary failed verification, reinstalling...")
+
+    # Check build dependencies
+    deps_ok, error_msg = check_build_dependencies()
+    if not deps_ok:
+        logger.error(f"Build dependencies check failed:\n{error_msg}")
+        return False
+
+    # Create temporary directory for building
+    with tempfile.TemporaryDirectory(prefix='fastan_build_') as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        repo_dir = tmp_path / 'FASTAN'
+
+        try:
+            # Clone repository
+            logger.info(f"Cloning FasTAN repository from {FASTAN_REPO}...")
+            result = subprocess.run(
+                ['git', 'clone', FASTAN_REPO, str(repo_dir)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=300
+            )
+
+            if result.returncode != 0:
+                logger.error(f"Failed to clone FasTAN repository:\n{result.stderr.decode()}")
+                return False
+
+            logger.info("Repository cloned successfully")
+
+            # Build FasTAN
+            logger.info("Compiling FasTAN...")
+            result = subprocess.run(
+                ['make'],
+                cwd=repo_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=300
+            )
+
+            if result.returncode != 0:
+                logger.error(f"Failed to compile FasTAN:\n{result.stderr.decode()}")
+                return False
+
+            logger.info("FasTAN compiled successfully")
+
+            # Find the binary (check common names)
+            possible_names = ['FasTAN', 'fastan', 'FASTAN']
+            binary_source = None
+
+            for name in possible_names:
+                candidate = repo_dir / name
+                if candidate.exists() and os.access(candidate, os.X_OK):
+                    binary_source = candidate
+                    break
+
+            if not binary_source:
+                logger.error(f"Could not find FasTAN binary in {repo_dir}")
+                logger.error(f"Directory contents: {list(repo_dir.glob('*'))}")
+                return False
+
+            # Copy binary to satellome bin directory
+            logger.info(f"Installing FasTAN to {fastan_path}...")
+            shutil.copy2(binary_source, fastan_path)
+            os.chmod(fastan_path, 0o755)
+
+            logger.info("FasTAN installed successfully!")
+
+            # Verify installation
+            if verify_installation('fastan'):
+                logger.info(f"FasTAN is ready to use at: {fastan_path}")
+                return True
+            else:
+                logger.warning("FasTAN installed but verification failed")
+                return False
+
+        except subprocess.TimeoutExpired:
+            logger.error("Installation timed out")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error during installation: {e}")
+            return False
+
+
+def uninstall_fastan() -> bool:
+    """
+    Uninstall FasTAN by removing the binary.
+
+    Returns:
+        bool: True if uninstallation successful, False otherwise
+    """
+    bin_dir = get_satellome_bin_dir()
+    fastan_path = bin_dir / 'fastan'
+
+    if not fastan_path.exists():
+        logger.info("FasTAN is not installed")
+        return True
+
+    try:
+        fastan_path.unlink()
+        logger.info("FasTAN uninstalled successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to uninstall FasTAN: {e}")
+        return False

@@ -20,6 +20,7 @@ try:
     from satellome.core_functions.tools.reports import create_html_report
     from satellome.core_functions.tools.processing import get_genome_size_with_progress
     from satellome.core_functions.tools.ncbi import get_taxon_name
+    from satellome.installers import install_fastan, install_tanbed
     from satellome.constants import (
         MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
         KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -34,6 +35,7 @@ except ImportError:
     from src.satellome.core_functions.tools.reports import create_html_report
     from src.satellome.core_functions.tools.processing import get_genome_size_with_progress
     from src.satellome.core_functions.tools.ncbi import get_taxon_name
+    from src.satellome.installers import install_fastan, install_tanbed
     from src.satellome.constants import (
         MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
         KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -87,10 +89,10 @@ def parse_arguments():
         help="Show version information and exit"
     )
 
-    parser.add_argument("-i", "--input", help="Input fasta file", required=True)
-    parser.add_argument("-o", "--output", help="Output folder (must be an absolute path, e.g., /home/user/output)", required=True)
-    parser.add_argument("-p", "--project", help="Project", required=True)
-    parser.add_argument("-t", "--threads", help="Threads", required=True)
+    parser.add_argument("-i", "--input", help="Input fasta file", required=False)
+    parser.add_argument("-o", "--output", help="Output folder (must be an absolute path, e.g., /home/user/output)", required=False)
+    parser.add_argument("-p", "--project", help="Project", required=False)
+    parser.add_argument("-t", "--threads", help="Threads", required=False)
     parser.add_argument(
         "--trf", help="Path to TRF binary (default: trf in PATH)", required=False, default="trf"
     )
@@ -114,6 +116,11 @@ def parse_arguments():
     parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
     parser.add_argument("--continue-on-error", help="Continue pipeline even if some TRF runs fail (results may be incomplete)", action='store_true', default=False)
     parser.add_argument("--keep-trf", help="Keep original TRF files before filtering (saved with .original suffix)", action='store_true', default=False)
+
+    # Installation commands
+    parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
+    parser.add_argument("--install-tanbed", help="Install tanbed binary to ~/.satellome/bin/", action='store_true', default=False)
+    parser.add_argument("--install-all", help="Install all external dependencies (FasTAN and tanbed)", action='store_true', default=False)
 
     return vars(parser.parse_args())
 
@@ -390,6 +397,66 @@ def run_trf_drawing(settings, force_rerun):
         sys.exit(1)
 
 
+def handle_installation_commands(args):
+    """
+    Handle installation commands (--install-fastan, --install-tanbed, --install-all).
+
+    Args:
+        args: Parsed command line arguments
+
+    Returns:
+        bool: True if installation commands were processed (and program should exit), False otherwise
+    """
+    install_fastan_flag = args.get("install_fastan", False)
+    install_tanbed_flag = args.get("install_tanbed", False)
+    install_all_flag = args.get("install_all", False)
+
+    # If no installation commands, return False to continue with main pipeline
+    if not (install_fastan_flag or install_tanbed_flag or install_all_flag):
+        return False
+
+    logger.info(SEPARATOR_LINE_DOUBLE)
+    logger.info("Installation mode activated")
+    logger.info(SEPARATOR_LINE_DOUBLE)
+
+    success = True
+
+    # Install FasTAN
+    if install_fastan_flag or install_all_flag:
+        logger.info("Installing FasTAN...")
+        if install_fastan(force=True):
+            logger.info("✓ FasTAN installed successfully")
+        else:
+            logger.error("✗ FasTAN installation failed")
+            success = False
+        logger.info(SEPARATOR_LINE)
+
+    # Install tanbed
+    if install_tanbed_flag or install_all_flag:
+        logger.info("Installing tanbed...")
+        if install_tanbed(force=True):
+            logger.info("✓ tanbed installed successfully")
+        else:
+            logger.error("✗ tanbed installation failed")
+            success = False
+        logger.info(SEPARATOR_LINE)
+
+    # Print summary
+    logger.info(SEPARATOR_LINE_DOUBLE)
+    if success:
+        logger.info("All installations completed successfully!")
+        logger.info("Binaries installed to: ~/.satellome/bin/")
+        logger.info("You can now use these tools with Satellome.")
+    else:
+        logger.error("Some installations failed. Please check the error messages above.")
+        sys.exit(1)
+
+    logger.info(SEPARATOR_LINE_DOUBLE)
+
+    # Return True to indicate program should exit after installation
+    return True
+
+
 def print_summary(project, taxon_name, output_dir, html_report_file):
     """Print final summary of the analysis."""
     logger.info("\n" + SEPARATOR_LINE_DOUBLE)
@@ -405,6 +472,17 @@ def print_summary(project, taxon_name, output_dir, html_report_file):
 def main():
     args = parse_arguments()
 
+    # Handle installation commands first (exits if installation was performed)
+    if handle_installation_commands(args):
+        sys.exit(0)
+
+    # Validate required arguments for pipeline mode
+    required_args = ["input", "output", "project", "threads"]
+    missing_args = [arg for arg in required_args if not args.get(arg)]
+    if missing_args:
+        logger.error(f"Missing required arguments: {', '.join(missing_args)}")
+        logger.error("Use --help to see all required arguments")
+        sys.exit(1)
 
     print_logo()
 

@@ -88,6 +88,68 @@ cd trf
 
 The modified TRF includes memory optimizations and can handle chromosomes up to several gigabases in size. Specify the path to the modified TRF binary using the `--trf` parameter when running Satellome.
 
+### FasTAN and tanbed (Optional)
+
+Satellome supports **FasTAN** as an alternative tandem repeat finder. FasTAN and its companion tool **tanbed** can be automatically installed:
+
+#### Automatic Installation
+
+```bash
+# Install FasTAN only
+satellome --install-fastan
+
+# Install tanbed only
+satellome --install-tanbed
+
+# Install both FasTAN and tanbed
+satellome --install-all
+```
+
+Binaries will be installed to `~/.satellome/bin/` and are ready to use with Satellome.
+
+#### Requirements for Installation
+
+The automatic installer requires:
+- **git**: For cloning repositories
+- **make**: For building
+- **C compiler**: gcc, clang, or cc
+
+**On macOS:**
+```bash
+xcode-select --install
+```
+
+**On Ubuntu/Debian:**
+```bash
+sudo apt-get install build-essential git
+```
+
+**On CentOS/RHEL:**
+```bash
+sudo yum groupinstall 'Development Tools'
+sudo yum install git
+```
+
+#### Manual Installation
+
+If you prefer manual installation or encounter issues:
+
+**FasTAN:**
+```bash
+git clone https://github.com/thegenemyers/FASTAN.git
+cd FASTAN
+make
+cp FasTAN ~/.satellome/bin/fastan
+```
+
+**tanbed:**
+```bash
+git clone https://github.com/richarddurbin/alntools.git
+cd alntools
+make
+cp tanbed ~/.satellome/bin/tanbed
+```
+
 ## Usage
 
 ### Basic Command
