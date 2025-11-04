@@ -42,12 +42,10 @@ dependencies = [
     "simplejson",
     "intervaltree",
     "tqdm",
-    "requests",
     "plotly",
     "kaleido",
     "editdistance",
     "networkx",
-    "six",
 ]
 requires-python = ">=3.6"
 

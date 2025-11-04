@@ -7,7 +7,8 @@
 
 
 import logging
-import requests
+import urllib.request
+import urllib.error
 from xml.etree import ElementTree
 import time
 
@@ -15,28 +16,33 @@ logger = logging.getLogger(__name__)
 
 def get_taxon_name(taxid):
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=taxonomy&id={taxid}"
-    
+
     attempts = 0
 
     while attempts < 7:
         attempts += 1
         try:
-            response = requests.get(url, timeout=30)
-            
-            response.raise_for_status()
-            tree = ElementTree.fromstring(response.content)
-            
+            # Use urllib instead of requests - no external dependencies needed
+            with urllib.request.urlopen(url, timeout=30) as response:
+                content = response.read()
+
+            tree = ElementTree.fromstring(content)
+
             for item in tree.findall(".//Item[@Name='ScientificName']"):
                 return item.text
-            
-            if taxon_name_element is None:
-                raise ValueError(f"Invalid taxid: {taxid} or the response format has changed.")
-            
-            return taxon_name_element.text
-        
-        except requests.RequestException as e:
-            # Handles any kind of request issues (e.g. network issues, invalid URL, etc.)
-            logger.warning(f"Error fetching data from NCBI: {e}")
+
+            # If no scientific name found, log warning
+            logger.warning(f"No ScientificName found for taxid: {taxid}")
+            return None
+
+        except urllib.error.HTTPError as e:
+            # HTTP errors (404, 500, etc.)
+            logger.warning(f"HTTP error fetching data from NCBI: {e.code} {e.reason}")
+            logger.info(f"Attempt {attempts} of 7")
+            time.sleep(5)
+        except urllib.error.URLError as e:
+            # Network issues, invalid URL, timeout
+            logger.warning(f"Network error fetching data from NCBI: {e.reason}")
             logger.info(f"Attempt {attempts} of 7")
             time.sleep(5)
         except ElementTree.ParseError:

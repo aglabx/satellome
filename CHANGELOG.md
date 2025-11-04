@@ -10,7 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Critical bugfix**: Removed broken import fallback pattern in main.py that caused ModuleNotFoundError when package was installed via pip
 - Removed sys.path.append hack that interfered with proper package installation
+- Fixed SyntaxWarning: invalid escape sequences in regex patterns (Python 3.12+ compatibility)
 - Package now imports correctly when installed from PyPI
+
+### Changed
+- **Removed external dependencies**: Replaced `requests` with `urllib` from stdlib
+  - Eliminates dependency conflicts with `urllib3` and `six`
+  - Reduces total dependencies from 13 to 11 packages
+  - No impact on functionality - NCBI taxon name fetching still works correctly
+  - More reliable installation across different environments
 
 ## [1.4.0] - 2025-01-04
 
