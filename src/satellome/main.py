@@ -18,7 +18,7 @@ from satellome.core_functions.tools.gene_intersect import add_annotation_from_gf
 from satellome.core_functions.tools.reports import create_html_report
 from satellome.core_functions.tools.processing import get_genome_size_with_progress
 from satellome.core_functions.tools.ncbi import get_taxon_name
-from satellome.installers import install_fastan, install_tanbed, install_trf_large
+from satellome.installers import install_fastan, install_tanbed, install_trf_large, install_trf_standard
 from satellome.constants import (
     MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
     KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -103,6 +103,7 @@ def parse_arguments():
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
     parser.add_argument("--install-tanbed", help="Install tanbed binary to ~/.satellome/bin/", action='store_true', default=False)
+    parser.add_argument("--install-trf", help="Install standard TRF (download pre-compiled binary)", action='store_true', default=False)
     parser.add_argument("--install-trf-large", help="Install modified TRF (for large genomes) to ~/.satellome/bin/", action='store_true', default=False)
     parser.add_argument("--install-all", help="Install all external dependencies (FasTAN, tanbed, and modified TRF)", action='store_true', default=False)
 
@@ -129,34 +130,52 @@ def validate_and_prepare_environment(args):
             logger.info(f"TRF binary: {trf_found}")
         else:
             logger.warning(f"TRF not found in PATH.")
-            logger.info("Attempting to install modified TRF automatically...")
+            logger.info("Attempting to install TRF automatically...")
 
             # Try to auto-install TRF
             try:
-                from satellome.installers import install_trf_large
+                from satellome.installers import install_trf_large, install_trf_standard
+                from satellome.installers.base import get_satellome_bin_dir
+
+                # Try modified TRF first (for large genomes)
+                logger.info("Trying modified TRF (for large genomes >2GB chromosomes)...")
                 if install_trf_large(force=False):
                     logger.info("✓ Modified TRF installed successfully!")
-                    # Update trf_path to use the installed binary
-                    from satellome.installers.base import get_satellome_bin_dir
                     trf_bin = get_satellome_bin_dir() / "trf"
                     if trf_bin.exists():
                         trf_path = str(trf_bin)
-                        args["trf"] = trf_path  # Update args as well
+                        args["trf"] = trf_path
                         logger.info(f"Using installed TRF: {trf_path}")
                     else:
                         logger.error("TRF installation succeeded but binary not found")
-                        logger.warning("Please install TRF manually or use: satellome --install-trf-large")
                         sys.exit(1)
                 else:
-                    logger.error("TRF auto-installation failed")
-                    logger.warning("Please install TRF manually:")
-                    logger.warning("  Option 1: satellome --install-trf-large")
-                    logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
-                    sys.exit(1)
+                    # Fallback to standard TRF (download pre-compiled binary)
+                    logger.warning("Modified TRF installation failed (missing build tools?)")
+                    logger.info("Falling back to standard TRF (download pre-compiled binary)...")
+
+                    if install_trf_standard(force=False):
+                        logger.info("✓ Standard TRF installed successfully!")
+                        trf_bin = get_satellome_bin_dir() / "trf"
+                        if trf_bin.exists():
+                            trf_path = str(trf_bin)
+                            args["trf"] = trf_path
+                            logger.info(f"Using installed TRF: {trf_path}")
+                            logger.info("Note: Using standard TRF. For genomes with chromosomes >2GB,")
+                            logger.info("      install build tools and run: satellome --install-trf-large")
+                        else:
+                            logger.error("TRF installation succeeded but binary not found")
+                            sys.exit(1)
+                    else:
+                        logger.error("Both TRF installers failed")
+                        logger.warning("Please install TRF manually:")
+                        logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+                        logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
+                        sys.exit(1)
             except Exception as e:
                 logger.error(f"TRF auto-installation failed: {e}")
                 logger.warning("Please install TRF manually:")
-                logger.warning("  Option 1: satellome --install-trf-large")
+                logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
                 logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
                 sys.exit(1)
     else:
@@ -422,11 +441,12 @@ def handle_installation_commands(args):
     """
     install_fastan_flag = args.get("install_fastan", False)
     install_tanbed_flag = args.get("install_tanbed", False)
+    install_trf_flag = args.get("install_trf", False)
     install_trf_large_flag = args.get("install_trf_large", False)
     install_all_flag = args.get("install_all", False)
 
     # If no installation commands, return False to continue with main pipeline
-    if not (install_fastan_flag or install_tanbed_flag or install_trf_large_flag or install_all_flag):
+    if not (install_fastan_flag or install_tanbed_flag or install_trf_flag or install_trf_large_flag or install_all_flag):
         return False
 
     logger.info(SEPARATOR_LINE_DOUBLE)
@@ -452,6 +472,16 @@ def handle_installation_commands(args):
             logger.info("✓ tanbed installed successfully")
         else:
             logger.error("✗ tanbed installation failed")
+            success = False
+        logger.info(SEPARATOR_LINE)
+
+    # Install standard TRF (download pre-compiled)
+    if install_trf_flag:
+        logger.info("Installing standard TRF (pre-compiled binary)...")
+        if install_trf_standard(force=True):
+            logger.info("✓ Standard TRF installed successfully")
+        else:
+            logger.error("✗ Standard TRF installation failed")
             success = False
         logger.info(SEPARATOR_LINE)
 

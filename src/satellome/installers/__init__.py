@@ -12,6 +12,7 @@ from .base import (
 from .fastan import install_fastan
 from .tanbed import install_tanbed
 from .trf_large import install_trf_large
+from .trf_standard import install_trf_standard
 
 __all__ = [
     'detect_platform',
@@ -22,4 +23,5 @@ __all__ = [
     'install_fastan',
     'install_tanbed',
     'install_trf_large',
+    'install_trf_standard',
 ]
