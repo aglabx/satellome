@@ -234,7 +234,7 @@ def run_trf_search(settings, args, force_rerun):
     else:
         logger.info("Running TRF search...")
 
-    command = f"python {settings['trf_search_path']} -i {settings['fasta_file']} \
+    command = f"{sys.executable} {settings['trf_search_path']} -i {settings['fasta_file']} \
                                    -o {settings['output_dir']} \
                                    -p {settings['project']} \
                                    -t {settings['threads']} \
@@ -321,7 +321,7 @@ def run_trf_classification(settings, args, force_rerun):
     else:
         logger.info("Running TRF classification...")
 
-    command = f"python {settings['trf_classify_path']} -i {trf_prefix} -o {settings['output_dir']} -l {settings['genome_size']}"
+    command = f"{sys.executable} {settings['trf_classify_path']} -i {trf_prefix} -o {settings['output_dir']} -l {settings['genome_size']}"
     if args["keep_trf"]:
         command += " --keep-trf"
 
@@ -366,7 +366,7 @@ def run_trf_drawing(settings, force_rerun):
 
     # Add --force flag if force_rerun is True
     force_flag = " --force" if force_rerun else ""
-    command = f"python {settings['trf_draw_path']} -f {settings['fasta_file']} -i {trf_file} -o {settings['output_image_dir']} -c {settings['minimal_scaffold_length']} -e {settings['drawing_enhancing']} -t '{settings['taxon_name']}' -s {settings['genome_size']}{force_flag}"
+    command = f"{sys.executable} {settings['trf_draw_path']} -f {settings['fasta_file']} -i {trf_file} -o {settings['output_image_dir']} -c {settings['minimal_scaffold_length']} -e {settings['drawing_enhancing']} -t '{settings['taxon_name']}' -s {settings['genome_size']}{force_flag}"
 
     logger.debug(f"Command: {command}")
     completed_process = subprocess.run(command, shell=True)
