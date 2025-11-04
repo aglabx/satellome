@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 def print_logo():
     '''https://patorjk.com/software/taag/#p=display&f=Ghost&t=AGLABX%0Asatellome
     '''
-    logo = '''
+    logo = r'''
    ('-.                             ('-.    .-. .-') ) (`-.                      
   ( OO ).-.                        ( OO ).-.\  ( OO ) ( OO ).                    
   / . --. /  ,----.     ,--.       / . --. / ;-----.\(_/.  \_)-.                 

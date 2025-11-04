@@ -24,12 +24,12 @@ def clear_sequence(sequence):
     """Clear sequence (full alphabet):
 
     - lower case
-    - \s -> ""
+    - \\s -> ""
     - [^actgn] -> ""
     """
     sequence = sequence.strip().upper()
-    sequence = re.sub("\s+", "", sequence)
-    return re.sub("[^actgnuwsmkrybdhvACTGNUWSMKRYBDHV\-]", "", sequence)
+    sequence = re.sub(r"\s+", "", sequence)
+    return re.sub(r"[^actgnuwsmkrybdhvACTGNUWSMKRYBDHV\-]", "", sequence)
 
 
 class TRModel(AbstractModel):

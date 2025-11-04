@@ -32,42 +32,42 @@ def parse_fasta_head(fa_head):
     Valid examples of head format:
 
     - >gi|20928815|ref|NW_003237.1|MmUn_WIFeb01_12612 Mus musculus chromosome Un genomic contig
-    - Short variant >(\d*)\t(\S*)
-    - >134124-14124\n
-    - >134124\n
+    - Short variant >(\\d*)\\t(\\S*)
+    - >134124-14124\\n
+    - >134124\\n
     - >probe|misat|ref|CAAA01154094|start|991|end|1019
-    - Repbase: >TC5A    Mariner/Tc1    Caenorhabditis elegans (split by \t <=== settings)
+    - Repbase: >TC5A    Mariner/Tc1    Caenorhabditis elegans (split by \\t <=== settings)
     - >lcl|HmaUn_WGA106_1 Hydra magnipapillata genomic contig, re...
     - plants: >gi|293886233|dbj|BABO01423189.1|
     """
 
-    head_regexp = re.compile("^>?gi\|(\d+)\|(?:ref|dbj)\|([\w.]+)\|(.*)")
+    head_regexp = re.compile(r"^>?gi\|(\d+)\|(?:ref|dbj)\|([\w.]+)\|(.*)")
     regexp_obj = head_regexp.search(fa_head)
 
-    head_regexp_lcl = re.compile("^>?lcl\|(.*?) (.*)")
+    head_regexp_lcl = re.compile(r"^>?lcl\|(.*?) (.*)")
     regexp_obj_lcl = head_regexp_lcl.search(fa_head)
 
-    head_regexp_psu = re.compile("^>?psu\|(.*?) (.*)")
+    head_regexp_psu = re.compile(r"^>?psu\|(.*?) (.*)")
     regexp_obj_psu = head_regexp_psu.search(fa_head)
 
-    head_regexp_short = re.compile("^>(\d+)\t(\S+)")
+    head_regexp_short = re.compile(r"^>(\d+)\t(\S+)")
     regexp_obj_short = head_regexp_short.search(fa_head)
 
-    head_regexp_comp = re.compile("^>(\d+)-(\d+)")
+    head_regexp_comp = re.compile(r"^>(\d+)-(\d+)")
     regexp_obj_comp = head_regexp_comp.search(fa_head)
 
-    head_regexp_number = re.compile("^>(\d+)")
+    head_regexp_number = re.compile(r"^>(\d+)")
     regexp_obj_number = head_regexp_number.search(fa_head)
 
     head_regexp_probe_index = re.compile(
-        "^>probe\|(.*?)\|ref\|(.*?)\|start\|(\d*?)\|end\|(\d*)"
+        r"^>probe\|(.*?)\|ref\|(.*?)\|start\|(\d*?)\|end\|(\d*)"
     )
     regexp_obj_probe_index = head_regexp_probe_index.search(fa_head)
 
-    head_wgs = re.compile("^>?gi\|(\d+)\|\w+?\|([\w.]+)\|(.*)")
+    head_wgs = re.compile(r"^>?gi\|(\d+)\|\w+?\|([\w.]+)\|(.*)")
     regexp_obj_wgs = head_wgs.search(fa_head)
 
-    head_trace = re.compile("^>gnl\|ti\|(\d+) (.*)")
+    head_trace = re.compile(r"^>gnl\|ti\|(\d+) (.*)")
     regexp_obj_trace = head_trace.search(fa_head)
 
     if regexp_obj:
@@ -132,11 +132,11 @@ def parse_chromosome_name(head):
     # Head -> (...) -> Chromosome name or ""
     # TODO: write parse_chromosome_name function
     try:
-        chr0 = re.compile("chromosome ([^, ]+)").findall(head)
-        chr1 = re.compile("chromosome (\S+?),").findall(head)
-        chr2 = re.compile("chromosome (\S+?),?").findall(head)
-        chr3 = re.compile("chr(\S+?) ").findall(head)
-        mit = re.compile(" (mitochon\S+?) ").findall(head)
+        chr0 = re.compile(r"chromosome ([^, ]+)").findall(head)
+        chr1 = re.compile(r"chromosome (\S+?),").findall(head)
+        chr2 = re.compile(r"chromosome (\S+?),?").findall(head)
+        chr3 = re.compile(r"chr(\S+?) ").findall(head)
+        mit = re.compile(r" (mitochon\S+?) ").findall(head)
         if chr0:
             return chr0[0]
         if chr1:
@@ -156,7 +156,7 @@ def parse_chromosome_name(head):
 def trf_parse_line(line):
     """Parse TRF data line"""
     line = line.strip()
-    groups = re.split("\s", line)
+    groups = re.split(r"\s", line)
 
     if groups and len(groups) == 15:
         return list(groups)
@@ -168,7 +168,7 @@ def trf_parse_line(line):
 def trf_parse_param(line):
     """TRF parameters line"""
     try:
-        res = re.compile("Parameters: ([\d ]*)", re.S).findall(line)[0]
+        res = re.compile(r"Parameters: ([\d ]*)", re.S).findall(line)[0]
         return res
     except (IndexError, AttributeError) as e:
         logger.error(f"Failed parse param: {line}, error: {e}")
