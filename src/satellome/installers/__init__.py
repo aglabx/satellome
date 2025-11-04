@@ -1,5 +1,5 @@
 """
-Installers module for external dependencies (FasTAN, tanbed, etc.)
+Installers module for external dependencies (FasTAN, tanbed, TRF, etc.)
 """
 
 from .base import (
@@ -11,6 +11,7 @@ from .base import (
 )
 from .fastan import install_fastan
 from .tanbed import install_tanbed
+from .trf_large import install_trf_large
 
 __all__ = [
     'detect_platform',
@@ -20,4 +21,5 @@ __all__ = [
     'verify_installation',
     'install_fastan',
     'install_tanbed',
+    'install_trf_large',
 ]

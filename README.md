@@ -72,21 +72,41 @@ mv trf409.macosx trf
 
 ### TRF for Large Genomes (Chromosomes >1-2 GB)
 
-**Important**: The standard TRF binary has limitations with very large chromosomes (>1-2 GB) and may crash during analysis. For large genome assemblies (e.g., some plant genomes, salamander genomes), use our modified TRF version:
+**Important**: The standard TRF binary has limitations with very large chromosomes (>1-2 GB) and may crash during analysis. For large genome assemblies (e.g., some plant genomes, salamander genomes), use our modified TRF version.
+
+#### Automatic Installation (Linux)
 
 ```bash
-# Download modified TRF from aglabx
+# Install modified TRF automatically (Linux only)
+satellome --install-trf-large
+```
+
+Binary will be installed to `~/.satellome/bin/trf-large` and can be used with `--trf ~/.satellome/bin/trf-large`.
+
+**Note**: Automatic installation works best on Linux. macOS users may encounter compilation issues and should use manual installation or pre-compiled binaries.
+
+#### Manual Installation
+
+```bash
+# Clone and build modified TRF
 git clone https://github.com/aglabx/trf.git
 cd trf
-# Follow installation instructions in the repository
+mkdir build && cd build
+../configure
+make
+
+# Copy to system or Satellome directory
+cp src/trf ~/.satellome/bin/trf-large
 ```
+
+For pre-compiled binaries, visit: https://github.com/aglabx/trf/releases
 
 **When to use the modified TRF:**
 - Working with genomes containing chromosomes larger than 1-2 GB
 - Experiencing crashes or "Segmentation fault" errors with standard TRF
 - Processing large plant or amphibian genomes
 
-The modified TRF includes memory optimizations and can handle chromosomes up to several gigabases in size. Specify the path to the modified TRF binary using the `--trf` parameter when running Satellome.
+The modified TRF includes memory optimizations and can handle chromosomes up to several gigabases in size. Specify the path using: `--trf ~/.satellome/bin/trf-large`
 
 ### FasTAN and tanbed (Optional)
 

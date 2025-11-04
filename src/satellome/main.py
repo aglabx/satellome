@@ -20,7 +20,7 @@ try:
     from satellome.core_functions.tools.reports import create_html_report
     from satellome.core_functions.tools.processing import get_genome_size_with_progress
     from satellome.core_functions.tools.ncbi import get_taxon_name
-    from satellome.installers import install_fastan, install_tanbed
+    from satellome.installers import install_fastan, install_tanbed, install_trf_large
     from satellome.constants import (
         MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
         KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -35,7 +35,7 @@ except ImportError:
     from src.satellome.core_functions.tools.reports import create_html_report
     from src.satellome.core_functions.tools.processing import get_genome_size_with_progress
     from src.satellome.core_functions.tools.ncbi import get_taxon_name
-    from src.satellome.installers import install_fastan, install_tanbed
+    from src.satellome.installers import install_fastan, install_tanbed, install_trf_large
     from src.satellome.constants import (
         MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
         KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -120,7 +120,8 @@ def parse_arguments():
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
     parser.add_argument("--install-tanbed", help="Install tanbed binary to ~/.satellome/bin/", action='store_true', default=False)
-    parser.add_argument("--install-all", help="Install all external dependencies (FasTAN and tanbed)", action='store_true', default=False)
+    parser.add_argument("--install-trf-large", help="Install modified TRF (for large genomes) to ~/.satellome/bin/", action='store_true', default=False)
+    parser.add_argument("--install-all", help="Install all external dependencies (FasTAN, tanbed, and modified TRF)", action='store_true', default=False)
 
     return vars(parser.parse_args())
 
@@ -399,7 +400,7 @@ def run_trf_drawing(settings, force_rerun):
 
 def handle_installation_commands(args):
     """
-    Handle installation commands (--install-fastan, --install-tanbed, --install-all).
+    Handle installation commands (--install-fastan, --install-tanbed, --install-trf-large, --install-all).
 
     Args:
         args: Parsed command line arguments
@@ -409,10 +410,11 @@ def handle_installation_commands(args):
     """
     install_fastan_flag = args.get("install_fastan", False)
     install_tanbed_flag = args.get("install_tanbed", False)
+    install_trf_large_flag = args.get("install_trf_large", False)
     install_all_flag = args.get("install_all", False)
 
     # If no installation commands, return False to continue with main pipeline
-    if not (install_fastan_flag or install_tanbed_flag or install_all_flag):
+    if not (install_fastan_flag or install_tanbed_flag or install_trf_large_flag or install_all_flag):
         return False
 
     logger.info(SEPARATOR_LINE_DOUBLE)
@@ -438,6 +440,16 @@ def handle_installation_commands(args):
             logger.info("✓ tanbed installed successfully")
         else:
             logger.error("✗ tanbed installation failed")
+            success = False
+        logger.info(SEPARATOR_LINE)
+
+    # Install modified TRF (for large genomes)
+    if install_trf_large_flag or install_all_flag:
+        logger.info("Installing modified TRF (for large genomes)...")
+        if install_trf_large(force=True):
+            logger.info("✓ Modified TRF installed successfully")
+        else:
+            logger.error("✗ Modified TRF installation failed")
             success = False
         logger.info(SEPARATOR_LINE)
 
