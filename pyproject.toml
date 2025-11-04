@@ -3,9 +3,9 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["satellome", "satellome.core_functions", "satellome.core_functions.io", 
-           "satellome.core_functions.models", "satellome.core_functions.tools", 
-           "satellome.steps"]
+packages = ["satellome", "satellome.core_functions", "satellome.core_functions.io",
+           "satellome.core_functions.models", "satellome.core_functions.tools",
+           "satellome.steps", "satellome.installers"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
@@ -13,7 +13,7 @@ satellome = ["settings.yaml", "*.yaml", "*.yml"]
 
 [project]
 name = "satellome"
-version = "1.4.0"
+version = "1.4.1"
 description = "A comprehensive tool for satellite DNA analysis in T2T genome assemblies"
 readme = "README.md"
 authors = [

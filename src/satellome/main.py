@@ -7,41 +7,24 @@
 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 import argparse
 import subprocess
 import logging
 
-try:
-    from satellome import __version__
-    from satellome.core_functions.io.tab_file import sc_iter_tab_file
-    from satellome.core_functions.models.trf_model import TRModel
-    from satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
-    from satellome.core_functions.tools.reports import create_html_report
-    from satellome.core_functions.tools.processing import get_genome_size_with_progress
-    from satellome.core_functions.tools.ncbi import get_taxon_name
-    from satellome.installers import install_fastan, install_tanbed, install_trf_large
-    from satellome.constants import (
-        MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
-        KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
-        SEPARATOR_LINE, SEPARATOR_LINE_DOUBLE,
-        DEFAULT_TAXON_NAME
-    )
-except ImportError:
-    from src.satellome import __version__
-    from src.satellome.core_functions.io.tab_file import sc_iter_tab_file
-    from src.satellome.core_functions.models.trf_model import TRModel
-    from src.satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
-    from src.satellome.core_functions.tools.reports import create_html_report
-    from src.satellome.core_functions.tools.processing import get_genome_size_with_progress
-    from src.satellome.core_functions.tools.ncbi import get_taxon_name
-    from src.satellome.installers import install_fastan, install_tanbed, install_trf_large
-    from src.satellome.constants import (
-        MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
-        KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
-        SEPARATOR_LINE, SEPARATOR_LINE_DOUBLE,
-        DEFAULT_TAXON_NAME
-    )
+from satellome import __version__
+from satellome.core_functions.io.tab_file import sc_iter_tab_file
+from satellome.core_functions.models.trf_model import TRModel
+from satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
+from satellome.core_functions.tools.reports import create_html_report
+from satellome.core_functions.tools.processing import get_genome_size_with_progress
+from satellome.core_functions.tools.ncbi import get_taxon_name
+from satellome.installers import install_fastan, install_tanbed, install_trf_large
+from satellome.constants import (
+    MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
+    KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
+    SEPARATOR_LINE, SEPARATOR_LINE_DOUBLE,
+    DEFAULT_TAXON_NAME
+)
 
 # Configure logging
 logging.basicConfig(
