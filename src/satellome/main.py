@@ -128,8 +128,37 @@ def validate_and_prepare_environment(args):
         if trf_found:
             logger.info(f"TRF binary: {trf_found}")
         else:
-            logger.warning(f"TRF not found in PATH. Please install TRF or provide path with --trf")
-            logger.warning("Download TRF from: https://tandem.bu.edu/trf/trf.html")
+            logger.warning(f"TRF not found in PATH.")
+            logger.info("Attempting to install modified TRF automatically...")
+
+            # Try to auto-install TRF
+            try:
+                from satellome.installers import install_trf_large
+                if install_trf_large(force=False):
+                    logger.info("✓ Modified TRF installed successfully!")
+                    # Update trf_path to use the installed binary
+                    from satellome.installers.base import get_satellome_bin_dir
+                    trf_bin = get_satellome_bin_dir() / "trf"
+                    if trf_bin.exists():
+                        trf_path = str(trf_bin)
+                        args["trf"] = trf_path  # Update args as well
+                        logger.info(f"Using installed TRF: {trf_path}")
+                    else:
+                        logger.error("TRF installation succeeded but binary not found")
+                        logger.warning("Please install TRF manually or use: satellome --install-trf-large")
+                        sys.exit(1)
+                else:
+                    logger.error("TRF auto-installation failed")
+                    logger.warning("Please install TRF manually:")
+                    logger.warning("  Option 1: satellome --install-trf-large")
+                    logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
+                    sys.exit(1)
+            except Exception as e:
+                logger.error(f"TRF auto-installation failed: {e}")
+                logger.warning("Please install TRF manually:")
+                logger.warning("  Option 1: satellome --install-trf-large")
+                logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
+                sys.exit(1)
     else:
         # Check if the provided path exists
         if os.path.exists(trf_path) and os.access(trf_path, os.X_OK):
