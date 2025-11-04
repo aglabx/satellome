@@ -48,11 +48,36 @@ def get_satellome_bin_dir() -> Path:
     """
     Get or create the Satellome binary directory.
 
+    Priority:
+    1. <site-packages>/satellome/bin/ (primary location, cleaner)
+    2. ~/.satellome/bin/ (fallback if no write permissions)
+
     Returns:
-        Path: Path to ~/.satellome/bin/
+        Path: Path to binary directory
     """
+    # Try to use package directory first (cleaner, no pollution of user's home)
+    try:
+        import satellome
+        package_dir = Path(satellome.__file__).parent
+        bin_dir = package_dir / 'bin'
+
+        # Test if we can write to this directory
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        test_file = bin_dir / '.write_test'
+        try:
+            test_file.touch()
+            test_file.unlink()
+            logger.debug(f"Using package binary directory: {bin_dir}")
+            return bin_dir
+        except (PermissionError, OSError):
+            logger.debug(f"No write permission to {bin_dir}, falling back to ~/.satellome/bin/")
+    except Exception as e:
+        logger.debug(f"Could not use package directory: {e}")
+
+    # Fallback to user home directory
     bin_dir = Path.home() / '.satellome' / 'bin'
     bin_dir.mkdir(parents=True, exist_ok=True)
+    logger.debug(f"Using home directory: {bin_dir}")
     return bin_dir
 
 

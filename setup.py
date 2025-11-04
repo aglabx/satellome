@@ -1,6 +1,17 @@
 import re
+import sys
+import os
 
 from setuptools import find_packages, setup
+
+# Import custom install command
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+try:
+    from satellome.install_command import PostInstallCommand
+    cmdclass = {'install': PostInstallCommand}
+except ImportError:
+    # Fallback if import fails (e.g., during package build)
+    cmdclass = {}
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -47,4 +58,5 @@ setup(
             'satellome = satellome.main:main',
         ],
     },
+    cmdclass=cmdclass,
 )

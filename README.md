@@ -57,6 +57,14 @@ pip install -e .  # Development mode
 pip install .     # Production mode
 ```
 
+**Note**: During installation, Satellome will **automatically** attempt to install external tools (FasTAN, tanbed, modified TRF). This process:
+- Compiles tools from source (requires: git, make, gcc/clang)
+- Installs binaries to `<site-packages>/satellome/bin/` (or `~/.satellome/bin/` if no write permissions)
+- Takes 2-5 minutes depending on your system
+- **Can be skipped**: `SATELLOME_SKIP_AUTO_INSTALL=1 pip install satellome`
+- If compilation fails, Satellome will still install successfully
+- Failed tools can be installed later with `satellome --install-all`
+
 5. **Download TRF binary**
 ```bash
 # Linux
@@ -81,7 +89,7 @@ mv trf409.macosx trf
 satellome --install-trf-large
 ```
 
-Binary will be installed to `~/.satellome/bin/trf-large` and can be used with `--trf ~/.satellome/bin/trf-large`.
+Binary will be installed to `<site-packages>/satellome/bin/trf-large` (or `~/.satellome/bin/trf-large` as fallback).
 
 **Note**: Automatic installation works best on Linux. macOS users may encounter compilation issues and should use manual installation or pre-compiled binaries.
 
@@ -125,7 +133,9 @@ satellome --install-tanbed
 satellome --install-all
 ```
 
-Binaries will be installed to `~/.satellome/bin/` and are ready to use with Satellome.
+**Note**: These tools are automatically installed during `pip install satellome`. Manual installation is only needed if automatic installation failed or was skipped.
+
+Binaries will be installed to `<site-packages>/satellome/bin/` (or `~/.satellome/bin/` as fallback).
 
 #### Requirements for Installation
 
