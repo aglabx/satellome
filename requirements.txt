@@ -9,4 +9,3 @@ plotly
 kaleido
 editdistance
 networkx
-tqdm
