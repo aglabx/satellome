@@ -122,6 +122,7 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
 
     # Step 2: Process FASTA sequentially, extracting sequences for each chromosome
     extracted_count = 0
+    seen_chromosomes = set()  # Track chromosome names to detect duplicates
 
     with open(output_file, 'w') as out_fh:
         # Write header
@@ -133,7 +134,24 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
         logger.info("Processing FASTA file...")
         for header, sequence in sc_iter_fasta_brute(fasta_file):
             # Remove '>' and take first word as chromosome name
-            chr_name = header.lstrip('>').split()[0]
+            full_header = header.lstrip('>')
+            chr_name = full_header.split()[0]
+
+            # Check for duplicate chromosome names (CRITICAL SAFETY CHECK)
+            if chr_name in seen_chromosomes:
+                logger.error(
+                    f"Duplicate chromosome name detected: '{chr_name}'\n"
+                    f"Full header: {full_header}\n"
+                    f"This indicates ambiguous chromosome naming in FASTA file.\n"
+                    f"Extraction results may be incorrect!"
+                )
+                raise ValueError(
+                    f"Duplicate chromosome name '{chr_name}' found in FASTA. "
+                    f"First word of FASTA headers must be unique. "
+                    f"Please use unique chromosome identifiers."
+                )
+
+            seen_chromosomes.add(chr_name)
 
             # Skip if no BED entries for this chromosome
             if chr_name not in bed_entries:

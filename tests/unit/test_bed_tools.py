@@ -249,3 +249,28 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
         fields = data_lines[0].split('\t')
         # Should extract "ATCGATCGAT"
         assert fields[-1] == "ATCGATCGAT"
+
+    def test_duplicate_chromosome_names(self, tmp_path):
+        """Test that duplicate chromosome names are detected and raise error."""
+        # Create FASTA with duplicate first words in headers
+        fasta_file = tmp_path / "test_duplicate.fasta"
+        content = """>chr1 First sequence
+ATCGATCGATCGATCGATCGATCGATCGATCG
+>chr1 Second sequence with same first word
+GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
+"""
+        fasta_file.write_text(content)
+
+        bed_file = tmp_path / "test_duplicate.bed"
+        bed_content = """chr1\t0\t10\trepeat1\t100\t+
+"""
+        bed_file.write_text(bed_content)
+
+        output_file = tmp_path / "output_duplicate.trf"
+
+        # Should raise ValueError due to duplicate chromosome name
+        with pytest.raises(ValueError) as exc_info:
+            extract_sequences_from_bed(str(fasta_file), str(bed_file), str(output_file))
+
+        assert "Duplicate chromosome name 'chr1' found in FASTA" in str(exc_info.value)
+        assert "First word of FASTA headers must be unique" in str(exc_info.value)
