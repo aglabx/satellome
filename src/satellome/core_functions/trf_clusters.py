@@ -42,39 +42,26 @@ sys.setrecursionlimit(RECURSION_LIMIT_DEFAULT)
 
 def safe_write_figure(fig, output_file, width=None, height=None, engine="kaleido"):
     """
-    Safely write plotly figure to file with fallback to HTML if kaleido unavailable.
+    Write plotly figure to HTML file.
+
+    Static PNG export is handled separately by matplotlib (via _create_matplotlib_karyotype).
+    This function only creates interactive HTML visualizations.
 
     Args:
         fig: Plotly figure object
-        output_file: Output file path (extension will be changed to .html if kaleido fails)
-        width: Figure width (optional)
-        height: Figure height (optional)
-        engine: Image export engine (default: "kaleido")
+        output_file: Output file path (extension will be changed to .html)
+        width: Figure width (optional, ignored - kept for compatibility)
+        height: Figure height (optional, ignored - kept for compatibility)
+        engine: Image export engine (ignored - kept for compatibility)
 
     Returns:
-        str: Path to the created file
+        str: Path to the created HTML file
     """
-    try:
-        # Try to export as static image (PNG/SVG/PDF)
-        kwargs = {"engine": engine}
-        if width is not None:
-            kwargs["width"] = width
-        if height is not None:
-            kwargs["height"] = height
-
-        fig.write_image(output_file, **kwargs)
-        logger.info(f"Exported plot to {output_file}")
-        return output_file
-    except Exception as e:
-        # Fallback to interactive HTML if kaleido/chromium not available
-        logger.warning(f"Failed to export static image: {e}")
-        logger.warning("Kaleido/chromium not available. Saving as interactive HTML instead.")
-
-        # Change extension to .html
-        html_file = os.path.splitext(output_file)[0] + ".html"
-        fig.write_html(html_file)
-        logger.info(f"Exported interactive plot to {html_file}")
-        return html_file
+    # Change extension to .html
+    html_file = os.path.splitext(output_file)[0] + ".html"
+    fig.write_html(html_file)
+    logger.debug(f"Exported interactive plot to {html_file}")
+    return html_file
 
 
 def save_matplotlib_figure(fig, output_file, dpi=150):
@@ -607,6 +594,7 @@ def _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use
             color='#f3f4f7', edgecolor='none', zorder=1)
 
     # Add traces if provided
+    has_labeled_artists = False
     if traces:
         for trace_config in traces:
             # Extract matplotlib-compatible parameters from plotly trace config
@@ -629,6 +617,8 @@ def _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use
 
                 ax.barh(valid_y_pos, valid_x, left=valid_base, height=0.8,
                        color=color, label=label, zorder=2)
+                if label:  # Track if we added a labeled artist
+                    has_labeled_artists = True
 
     # Formatting
     ax.set_yticks(y_positions)
@@ -647,8 +637,8 @@ def _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use
     # Set x-axis to start at 0
     ax.set_xlim(left=0)
 
-    # Add legend if there are traces
-    if traces and any(t.get('name') for t in traces):
+    # Add legend only if we actually added labeled artists
+    if has_labeled_artists:
         ax.legend(loc='best', frameon=False)
 
     # Save as PNG
