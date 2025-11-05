@@ -72,6 +72,48 @@ def install_fastan(force: bool = False) -> bool:
 
             logger.info("Repository cloned successfully")
 
+            # Patch Makefile to add pthread linking flag
+            makefile_path = repo_dir / 'Makefile'
+            if makefile_path.exists():
+                logger.info("Patching Makefile to add pthread support...")
+                try:
+                    with open(makefile_path, 'r') as f:
+                        makefile_content = f.read()
+
+                    # Add -lpthread to LDFLAGS if not already present
+                    if '-lpthread' not in makefile_content:
+                        # Try to find and modify LDFLAGS line
+                        if 'LDFLAGS' in makefile_content:
+                            makefile_content = makefile_content.replace(
+                                'LDFLAGS =',
+                                'LDFLAGS = -lpthread'
+                            )
+                        else:
+                            # Add LDFLAGS at the beginning
+                            makefile_content = 'LDFLAGS = -lpthread\n\n' + makefile_content
+
+                        # Also ensure the linker command uses LDFLAGS
+                        # Common pattern: gcc ... -o target
+                        # Should be: gcc ... $(LDFLAGS) -o target
+                        lines = makefile_content.split('\n')
+                        modified_lines = []
+                        for line in lines:
+                            # If it's a gcc/cc link command without $(LDFLAGS)
+                            if (('gcc' in line or 'cc' in line or '$(CC)' in line) and
+                                '-o' in line and
+                                '$(LDFLAGS)' not in line and
+                                not line.strip().startswith('#')):
+                                # Insert $(LDFLAGS) before -o
+                                line = line.replace(' -o ', ' $(LDFLAGS) -o ')
+                            modified_lines.append(line)
+                        makefile_content = '\n'.join(modified_lines)
+
+                        with open(makefile_path, 'w') as f:
+                            f.write(makefile_content)
+                        logger.info("Makefile patched successfully")
+                except Exception as e:
+                    logger.warning(f"Could not patch Makefile: {e}. Attempting build anyway...")
+
             # Build FasTAN
             logger.info("Compiling FasTAN...")
             result = subprocess.run(
