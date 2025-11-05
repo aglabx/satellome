@@ -65,7 +65,9 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
 
     Format:
         Input BED: chr  start  end  name  score  strand  [other_columns...]
-        Output: chr  start  end  name  score  strand  [other_columns...]  sequence
+        Output: chr  start  end  name  score  strand  [other_columns...]  length  sequence
+
+        Where length = end - start (repeat length in bp)
     """
     logger.info(f"Extracting sequences from {fasta_file} using coordinates from {bed_file}")
 
@@ -127,7 +129,8 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
     with open(output_file, 'w') as out_fh:
         # Write header
         out_fh.write("# FasTAN results with extracted sequences\n")
-        out_fh.write("# Format: chr\tstart\tend\tname\tscore\tstrand\t[...]\tsequence\n")
+        out_fh.write("# Format: chr\tstart\tend\tname\tscore\tstrand\t[...]\tlength\tsequence\n")
+        out_fh.write("# Note: length = end - start (repeat length in bp)\n")
         out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
         out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
 
@@ -181,12 +184,15 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
                 if strand == '-':
                     extracted_seq = reverse_complement(extracted_seq)
 
+                # Calculate repeat length
+                repeat_length = end - start
+
                 # Write output: replace full chromosome name with short name (first word only)
                 # Original BED line might have: "NC_000913.3 Escherichia coli..."
-                # We write: "NC_000913.3\t..."
+                # We write: "NC_000913.3\t...\tlength\tsequence"
                 fields = line.split('\t')
                 fields[0] = chr_name  # Replace full name with first word
-                output_line = '\t'.join(fields) + '\t' + extracted_seq
+                output_line = '\t'.join(fields) + '\t' + str(repeat_length) + '\t' + extracted_seq
                 out_fh.write(output_line + '\n')
                 extracted_count += 1
 

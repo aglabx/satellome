@@ -124,10 +124,13 @@ chr2\t0\t5\trepeat2\t100\t+
         assert fields[0] == "chr1"
         assert fields[1] == "0"
         assert fields[2] == "10"
+        # Check length field (second to last, before sequence)
+        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
         assert fields[-1] == "ATCGATCGAT"
 
         # Second entry: chr1 10-20 should extract "CGATCGATCG"
         fields = data_lines[1].split('\t')
+        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
         assert fields[-1] == "CGATCGATCG"
 
     def test_reverse_strand(self, test_fasta, test_bed_reverse_strand, tmp_path):
@@ -252,6 +255,9 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
         # Input BED: "NC_000913.3 Escherichia coli str. K-12..."
         # Output: "NC_000913.3"
         assert fields[0] == "NC_000913.3", f"Expected 'NC_000913.3', got '{fields[0]}'"
+
+        # Check length field (coordinates: 0-10, length should be 10)
+        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
 
         # Should extract "ATCGATCGAT"
         assert fields[-1] == "ATCGATCGAT"
