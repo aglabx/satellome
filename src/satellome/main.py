@@ -18,6 +18,7 @@ from satellome.core_functions.tools.gene_intersect import add_annotation_from_gf
 from satellome.core_functions.tools.reports import create_html_report
 from satellome.core_functions.tools.processing import get_genome_size_with_progress
 from satellome.core_functions.tools.ncbi import get_taxon_name
+from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
 from satellome.installers import install_fastan, install_tanbed, install_trf_large, install_trf_standard
 from satellome.constants import (
     MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
@@ -555,6 +556,19 @@ def run_fastan(settings, force_rerun):
 
         if tanbed_process.returncode == 0:
             logger.info(f"✓ BED file created: {bed_file}")
+
+            # Extract sequences from FASTA based on BED coordinates
+            trf_file = os.path.join(fastan_dir, f"{genome_basename}.trf")
+            logger.info("Extracting sequences from FASTA based on BED coordinates...")
+            try:
+                extracted_count = extract_sequences_from_bed(fasta_file, bed_file, trf_file)
+                logger.info(f"✓ Sequence extraction completed: {trf_file}")
+                logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
+            except Exception as e:
+                logger.error(f"Sequence extraction failed: {e}")
+                logger.warning("Continuing without sequence extraction...")
+                # Don't fail the whole pipeline - BED file is still useful
+
             logger.info(f"✓ FasTAN analysis completed!")
             return True
         else:
