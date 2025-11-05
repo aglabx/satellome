@@ -1210,7 +1210,30 @@ def draw_all(
         logger.info("Saving gaps data to cache...")
         with open(gaps_cache_file, 'wb') as f:
             pickle.dump(gaps_data, f)
-    
+
+    # Export gaps to BED format in output root directory (not in images/)
+    bed_output_file = os.path.join(os.path.dirname(output_folder), f"{taxon}.gaps.bed")
+    logger.info(f"Exporting gaps to BED format: {bed_output_file}")
+
+    try:
+        with open(bed_output_file, 'w') as f:
+            # BED format header
+            f.write("# Gaps annotation from Satellome\n")
+            f.write(f"# Genome: {taxon}\n")
+            f.write(f"# Total gaps: {len(gaps_data)}\n")
+            f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
+
+            # Write gaps in BED6 format
+            for chrm, start, end, length in gaps_data:
+                # BED format: chr, start, end, name, score, strand
+                # score = length of gap (for filtering)
+                # strand = . (not applicable for gaps)
+                f.write(f"{chrm}\t{start}\t{end}\tgap\t{length}\t.\n")
+
+        logger.info(f"✓ Exported {len(gaps_data)} gaps to BED format")
+    except Exception as e:
+        logger.warning(f"Failed to export gaps to BED format: {e}")
+
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
     if gaps_lengths:
