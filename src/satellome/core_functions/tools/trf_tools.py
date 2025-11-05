@@ -368,9 +368,16 @@ def trf_search_by_splitting(
 
     ## 4. Remove temp folder
     if not keep_raw:
+        # Safety check: ensure we're removing a temp directory with sufficient path depth
         if folder_path.count("/") <= 3:
-            input("Remove: %s ?" % folder_path)
-        shutil.rmtree(folder_path)
+            logger.warning(f"Suspicious temp folder path (too short): {folder_path}")
+            logger.warning("Skipping removal for safety. Please remove manually if needed.")
+        else:
+            try:
+                shutil.rmtree(folder_path)
+                logger.info(f"Removed temporary folder: {folder_path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove temp folder {folder_path}: {e}")
 
     return output_file
 

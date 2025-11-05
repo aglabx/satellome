@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed SyntaxWarning: invalid escape sequences in regex patterns (Python 3.12+ compatibility)
 - Fixed subprocess calls to use correct Python interpreter (sys.executable instead of "python")
   - Fixes ModuleNotFoundError in subprocesses when system has multiple Python versions
+- Removed interactive input() prompt in temp folder cleanup that blocked automatic pipeline execution
+- Added explicit six>=1.16.0 dependency to fix pandas/python-dateutil compatibility in containers
+  - Fixes "ModuleNotFoundError: No module named 'six.moves'" when system has outdated six package
 - Package now imports correctly when installed from PyPI
 
 ### Changed
