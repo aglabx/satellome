@@ -18,7 +18,7 @@ from .base import (
 
 logger = logging.getLogger(__name__)
 
-FASTAN_REPO = "https://github.com/thegenemyers/FASTAN.git"
+FASTAN_REPO = "https://github.com/ad3002/FASTAN.git"
 
 
 def install_fastan(force: bool = False) -> bool:
