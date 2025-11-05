@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 CENPB_REGEXP = re.compile(r".ttcg....a..cggg.")
 TELOMERE_REGEXP = re.compile(r"ttagggttagggttagggttagggttaggg")
-CHRM_REGEXP = re.compile("chromosome\: (.*)")
+CHRM_REGEXP = re.compile(r"chromosome\: (.*)")
 
 chm2name = {
     "NC_060925.1": "Chr1",

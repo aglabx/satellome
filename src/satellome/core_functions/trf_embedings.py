@@ -60,7 +60,7 @@ def create_vector(token2id, token2revtoken, seq, k=5):
 
 def fill_vectors(df_trs, token2id, token2revtoken, k=5):
     tr2vector = {}
-    for id1, x in df_trs.iterrows():
+    for id1, x in enumerate(df_trs):
         tr2vector[id1] = create_vector(token2id, token2revtoken, x["seq"], k)
     return tr2vector
 

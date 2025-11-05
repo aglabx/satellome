@@ -23,9 +23,64 @@ class PostInstallCommand(install):
     Can be skipped by setting SATELLOME_SKIP_AUTO_INSTALL environment variable.
     """
 
+    def _fix_six_package(self):
+        """
+        Fix old six package that causes 'ModuleNotFoundError: No module named six.moves'.
+
+        Old system-installed six (e.g., 1.14.0 from Ubuntu packages) doesn't have six.moves,
+        which breaks matplotlib and other packages. This upgrades six to >=1.16.0.
+        """
+        import subprocess
+
+        try:
+            # Check if six is installed and get version
+            import six
+            version = getattr(six, '__version__', '0.0.0')
+
+            # Parse version (e.g., "1.14.0" -> [1, 14, 0])
+            try:
+                major, minor, patch = map(int, version.split('.')[:3])
+            except (ValueError, AttributeError):
+                logger.warning(f"Could not parse six version: {version}")
+                major, minor, patch = 0, 0, 0
+
+            # Check if version is too old (< 1.16.0)
+            if major < 1 or (major == 1 and minor < 16):
+                logger.info("")
+                logger.info("="*60)
+                logger.info(f"Detected old six package (version {version})")
+                logger.info("Upgrading to six>=1.16.0 to fix matplotlib compatibility...")
+                logger.info("="*60)
+
+                # Force reinstall six to override system package
+                result = subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', '--upgrade', '--force-reinstall', 'six>=1.16.0'],
+                    capture_output=True,
+                    text=True
+                )
+
+                if result.returncode == 0:
+                    logger.info("✓ Successfully upgraded six package")
+                else:
+                    logger.warning(f"Failed to upgrade six: {result.stderr}")
+                    logger.warning("matplotlib may not work correctly")
+                    logger.warning("You can manually fix with: pip install --upgrade --force-reinstall six")
+            else:
+                logger.info(f"✓ six package version {version} is up to date")
+
+        except ImportError:
+            # six not installed yet - pip will install it from dependencies
+            logger.info("six package will be installed from dependencies")
+        except Exception as e:
+            logger.warning(f"Could not check/upgrade six package: {e}")
+            logger.warning("If you encounter 'six.moves' errors, run: pip install --upgrade --force-reinstall six")
+
     def run(self):
         # Run standard install first
         install.run(self)
+
+        # Fix old six package that conflicts with matplotlib/pandas dependencies
+        self._fix_six_package()
 
         # Check if auto-install is disabled
         if os.environ.get('SATELLOME_SKIP_AUTO_INSTALL'):

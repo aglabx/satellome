@@ -199,11 +199,11 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
 
             name = f"{class_name}_{median_monomer}"
             for id1, period in d:
-                df_trs.at[id1, "family_name"] = name
-                df_trs.at[id1, "locus_name"] = name
+                df_trs[id1]["family_name"] = name
+                df_trs[id1]["locus_name"] = name
 
         for id1, period in singl:
-            df_trs.at[id1, "family_name"] = "SING"
+            df_trs[id1]["family_name"] = "SING"
 
     return df_trs, tr2vector, distances, all_distances
 
@@ -1183,10 +1183,15 @@ def draw_all(
 
     repeats_with_gap = []
     repeats_without_gaps = []
-    for i, d in df_trs.iterrows():
-        if d.chrm not in chrm2gapIT:
+    for d in df_trs:
+        chrm = d.get("chrm")
+        start = d.get("start")
+        end = d.get("end")
+        family_name = d.get("family_name")
+
+        if chrm not in chrm2gapIT:
             continue
-        found_gaps = chrm2gapIT[d.chrm][d.start - GAP_SEARCH_WINDOW : d.end + GAP_SEARCH_WINDOW]
+        found_gaps = chrm2gapIT[chrm][start - GAP_SEARCH_WINDOW : end + GAP_SEARCH_WINDOW]
         if not found_gaps:
             repeats_without_gaps.append(d)
             continue
@@ -1194,23 +1199,23 @@ def draw_all(
         start_gap = min([x.begin for x in found_gaps])
         end_gap = max([x.end for x in found_gaps])
 
-        if d.start < start_gap and d.end < end_gap:
+        if start < start_gap and end < end_gap:
             gap_type = "aN"
-        elif d.start < start_gap and d.end > end_gap:
+        elif start < start_gap and end > end_gap:
             gap_type = "aNa"
-        elif start_gap < d.start:
+        elif start_gap < start:
             gap_type = "Na"
         else:
             logger.debug("Unknown")
-            logger.debug(f"{d.family_name}, {d.start}, {d.end}, {start_gap}, {end_gap}")
+            logger.debug(f"{family_name}, {start}, {end}, {start_gap}, {end_gap}")
         repeats_with_gap.append(
             [
-                d.chrm,
-                min(d.start, start_gap),
-                max(d.end, end_gap),
-                d.family_name,
+                chrm,
+                min(start, start_gap),
+                max(end, end_gap),
+                family_name,
                 gap_type,
-                abs(min(d.start, start_gap) - max(d.end, end_gap)),
+                abs(min(start, start_gap) - max(end, end_gap)),
             ]
         )
 

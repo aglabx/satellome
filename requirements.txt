@@ -8,3 +8,4 @@ plotly
 matplotlib
 editdistance
 networkx
+six>=1.16.0
