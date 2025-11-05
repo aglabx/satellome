@@ -148,14 +148,14 @@ def uninstall_trf_large() -> bool:
         bool: True if uninstallation successful, False otherwise
     """
     bin_dir = get_satellome_bin_dir()
-    trf_large_path = bin_dir / 'trf-large'
+    trf_path = bin_dir / 'trf'
 
-    if not trf_large_path.exists():
+    if not trf_path.exists():
         logger.info("Modified TRF is not installed")
         return True
 
     try:
-        trf_large_path.unlink()
+        trf_path.unlink()
         logger.info("Modified TRF uninstalled successfully")
         return True
     except Exception as e:
