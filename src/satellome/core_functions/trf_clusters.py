@@ -1193,10 +1193,17 @@ def draw_all(
     id2names = {}
 
     # Draw gaps visualization
-    
-    # Create gaps cache file path
-    gaps_cache_file = os.path.join(output_folder, f"{taxon}.gaps.pkl")
-    
+
+    # Extract project name from TRF file (e.g., GCF_000005845.2_ASM584v2_genomic.1kb.trf -> GCF_000005845.2_ASM584v2_genomic)
+    trf_basename = os.path.basename(trf_file)
+    # Remove .trf extension and any suffix like .1kb, .3kb, .10kb
+    project_name = trf_basename.replace('.trf', '')
+    for suffix in ['.1kb', '.3kb', '.10kb', '.micro', '.complex', '.pmicro', '.tssr']:
+        project_name = project_name.replace(suffix, '')
+
+    # Create gaps cache file path using project name instead of taxon to avoid "Unknown.gaps.pkl"
+    gaps_cache_file = os.path.join(output_folder, f"{project_name}.gaps.pkl")
+
     if os.path.isfile(gaps_cache_file) and os.path.getsize(gaps_cache_file) > 0 and not force_rerun:
         logger.info("Loading cached gaps data...")
         with open(gaps_cache_file, 'rb') as f:
@@ -1212,12 +1219,6 @@ def draw_all(
             pickle.dump(gaps_data, f)
 
     # Export gaps to BED format in output root directory (not in images/)
-    # Extract project name from TRF file (e.g., GCF_000005845.2_ASM584v2_genomic.1kb.trf -> GCF_000005845.2_ASM584v2_genomic)
-    trf_basename = os.path.basename(trf_file)
-    # Remove .trf extension and any suffix like .1kb, .3kb, .10kb
-    project_name = trf_basename.replace('.trf', '')
-    for suffix in ['.1kb', '.3kb', '.10kb', '.micro', '.complex', '.pmicro', '.tssr']:
-        project_name = project_name.replace(suffix, '')
 
     bed_output_file = os.path.join(os.path.dirname(output_folder), f"{project_name}.gaps.bed")
     logger.info(f"Exporting gaps to BED format: {bed_output_file}")
