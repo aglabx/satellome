@@ -219,3 +219,33 @@ chr2\t0\t5
             seq = line.split('\t')[-1]
             assert seq == seq.upper()
             assert seq.isupper() or len(seq) == 0  # Empty sequence edge case
+
+    def test_chromosome_name_with_spaces(self, tmp_path):
+        """Test that chromosome names with spaces are handled correctly."""
+        # Create FASTA with full chromosome name in header
+        fasta_file = tmp_path / "test_spaces.fasta"
+        content = """>NC_000913.3 Escherichia coli str. K-12 substr. MG1655, complete genome
+ATCGATCGATCGATCGATCGATCGATCGATCG
+"""
+        fasta_file.write_text(content)
+
+        # Create BED with full chromosome name (like tanbed outputs)
+        bed_file = tmp_path / "test_spaces.bed"
+        # BED has full chromosome name in first column
+        bed_content = """NC_000913.3 Escherichia coli str. K-12 substr. MG1655, complete genome\t0\t10\trepeat1\t100\t+
+"""
+        bed_file.write_text(bed_content)
+
+        output_file = tmp_path / "output_spaces.trf"
+        count = extract_sequences_from_bed(str(fasta_file), str(bed_file), str(output_file))
+
+        # Should successfully extract sequence
+        assert count == 1
+
+        lines = output_file.read_text().split('\n')
+        data_lines = [l for l in lines if l and not l.startswith('#')]
+
+        assert len(data_lines) == 1
+        fields = data_lines[0].split('\t')
+        # Should extract "ATCGATCGAT"
+        assert fields[-1] == "ATCGATCGAT"

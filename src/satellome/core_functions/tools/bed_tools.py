@@ -90,7 +90,8 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
                 skipped_count += 1
                 continue
 
-            chr_name = fields[0]
+            # Take only first word from chromosome name (to match FASTA parsing)
+            chr_name = fields[0].split()[0]
             try:
                 start = int(fields[1])  # 0-based
                 end = int(fields[2])    # 0-based, exclusive
