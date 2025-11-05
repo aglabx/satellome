@@ -457,7 +457,7 @@ def run_fastan(settings, force_rerun):
         logger.info("Use --force to rerun this step")
         return True
 
-    # Find fastan binary
+    # Find fastan binary (auto-install if not found)
     fastan_bin = shutil.which("fastan")
     if not fastan_bin:
         # Try satellome bin directory
@@ -465,13 +465,30 @@ def run_fastan(settings, force_rerun):
         if satellome_bin.exists():
             fastan_bin = str(satellome_bin)
         else:
-            logger.warning("FasTAN binary not found. Install with: satellome --install-fastan")
-            logger.warning("Skipping FasTAN analysis...")
-            return False
+            # Auto-install FasTAN
+            logger.warning("FasTAN binary not found.")
+            logger.info("Attempting to install FasTAN automatically...")
+            try:
+                if install_fastan(force=False):
+                    logger.info("✓ FasTAN installed successfully!")
+                    fastan_bin = str(get_satellome_bin_dir() / "fastan")
+                    if not os.path.exists(fastan_bin):
+                        logger.error("FasTAN installation succeeded but binary not found")
+                        return False
+                else:
+                    logger.warning("FasTAN installation failed (missing build tools?)")
+                    logger.warning("Install manually with: satellome --install-fastan")
+                    logger.warning("Skipping FasTAN analysis...")
+                    return False
+            except Exception as e:
+                logger.warning(f"FasTAN auto-installation failed: {e}")
+                logger.warning("Install manually with: satellome --install-fastan")
+                logger.warning("Skipping FasTAN analysis...")
+                return False
 
     logger.info(f"FasTAN binary: {fastan_bin}")
 
-    # Find tanbed binary
+    # Find tanbed binary (auto-install if not found)
     tanbed_bin = shutil.which("tanbed")
     if not tanbed_bin:
         # Try satellome bin directory
@@ -479,9 +496,26 @@ def run_fastan(settings, force_rerun):
         if satellome_bin.exists():
             tanbed_bin = str(satellome_bin)
         else:
-            logger.warning("tanbed binary not found. Install with: satellome --install-tanbed")
-            logger.warning("Skipping FasTAN analysis...")
-            return False
+            # Auto-install tanbed
+            logger.warning("tanbed binary not found.")
+            logger.info("Attempting to install tanbed automatically...")
+            try:
+                if install_tanbed(force=False):
+                    logger.info("✓ tanbed installed successfully!")
+                    tanbed_bin = str(get_satellome_bin_dir() / "tanbed")
+                    if not os.path.exists(tanbed_bin):
+                        logger.error("tanbed installation succeeded but binary not found")
+                        return False
+                else:
+                    logger.warning("tanbed installation failed (missing build tools?)")
+                    logger.warning("Install manually with: satellome --install-tanbed")
+                    logger.warning("Skipping FasTAN analysis...")
+                    return False
+            except Exception as e:
+                logger.warning(f"tanbed auto-installation failed: {e}")
+                logger.warning("Install manually with: satellome --install-tanbed")
+                logger.warning("Skipping FasTAN analysis...")
+                return False
 
     logger.info(f"tanbed binary: {tanbed_bin}")
 
