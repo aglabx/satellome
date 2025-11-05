@@ -99,6 +99,8 @@ def parse_arguments():
     parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
     parser.add_argument("--continue-on-error", help="Continue pipeline even if some TRF runs fail (results may be incomplete)", action='store_true', default=False)
     parser.add_argument("--keep-trf", help="Keep original TRF files before filtering (saved with .original suffix)", action='store_true', default=False)
+    parser.add_argument("--nofastan", help="Skip FasTAN analysis (TRF runs by default)", action='store_true', default=False)
+    parser.add_argument("--notrf", help="Skip TRF analysis (FasTAN runs by default)", action='store_true', default=False)
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -429,6 +431,103 @@ def run_trf_drawing(settings, force_rerun):
         sys.exit(1)
 
 
+def run_fastan(settings, force_rerun):
+    """Run FasTAN analysis step."""
+    import shutil
+    from pathlib import Path
+    from satellome.installers.base import get_satellome_bin_dir
+
+    fasta_file = settings["fasta_file"]
+    output_dir = settings["output_dir"]
+    project = settings["project"]
+
+    # Create fastan output directory
+    fastan_dir = os.path.join(output_dir, "fastan")
+    if not os.path.exists(fastan_dir):
+        os.makedirs(fastan_dir)
+        logger.info(f"Created FasTAN output directory: {fastan_dir}")
+
+    # Output files
+    aln_file = os.path.join(fastan_dir, f"{project}.1aln")
+    bed_file = os.path.join(fastan_dir, f"{project}.bed")
+
+    # Check if already completed
+    if os.path.exists(aln_file) and os.path.exists(bed_file) and not force_rerun:
+        logger.info(f"FasTAN analysis already completed! Found {aln_file} and {bed_file}")
+        logger.info("Use --force to rerun this step")
+        return True
+
+    # Find fastan binary
+    fastan_bin = shutil.which("fastan")
+    if not fastan_bin:
+        # Try satellome bin directory
+        satellome_bin = get_satellome_bin_dir() / "fastan"
+        if satellome_bin.exists():
+            fastan_bin = str(satellome_bin)
+        else:
+            logger.warning("FasTAN binary not found. Install with: satellome --install-fastan")
+            logger.warning("Skipping FasTAN analysis...")
+            return False
+
+    logger.info(f"FasTAN binary: {fastan_bin}")
+
+    # Find tanbed binary
+    tanbed_bin = shutil.which("tanbed")
+    if not tanbed_bin:
+        # Try satellome bin directory
+        satellome_bin = get_satellome_bin_dir() / "tanbed"
+        if satellome_bin.exists():
+            tanbed_bin = str(satellome_bin)
+        else:
+            logger.warning("tanbed binary not found. Install with: satellome --install-tanbed")
+            logger.warning("Skipping FasTAN analysis...")
+            return False
+
+    logger.info(f"tanbed binary: {tanbed_bin}")
+
+    # Run FasTAN
+    if force_rerun and os.path.exists(aln_file):
+        logger.info("Force rerun: Running FasTAN...")
+    else:
+        logger.info("Running FasTAN...")
+
+    fastan_command = f"{fastan_bin} {fasta_file} {aln_file}"
+    logger.debug(f"Command: {fastan_command}")
+
+    try:
+        fastan_process = subprocess.run(fastan_command, shell=True, capture_output=True, text=True)
+
+        if fastan_process.returncode == 0:
+            logger.info("FasTAN executed successfully!")
+        else:
+            logger.error(f"FasTAN failed with return code {fastan_process.returncode}")
+            logger.error(f"Error: {fastan_process.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"FasTAN execution failed: {e}")
+        return False
+
+    # Run tanbed to convert to BED format
+    logger.info("Converting FasTAN output to BED format...")
+    tanbed_command = f"{tanbed_bin} {aln_file} > {bed_file}"
+    logger.debug(f"Command: {tanbed_command}")
+
+    try:
+        tanbed_process = subprocess.run(tanbed_command, shell=True, capture_output=True, text=True)
+
+        if tanbed_process.returncode == 0:
+            logger.info(f"✓ BED file created: {bed_file}")
+            logger.info(f"✓ FasTAN analysis completed!")
+            return True
+        else:
+            logger.error(f"tanbed failed with return code {tanbed_process.returncode}")
+            logger.error(f"Error: {tanbed_process.stderr}")
+            return False
+    except Exception as e:
+        logger.error(f"tanbed execution failed: {e}")
+        return False
+
+
 def handle_installation_commands(args):
     """
     Handle installation commands (--install-fastan, --install-tanbed, --install-trf-large, --install-all).
@@ -589,20 +688,63 @@ def main():
 
     #TODO: use large_cutoff in code
 
-    # Step 1: TRF Search
-    trf_search_result = run_trf_search(settings, args, force_rerun)
+    # Extract run mode flags
+    skip_trf = args.get("notrf", False)
+    skip_fastan = args.get("nofastan", False)
 
-    # If recompute-failed mode was used and TRF was updated, force regeneration of downstream files
-    force_downstream = force_rerun or (trf_search_result == "recomputed")
+    # Validate that at least one tool will run
+    if skip_trf and skip_fastan:
+        logger.error("Cannot skip both TRF and FasTAN. At least one tool must run.")
+        logger.error("Remove either --notrf or --nofastan flag.")
+        sys.exit(1)
 
-    # Step 2: Add annotations
-    add_annotations(settings, force_downstream)
+    # Step 1: TRF Search (unless --notrf)
+    trf_search_result = None
+    force_downstream = force_rerun
 
-    # Step 3: TRF Classification
-    run_trf_classification(settings, args, force_downstream)
+    if not skip_trf:
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 1: TRF SEARCH")
+        logger.info(SEPARATOR_LINE)
+        trf_search_result = run_trf_search(settings, args, force_rerun)
 
-    # Step 4: TRF Drawing and HTML report
-    run_trf_drawing(settings, force_downstream)
+        # If recompute-failed mode was used and TRF was updated, force regeneration of downstream files
+        force_downstream = force_rerun or (trf_search_result == "recomputed")
+    else:
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 1: TRF SEARCH - SKIPPED (--notrf flag)")
+        logger.info(SEPARATOR_LINE)
+
+    # Step 1b: FasTAN Analysis (unless --nofastan)
+    if not skip_fastan:
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 1b: FASTAN ANALYSIS")
+        logger.info(SEPARATOR_LINE)
+        run_fastan(settings, force_downstream)
+    else:
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 1b: FASTAN ANALYSIS - SKIPPED (--nofastan flag)")
+        logger.info(SEPARATOR_LINE)
+
+    # Remaining steps only run if TRF was executed
+    if not skip_trf:
+        # Step 2: Add annotations
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 2: ADD ANNOTATIONS")
+        logger.info(SEPARATOR_LINE)
+        add_annotations(settings, force_downstream)
+
+        # Step 3: TRF Classification
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 3: TRF CLASSIFICATION")
+        logger.info(SEPARATOR_LINE)
+        run_trf_classification(settings, args, force_downstream)
+
+        # Step 4: TRF Drawing and HTML report
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 4: TRF DRAWING AND REPORT")
+        logger.info(SEPARATOR_LINE)
+        run_trf_drawing(settings, force_downstream)
 
     # Print summary
     print_summary(project, taxon_name, output_dir, html_report_file)
