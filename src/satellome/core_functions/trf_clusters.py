@@ -1212,14 +1212,22 @@ def draw_all(
             pickle.dump(gaps_data, f)
 
     # Export gaps to BED format in output root directory (not in images/)
-    bed_output_file = os.path.join(os.path.dirname(output_folder), f"{taxon}.gaps.bed")
+    # Extract project name from TRF file (e.g., GCF_000005845.2_ASM584v2_genomic.1kb.trf -> GCF_000005845.2_ASM584v2_genomic)
+    trf_basename = os.path.basename(trf_file)
+    # Remove .trf extension and any suffix like .1kb, .3kb, .10kb
+    project_name = trf_basename.replace('.trf', '')
+    for suffix in ['.1kb', '.3kb', '.10kb', '.micro', '.complex', '.pmicro', '.tssr']:
+        project_name = project_name.replace(suffix, '')
+
+    bed_output_file = os.path.join(os.path.dirname(output_folder), f"{project_name}.gaps.bed")
     logger.info(f"Exporting gaps to BED format: {bed_output_file}")
 
     try:
         with open(bed_output_file, 'w') as f:
             # BED format header
             f.write("# Gaps annotation from Satellome\n")
-            f.write(f"# Genome: {taxon}\n")
+            f.write(f"# Project: {project_name}\n")
+            f.write(f"# Taxon: {taxon}\n")
             f.write(f"# Total gaps: {len(gaps_data)}\n")
             f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
 
