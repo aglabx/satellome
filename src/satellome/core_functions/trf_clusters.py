@@ -678,6 +678,45 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
         logger.warning("Continuing with plotly HTML only")
 
 
+def _prepare_tr_traces(df_trs, names_filter=None, enhance=None):
+    """
+    Helper function to prepare TR traces for matplotlib rendering.
+
+    Args:
+        df_trs: List of dicts with tandem repeat data
+        names_filter: Optional function to filter family names (e.g., lambda x: x != "SING")
+        enhance: Optional minimum size to enhance small repeats
+
+    Returns:
+        List of trace configurations (dicts) for matplotlib
+    """
+    # Get unique family names from list of dicts
+    names = set(record.get("family_name") for record in df_trs if record.get("family_name"))
+
+    traces = []
+    for name in names:
+        if names_filter and not names_filter(name):
+            continue
+
+        # Filter items by family_name
+        items = [record for record in df_trs if record.get("family_name") == name]
+
+        # Extract data
+        starts = [item.get("start") for item in items]
+        lengths = [max(item.get("length", 0), enhance) for item in items] if enhance else [item.get("length", 0) for item in items]
+        chrms = [item.get("chrm") for item in items]
+
+        traces.append({
+            'base': starts,
+            'x': lengths,
+            'y': chrms,
+            'name': name,
+            'marker_color': None,  # Let matplotlib choose colors
+        })
+
+    return traces
+
+
 def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
     """
     Helper function to add tandem repeat families as traces to a figure.
@@ -726,6 +765,7 @@ def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffi
                             use_chrm=False, names_filter=None, enhance=None):
     """
     Helper function to create and save a TR visualization with specified parameters.
+    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -739,15 +779,27 @@ def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffi
     Returns:
         Output file path
     """
+    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
     _add_tr_families_by_name(fig, df_trs, names_filter=names_filter, enhance=enhance)
     safe_write_figure(fig, output_suffix, width=canvas_width, height=canvas_height)
+
+    # Create matplotlib version for static PNG export
+    try:
+        # Prepare traces for matplotlib
+        traces = _prepare_tr_traces(df_trs, names_filter, enhance)
+        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_suffix, use_chrm, traces)
+    except Exception as e:
+        logger.warning(f"Failed to create matplotlib version: {e}")
+        logger.warning("Continuing with plotly HTML only")
+
     return output_suffix
 
 
 def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_with_gap, size, use_chrm):
     """
     Helper function to draw repeats with gaps visualization.
+    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -757,6 +809,7 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
         size: Enhancement size
         use_chrm: Whether to use chromosome names
     """
+    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
 
     # Convert repeats_with_gap (list of tuples/lists) to list of dicts
@@ -777,6 +830,9 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
     Na_records = [r for r in repeats_with_gap_records if r["gap_type"] == "Na" and r["length"] < size]
     aNa_records = [r for r in repeats_with_gap_records if r["gap_type"] == "aNa" and r["length"] < size]
 
+    # Prepare traces for both plotly and matplotlib
+    traces = []
+
     # Add aN traces
     if len(aN_records) > 0:
         aN_starts = [r["start"] for r in aN_records]
@@ -789,6 +845,10 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
             base=[s + size for s in aN_starts], x=[size] * len(aN_records), y=aN_chrms,
             orientation="h", name="gaps aN", marker_color="#663399"
         ))
+        traces.extend([
+            {'base': aN_starts, 'x': [size] * len(aN_records), 'y': aN_chrms, 'name': "TR gap aN", 'marker_color': "#FF00FF"},
+            {'base': [s + size for s in aN_starts], 'x': [size] * len(aN_records), 'y': aN_chrms, 'name': "gaps aN", 'marker_color': "#663399"}
+        ])
 
     # Add Na traces
     if len(Na_records) > 0:
@@ -802,6 +862,10 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
             base=[s + size for s in Na_starts], x=[size] * len(Na_records), y=Na_chrms,
             orientation="h", name="gaps Na", marker_color="#00BFFF"
         ))
+        traces.extend([
+            {'base': Na_starts, 'x': [size] * len(Na_records), 'y': Na_chrms, 'name': "TR gap Na", 'marker_color': "#00CED1"},
+            {'base': [s + size for s in Na_starts], 'x': [size] * len(Na_records), 'y': Na_chrms, 'name': "gaps Na", 'marker_color': "#00BFFF"}
+        ])
 
     # Add aNa traces
     if len(aNa_records) > 0:
@@ -820,13 +884,26 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
             base=[s + third_size * 2 for s in aNa_starts], x=[third_size] * len(aNa_records), y=aNa_chrms,
             orientation="h", marker_color="#00FF7F"
         ))
+        traces.extend([
+            {'base': aNa_starts, 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "TR gap aNa", 'marker_color': "#00FF7F"},
+            {'base': [s + third_size for s in aNa_starts], 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "gaps aNa", 'marker_color': "#228B22"},
+            {'base': [s + third_size * 2 for s in aNa_starts], 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "", 'marker_color': "#00FF7F"}
+        ])
 
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
+
+    # Create matplotlib version for static PNG export
+    try:
+        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm, traces)
+    except Exception as e:
+        logger.warning(f"Failed to create matplotlib version: {e}")
+        logger.warning("Continuing with plotly HTML only")
 
 
 def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repeats_without_gaps, size, use_chrm):
     """
     Helper function to draw repeats without gaps visualization.
+    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -836,22 +913,44 @@ def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repea
         size: Enhancement size
         use_chrm: Whether to use chromosome names
     """
+    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
 
+    # Prepare traces for both plotly and matplotlib
+    traces = []
     names = set([x["family_name"] for x in repeats_without_gaps])
     for name in names:
         items = [x for x in repeats_without_gaps if x["family_name"] == name]
+        starts = [x.get("start") for x in items]
+        lengths = [max(x.get("length", 0), size) for x in items]
+        chrms = [x.get("chrm") for x in items]
+
         fig.add_trace(
             go.Bar(
-                base=[x.get("start") for x in items],
-                x=[max(x.get("length", 0), size) for x in items],
-                y=[x.get("chrm") for x in items],
+                base=starts,
+                x=lengths,
+                y=chrms,
                 orientation="h",
                 name=name,
             )
         )
 
+        traces.append({
+            'base': starts,
+            'x': lengths,
+            'y': chrms,
+            'name': name,
+            'marker_color': None,  # Let matplotlib choose colors
+        })
+
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
+
+    # Create matplotlib version for static PNG export
+    try:
+        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm, traces)
+    except Exception as e:
+        logger.warning(f"Failed to create matplotlib version: {e}")
+        logger.warning("Continuing with plotly HTML only")
 
 
 def draw_karyotypes(
