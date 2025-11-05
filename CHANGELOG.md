@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Automatic TRF installation on first run with smart fallback**:
   - Modified TRF tries to install first (for genomes with chromosomes >2GB)
+    - Now uses simple `build.sh` - only needs git and gcc/clang (no automake/autoconf!)
   - Falls back to standard TRF if build tools are missing (downloads pre-compiled binary)
   - Works in any environment - containers, minimal installs, etc.
   - Works with both regular install and editable install (`pip install -e .`)
