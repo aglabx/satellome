@@ -260,7 +260,6 @@ class TRModel(AbstractModel):
         if score1 > score2:
             use_first = True
 
-        
         self.trf_pmatch = float(
             (
                 self.trf_pmatch * self.trf_array_length
@@ -268,13 +267,15 @@ class TRModel(AbstractModel):
             )
             / (self.trf_array_length + obj2.trf_array_length)
         )
-        if not use_first:
-            self.trf_period = obj2.trf_period
-    
-        left_flank = obj2.trf_l_ind - self.trf_l_ind
-        self.trf_array = (
-            self.trf_array + obj2.trf_array[len(self.trf_array) - left_flank :]
-        )
+
+        # Calculate overlap based on coordinates, not array length
+        overlap_length = self.trf_r_ind - obj2.trf_l_ind + 1
+        if overlap_length > 0:
+            # Repeats overlap - skip the overlapping portion from obj2
+            self.trf_array = self.trf_array + obj2.trf_array[overlap_length:]
+        else:
+            # No overlap - just concatenate
+            self.trf_array = self.trf_array + obj2.trf_array
 
         self.trf_r_ind = obj2.trf_r_ind
         self.trf_array_length = len(self.trf_array)
@@ -283,6 +284,7 @@ class TRModel(AbstractModel):
         if not use_first:
             self.trf_period = obj2.trf_period
             self.trf_consensus = obj2.trf_consensus
+            self.trf_entropy = obj2.trf_entropy
             
         self.trf_n_copy = self.trf_array_length / self.trf_period
         self.trf_indels = None
@@ -291,8 +293,6 @@ class TRModel(AbstractModel):
         self.trf_n_c = self.trf_array.count("C")
         self.trf_n_g = self.trf_array.count("G")
         self.trf_n_t = self.trf_array.count("T")
-        if not use_first:
-            self.trf_entropy = obj2.trf_entropy
         self.trf_pvar = float(100 - float(self.trf_pmatch))
         self.trf_array_gc = get_gc_content(self.trf_array)
         self.trf_consensus_gc = get_gc_content(self.trf_consensus)
@@ -388,7 +388,7 @@ class TRModel(AbstractModel):
             properties = {}
         for name, attr in properties.items():
             features.append("%s=%s" % (name, getattr(self, attr)))
-        features = ";".join(features)
+        features = ";".join(features) if features else "."
         if prefix:
             seqid = prefix + seqid
         if self.trf_l_ind < self.trf_r_ind:

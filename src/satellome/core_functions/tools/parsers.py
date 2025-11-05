@@ -184,6 +184,7 @@ def trf_parse_head(line):
             return res[0]
         if res2:
             return res2[0]
+        return "Unknown"  # Return default if no pattern matches
     except (IndexError, AttributeError) as e:
         logger.error(f"Failed parse head: {line}, error: {e}")
         return "Unknown"

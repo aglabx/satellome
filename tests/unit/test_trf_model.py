@@ -41,7 +41,7 @@ class TestClearSequence:
     def test_clear_sequence_combined(self):
         """Test combined cleaning operations."""
         assert clear_sequence(" a t g c 123 ") == "ATGC"
-        assert clear_sequence("AtGc\n\tXYZ") == "ATGC"
+        assert clear_sequence("AtGc\n\tXYZ") == "ATGCY"  # Y is valid IUPAC code (pyrimidine)
         assert clear_sequence("at gc !@# 123") == "ATGC"
 
 

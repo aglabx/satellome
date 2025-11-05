@@ -530,8 +530,8 @@ class TestEdgeCases:
             x.trf_entropy and x.trf_entropy > 1.82
         )
 
-        # Should fail because entropy is None
-        assert filter_func(mock_tr) is False
+        # Should fail because entropy is None (returns None, which is falsy)
+        assert not filter_func(mock_tr)
 
     def test_case_insensitivity(self):
         """Test that filters handle lowercase sequences."""
