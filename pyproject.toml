@@ -36,7 +36,6 @@ classifiers = [
 ]
 dependencies = [
     "PyExp",
-    "pandas",
     "numpy",
     "pyyaml",
     "simplejson",
