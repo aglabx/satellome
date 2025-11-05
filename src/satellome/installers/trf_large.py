@@ -43,11 +43,11 @@ def install_trf_large(force: bool = False) -> bool:
 
     # Check if already installed
     bin_dir = get_satellome_bin_dir()
-    trf_large_path = bin_dir / 'trf-large'
+    trf_path = bin_dir / 'trf'
 
-    if trf_large_path.exists() and not force:
-        logger.info(f"Modified TRF already installed at {trf_large_path}")
-        if verify_installation('trf-large'):
+    if trf_path.exists() and not force:
+        logger.info(f"Modified TRF already installed at {trf_path}")
+        if verify_installation('trf'):
             logger.info("Modified TRF installation verified")
             return True
         else:
@@ -117,16 +117,16 @@ def install_trf_large(force: bool = False) -> bool:
                 return False
 
             # Copy binary to satellome bin directory
-            logger.info(f"Installing modified TRF to {trf_large_path}...")
-            shutil.copy2(binary_source, trf_large_path)
-            os.chmod(trf_large_path, 0o755)
+            logger.info(f"Installing modified TRF to {trf_path}...")
+            shutil.copy2(binary_source, trf_path)
+            os.chmod(trf_path, 0o755)
 
             logger.info("Modified TRF installed successfully!")
 
             # Verify installation
-            if verify_installation('trf-large'):
-                logger.info(f"Modified TRF is ready to use at: {trf_large_path}")
-                logger.info("Use this version for genomes with chromosomes >1-2 GB")
+            if verify_installation('trf'):
+                logger.info(f"Modified TRF is ready to use at: {trf_path}")
+                logger.info("Note: This version can handle chromosomes >2GB")
                 return True
             else:
                 logger.warning("Modified TRF installed but verification failed")
