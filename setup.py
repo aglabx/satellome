@@ -42,8 +42,15 @@ setup(
     long_description_content_type="text/markdown",
     install_requires=[
         "PyExp",
-        "editdistance",
+        "numpy",
+        "pyyaml",
+        "simplejson",
+        "intervaltree",
         "tqdm",
+        "plotly",
+        "editdistance",
+        "networkx",
+        "matplotlib",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",

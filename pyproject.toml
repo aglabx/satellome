@@ -42,9 +42,9 @@ dependencies = [
     "intervaltree",
     "tqdm",
     "plotly",
-    "kaleido",
     "editdistance",
     "networkx",
+    "matplotlib",
 ]
 requires-python = ">=3.6"
 
