@@ -447,9 +447,13 @@ def run_fastan(settings, force_rerun):
         os.makedirs(fastan_dir)
         logger.info(f"Created FasTAN output directory: {fastan_dir}")
 
-    # Output files
-    aln_file = os.path.join(fastan_dir, f"{project}.1aln")
-    bed_file = os.path.join(fastan_dir, f"{project}.bed")
+    # Output files - use genome filename instead of project name
+    genome_basename = os.path.splitext(os.path.basename(fasta_file))[0]
+    # Remove .gz extension if present
+    if genome_basename.endswith('.gz'):
+        genome_basename = os.path.splitext(genome_basename)[0]
+    aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
+    bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
 
     # Check if already completed
     if os.path.exists(aln_file) and os.path.exists(bed_file) and not force_rerun:
