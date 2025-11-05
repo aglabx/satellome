@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduces total dependencies from 13 to 11 packages
   - No impact on functionality - NCBI taxon name fetching still works correctly
   - More reliable installation across different environments
+- **Made kaleido optional** (SAT-29): Plotting works without chromium dependency
+  - If kaleido/chromium unavailable, saves interactive HTML plots instead of static PNG/SVG
+  - Significantly reduces installation complexity in containers and minimal environments
+  - Install with plotting support: `pip install satellome[plotting]`
+  - No functionality loss - HTML plots are fully interactive and viewable in any browser
 
 ## [1.4.0] - 2025-01-04
 

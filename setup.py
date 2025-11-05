@@ -45,6 +45,11 @@ setup(
         "editdistance",
         "tqdm",
     ],
+    extras_require={
+        'plotting': [
+            'kaleido>=0.2.1',  # For static image export (PNG/SVG/PDF)
+        ],
+    },
     classifiers=[
         "Development Status :: 4 - Beta",
         "Environment :: Console",

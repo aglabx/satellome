@@ -37,6 +37,43 @@ import sys
 sys.setrecursionlimit(RECURSION_LIMIT_DEFAULT)
 
 
+def safe_write_figure(fig, output_file, width=None, height=None, engine="kaleido"):
+    """
+    Safely write plotly figure to file with fallback to HTML if kaleido unavailable.
+
+    Args:
+        fig: Plotly figure object
+        output_file: Output file path (extension will be changed to .html if kaleido fails)
+        width: Figure width (optional)
+        height: Figure height (optional)
+        engine: Image export engine (default: "kaleido")
+
+    Returns:
+        str: Path to the created file
+    """
+    try:
+        # Try to export as static image (PNG/SVG/PDF)
+        kwargs = {"engine": engine}
+        if width is not None:
+            kwargs["width"] = width
+        if height is not None:
+            kwargs["height"] = height
+
+        fig.write_image(output_file, **kwargs)
+        logger.info(f"Exported plot to {output_file}")
+        return output_file
+    except Exception as e:
+        # Fallback to interactive HTML if kaleido/chromium not available
+        logger.warning(f"Failed to export static image: {e}")
+        logger.warning("Kaleido/chromium not available. Saving as interactive HTML instead.")
+
+        # Change extension to .html
+        html_file = os.path.splitext(output_file)[0] + ".html"
+        fig.write_html(html_file)
+        logger.info(f"Exported interactive plot to {html_file}")
+        return html_file
+
+
 class Graph:
 
     # init function to declare class variables
@@ -159,7 +196,7 @@ def _draw_sankey(output_file_name, title_text, labels, source, target, value):
         height=2000,
         width=2000,
     )
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
 
 def _deprecated_draw_sankey(
@@ -296,7 +333,7 @@ def _deprecated_draw_spheres(output_file_name_prefix, title_text, df_trs):
     )
     fig.update_layout(width=CANVAS_WIDTH_DEFAULT, height=CANVAS_HEIGHT_DEFAULT)
     output_file_name = output_file_name_prefix + ".3D.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
     fig = px.scatter_3d(
         df_trs[df_trs["family_name"] != "SING"],
@@ -317,25 +354,25 @@ def _deprecated_draw_spheres(output_file_name_prefix, title_text, df_trs):
     )
     fig.update_layout(width=CANVAS_WIDTH_DEFAULT, height=CANVAS_HEIGHT_DEFAULT)
     output_file_name = output_file_name_prefix + ".3D.nosingl.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="period", color="family_name", size="log_length")
     output_file_name = output_file_name_prefix + ".2D.gc_period.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="period", color="family_name", size="log_length")
     output_file_name = output_file_name_prefix + ".2D.gc_period.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
     fig = px.scatter(df_trs, x="gc", y="pmatch", color="family_name", size="log_length")
     output_file_name = output_file_name_prefix + ".2D.gc_pmatch.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
     fig = px.scatter(
         df_trs, x="pmatch", y="period", color="family_name", size="log_length"
     )
     output_file_name = output_file_name_prefix + ".2D.period_period.svg"
-    fig.write_image(output_file_name, engine="kaleido")
+    safe_write_figure(fig, output_file_name)
 
 
 def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
@@ -504,7 +541,7 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
         for trace_config in traces:
             fig.add_trace(go.Bar(**trace_config))
 
-    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+    safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
 
 
 def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
@@ -562,7 +599,7 @@ def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffi
     """
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
     _add_tr_families_by_name(fig, df_trs, names_filter=names_filter, enhance=enhance)
-    fig.write_image(output_suffix, engine="kaleido", width=canvas_width, height=canvas_height)
+    safe_write_figure(fig, output_suffix, width=canvas_width, height=canvas_height)
     return output_suffix
 
 
@@ -633,7 +670,7 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
             orientation="h", marker_color="#00FF7F"
         ))
 
-    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+    safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
 
 
 def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repeats_without_gaps, size, use_chrm):
@@ -663,7 +700,7 @@ def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repea
             )
         )
 
-    fig.write_image(output_file, engine="kaleido", width=canvas_width, height=canvas_height)
+    safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
 
 
 def draw_karyotypes(
