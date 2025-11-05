@@ -5,6 +5,57 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2025-01-05
+
+### Added
+- **FasTAN integration** (SAT-24): Alternative tandem repeat finder by Gene Myers
+  - FasTAN runs by default alongside TRF for comprehensive repeat analysis
+  - Automatic installation with `--install-fastan` or during `pip install`
+  - Use `--nofastan` to skip FasTAN and run TRF only
+  - Use `--notrf` to skip TRF and run FasTAN only
+  - Results saved to `fastan/` directory (`.1aln` and `.bed` formats)
+  - Automatic tanbed installation for BED format conversion
+- **Gaps annotation export to BED format** (SAT-41)
+  - Genomic gaps automatically exported to `{project_name}.gaps.bed`
+  - BED6 format with gap length as score
+  - Includes detailed header with project, taxon, and total gap count
+- **Professional README badges** (SAT-46)
+  - CI/CD status (GitHub Actions)
+  - Code coverage (Codecov)
+  - Python version support (3.9, 3.10, 3.11)
+  - MIT License badge
+  - PyPI version badge
+  - DOI badge for citations
+- **GitHub Actions CI/CD** (SAT-42)
+  - Automated testing on push and pull requests
+  - Matrix testing across Python 3.9, 3.10, 3.11
+  - Code coverage reporting to Codecov
+
+### Fixed
+- **Gaps BED file naming** (SAT-44): Now uses project name instead of taxon
+  - Previous: `Unknown.gaps.bed` (using taxon)
+  - Current: `{project_name}.gaps.bed` (using project name from input file)
+- **Critical test fixes** (SAT-43): Fixed 12 failing unit tests
+  - Overlap merging calculation fixed (coordinate-based, not array-based)
+  - TRF format validation and parsing
+  - Mock object handling in tests
+- **Additional test fixes** (SAT-45): Fixed 10 more failing unit tests
+  - TRF parse head now returns None for invalid input (proper handling in TRModel)
+  - Fixed test fixtures to match real TRF format (15 fields, proper header format)
+  - Fixed coordinate-length mismatches (1-based inclusive coordinates)
+- **FasTAN output file naming**: Now uses genome filename instead of project name for consistency
+- **FasTAN installer improvements**:
+  - Better binary detection in PATH and satellome bin directories
+  - Fixed compilation with pthread linker flag
+  - Uses forked FasTAN repository with fixed Makefile
+
+### Changed
+- **Default behavior**: Both TRF and FasTAN run by default for comprehensive analysis
+  - Use `--nofastan` to run TRF only
+  - Use `--notrf` to run FasTAN only
+  - At least one tool must run
+- FasTAN and tanbed now auto-install on first use (like TRF)
+
 ## [1.4.1] - 2025-01-05
 
 ### Added
