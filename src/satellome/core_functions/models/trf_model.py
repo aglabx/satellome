@@ -205,7 +205,8 @@ class TRModel(AbstractModel):
         - line: parsed trf line
         """
         self.trf_param = 0
-        self.trf_head = trf_parse_head(head).strip()
+        parsed_head = trf_parse_head(head)
+        self.trf_head = parsed_head.strip() if parsed_head else "Unknown"
         self.trf_gi = parse_fasta_head(self.trf_head)[0]
         self.trf_chr = parse_chromosome_name(self.trf_head)
 
