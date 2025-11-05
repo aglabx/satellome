@@ -247,6 +247,12 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
 
         assert len(data_lines) == 1
         fields = data_lines[0].split('\t')
+
+        # IMPORTANT: Output should have only first word in chromosome column
+        # Input BED: "NC_000913.3 Escherichia coli str. K-12..."
+        # Output: "NC_000913.3"
+        assert fields[0] == "NC_000913.3", f"Expected 'NC_000913.3', got '{fields[0]}'"
+
         # Should extract "ATCGATCGAT"
         assert fields[-1] == "ATCGATCGAT"
 

@@ -181,8 +181,13 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
                 if strand == '-':
                     extracted_seq = reverse_complement(extracted_seq)
 
-                # Write BED fields + sequence
-                out_fh.write(line + '\t' + extracted_seq + '\n')
+                # Write output: replace full chromosome name with short name (first word only)
+                # Original BED line might have: "NC_000913.3 Escherichia coli..."
+                # We write: "NC_000913.3\t..."
+                fields = line.split('\t')
+                fields[0] = chr_name  # Replace full name with first word
+                output_line = '\t'.join(fields) + '\t' + extracted_seq
+                out_fh.write(output_line + '\n')
                 extracted_count += 1
 
     logger.info(f"✓ Extracted {extracted_count} sequences")
