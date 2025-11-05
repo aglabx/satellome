@@ -37,11 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Reduces total dependencies from 13 to 11 packages
   - No impact on functionality - NCBI taxon name fetching still works correctly
   - More reliable installation across different environments
-- **Made kaleido optional** (SAT-29): Plotting works without chromium dependency
-  - If kaleido/chromium unavailable, saves interactive HTML plots instead of static PNG/SVG
-  - Significantly reduces installation complexity in containers and minimal environments
-  - Install with plotting support: `pip install satellome[plotting]`
-  - No functionality loss - HTML plots are fully interactive and viewable in any browser
+- **Eliminated kaleido/chromium dependency completely** (SAT-29): Now uses matplotlib for static images
+  - Karyotype plots saved in BOTH formats: interactive HTML (plotly) + static PNG (matplotlib)
+  - No external browser or chromium dependency required
+  - Works in any environment: containers, minimal installs, headless servers
+  - matplotlib backend (Agg) handles PNG/SVG export without X11/display
+  - Significantly simpler installation and smaller footprint
 
 ## [1.4.0] - 2025-01-04
 

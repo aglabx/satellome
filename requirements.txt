@@ -6,10 +6,7 @@ simplejson
 intervaltree
 tqdm
 plotly
+matplotlib
 editdistance
 networkx
 six>=1.16.0
-
-# Optional: For static image export (PNG/SVG/PDF) instead of interactive HTML
-# If not installed, plots will be saved as HTML files
-# kaleido

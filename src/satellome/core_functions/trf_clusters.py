@@ -15,6 +15,10 @@ import plotly.graph_objects as go
 from intervaltree import IntervalTree
 import pickle
 from tqdm import tqdm
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend for server environments
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -72,6 +76,40 @@ def safe_write_figure(fig, output_file, width=None, height=None, engine="kaleido
         fig.write_html(html_file)
         logger.info(f"Exported interactive plot to {html_file}")
         return html_file
+
+
+def save_matplotlib_figure(fig, output_file, dpi=150):
+    """
+    Save matplotlib figure to file (PNG or SVG).
+
+    Args:
+        fig: Matplotlib figure object
+        output_file: Output file path
+        dpi: DPI for raster formats (default: 150)
+
+    Returns:
+        str: Path to the created file
+    """
+    try:
+        ext = os.path.splitext(output_file)[1].lower()
+        if ext in ['.png', '.jpg', '.jpeg']:
+            fig.savefig(output_file, dpi=dpi, bbox_inches='tight', facecolor='white')
+        elif ext == '.svg':
+            fig.savefig(output_file, format='svg', bbox_inches='tight')
+        elif ext == '.pdf':
+            fig.savefig(output_file, format='pdf', bbox_inches='tight')
+        else:
+            # Default to PNG
+            output_file = os.path.splitext(output_file)[0] + '.png'
+            fig.savefig(output_file, dpi=dpi, bbox_inches='tight', facecolor='white')
+
+        plt.close(fig)
+        logger.info(f"Exported matplotlib plot to {output_file}")
+        return output_file
+    except Exception as e:
+        logger.error(f"Failed to save matplotlib figure: {e}")
+        plt.close(fig)
+        return None
 
 
 class Graph:
@@ -521,9 +559,108 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
     return fig, canvas_width, dynamic_height
 
 
+def _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm=False, traces=None):
+    """
+    Create karyotype visualization using matplotlib for PNG/SVG export without external dependencies.
+
+    Args:
+        scaffold_for_plot: Scaffold data for plotting
+        title_text: Plot title
+        output_file: Output file path (will change extension to .png)
+        use_chrm: Whether to use chromosome names
+        traces: List of trace configurations (dict with plotly trace parameters)
+
+    Returns:
+        None
+    """
+    # Extract data
+    if use_chrm:
+        scaffold_items = scaffold_for_plot["chrm"]
+        yaxis_title = "Chromosome name"
+    else:
+        scaffold_items = scaffold_for_plot["scaffold"]
+        yaxis_title = "Scaffold name"
+
+    # Apply same sorting as plotly version
+    scaffold_items = _sort_chromosomes_intelligent(scaffold_items)
+
+    # Reorder end values
+    if use_chrm:
+        chrm_to_end = dict(zip(scaffold_for_plot["chrm"], scaffold_for_plot["end"]))
+        scaffold_end_values = [chrm_to_end[chrm] for chrm in scaffold_items]
+    else:
+        scaffold_to_end = dict(zip(scaffold_for_plot["scaffold"], scaffold_for_plot["end"]))
+        scaffold_end_values = [scaffold_to_end[scaffold] for scaffold in scaffold_items]
+
+    # Calculate figure dimensions
+    num_items = len(scaffold_items)
+    fig_height = max(6, min(30, 2 + num_items * 0.3))  # Height in inches
+    fig_width = 14  # Width in inches
+
+    # Create figure
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    # Create y-axis positions
+    y_positions = list(range(len(scaffold_items)))
+
+    # Draw background bars (scaffolds)
+    ax.barh(y_positions, scaffold_end_values, height=0.8,
+            color='#f3f4f7', edgecolor='none', zorder=1)
+
+    # Add traces if provided
+    if traces:
+        for trace_config in traces:
+            # Extract matplotlib-compatible parameters from plotly trace config
+            x_values = trace_config.get('x', [])
+            base_values = trace_config.get('base', [])
+            y_items = trace_config.get('y', [])
+            color = trace_config.get('marker_color', 'black')
+            label = trace_config.get('name', '')
+
+            # Map y items to positions
+            y_item_to_pos = {item: pos for pos, item in enumerate(scaffold_items)}
+            trace_y_positions = [y_item_to_pos.get(item, -1) for item in y_items]
+
+            # Filter out invalid positions
+            valid_indices = [i for i, pos in enumerate(trace_y_positions) if pos >= 0]
+            if valid_indices:
+                valid_x = [x_values[i] for i in valid_indices]
+                valid_base = [base_values[i] for i in valid_indices]
+                valid_y_pos = [trace_y_positions[i] for i in valid_indices]
+
+                ax.barh(valid_y_pos, valid_x, left=valid_base, height=0.8,
+                       color=color, label=label, zorder=2)
+
+    # Formatting
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(scaffold_items)
+    ax.set_xlabel('bp', fontsize=12)
+    ax.set_ylabel(yaxis_title, fontsize=12)
+    ax.set_title(title_text, fontsize=14, pad=20)
+
+    # Style axes
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.grid(False)
+    ax.set_axisbelow(True)
+
+    # Set x-axis to start at 0
+    ax.set_xlim(left=0)
+
+    # Add legend if there are traces
+    if traces and any(t.get('name') for t in traces):
+        ax.legend(loc='best', frameon=False)
+
+    # Save as PNG
+    png_output = os.path.splitext(output_file)[0] + '.png'
+    save_matplotlib_figure(fig, png_output, dpi=150)
+
+
 def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use_chrm=False, traces=None):
     """
     Helper function to create a bar chart with given traces and save it.
+    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -535,6 +672,7 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
     Returns:
         None
     """
+    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_suffix, use_chrm=use_chrm)
 
     if traces:
@@ -542,6 +680,13 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
             fig.add_trace(go.Bar(**trace_config))
 
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
+
+    # Create matplotlib version for static PNG/SVG export
+    try:
+        _create_matplotlib_karyotype(scaffold_for_plot, title_suffix, output_file, use_chrm, traces)
+    except Exception as e:
+        logger.warning(f"Failed to create matplotlib version: {e}")
+        logger.warning("Continuing with plotly HTML only")
 
 
 def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
