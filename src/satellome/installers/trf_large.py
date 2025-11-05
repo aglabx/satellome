@@ -38,9 +38,8 @@ def install_trf_large(force: bool = False) -> bool:
     platform_name, _ = detect_platform()
 
     if platform_name == 'darwin':
-        logger.warning("Note: Modified TRF compilation has known issues on macOS due to platform-specific code.")
-        logger.warning("If compilation fails, please use pre-compiled binaries or compile on Linux.")
-        logger.info("You can download pre-compiled binaries from: https://github.com/aglabx/trf/releases")
+        logger.info("Note: Compiling modified TRF on macOS using build.sh (requires Xcode Command Line Tools).")
+        logger.info("If compilation fails, standard TRF will be used as fallback.")
 
     # Check if already installed
     bin_dir = get_satellome_bin_dir()
@@ -64,7 +63,6 @@ def install_trf_large(force: bool = False) -> bool:
     with tempfile.TemporaryDirectory(prefix='trf_large_build_') as tmp_dir:
         tmp_path = Path(tmp_dir)
         repo_dir = tmp_path / 'trf'
-        build_dir = repo_dir / 'build'
 
         try:
             # Clone repository
@@ -82,34 +80,22 @@ def install_trf_large(force: bool = False) -> bool:
 
             logger.info("Repository cloned successfully")
 
-            # Create build directory
-            build_dir.mkdir(exist_ok=True)
-            logger.info("Created build directory")
+            # Make build.sh executable
+            build_script = repo_dir / 'build.sh'
+            if not build_script.exists():
+                logger.error("build.sh not found in repository")
+                return False
 
-            # Run configure
-            logger.info("Running configure...")
+            os.chmod(build_script, 0o755)
+
+            # Build modified TRF using build.sh
+            logger.info("Compiling modified TRF using build.sh (this may take a minute)...")
             result = subprocess.run(
-                ['../configure'],
-                cwd=build_dir,
+                ['./build.sh'],
+                cwd=repo_dir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 timeout=300
-            )
-
-            if result.returncode != 0:
-                logger.error(f"Configure failed:\n{result.stderr.decode()}")
-                return False
-
-            logger.info("Configure completed successfully")
-
-            # Build modified TRF
-            logger.info("Compiling modified TRF (this may take a few minutes)...")
-            result = subprocess.run(
-                ['make'],
-                cwd=build_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=600
             )
 
             if result.returncode != 0:
@@ -118,12 +104,12 @@ def install_trf_large(force: bool = False) -> bool:
 
             logger.info("Modified TRF compiled successfully")
 
-            # Find the binary
-            binary_source = build_dir / 'src' / 'trf'
+            # Find the binary (should be in repo root)
+            binary_source = repo_dir / 'trf'
 
             if not binary_source.exists():
                 logger.error(f"Could not find TRF binary at {binary_source}")
-                logger.error(f"Build directory contents: {list(build_dir.glob('**/*'))}")
+                logger.error(f"Repository contents: {list(repo_dir.glob('*'))}")
                 return False
 
             if not os.access(binary_source, os.X_OK):
