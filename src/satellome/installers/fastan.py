@@ -130,19 +130,28 @@ def install_fastan(force: bool = False) -> bool:
 
             logger.info("FasTAN compiled successfully")
 
-            # Find the binary (check common names)
+            # Find the binary (check common names in multiple locations)
             possible_names = ['FasTAN', 'fastan', 'FASTAN']
+            search_dirs = [repo_dir, repo_dir / 'bin']
             binary_source = None
 
-            for name in possible_names:
-                candidate = repo_dir / name
-                if candidate.exists() and os.access(candidate, os.X_OK):
-                    binary_source = candidate
+            for search_dir in search_dirs:
+                if not search_dir.exists():
+                    continue
+                for name in possible_names:
+                    candidate = search_dir / name
+                    if candidate.exists() and os.access(candidate, os.X_OK):
+                        binary_source = candidate
+                        logger.info(f"Found FasTAN binary at {candidate}")
+                        break
+                if binary_source:
                     break
 
             if not binary_source:
-                logger.error(f"Could not find FasTAN binary in {repo_dir}")
-                logger.error(f"Directory contents: {list(repo_dir.glob('*'))}")
+                logger.error(f"Could not find FasTAN binary in {repo_dir} or {repo_dir / 'bin'}")
+                logger.error(f"Repository root contents: {list(repo_dir.glob('*'))}")
+                if (repo_dir / 'bin').exists():
+                    logger.error(f"bin/ directory contents: {list((repo_dir / 'bin').glob('*'))}")
                 return False
 
             # Copy binary to satellome bin directory

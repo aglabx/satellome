@@ -88,16 +88,24 @@ def install_tanbed(force: bool = False) -> bool:
 
             logger.info("alntools compiled successfully")
 
-            # Find tanbed binary
-            binary_source = repo_dir / 'tanbed'
+            # Find tanbed binary (check multiple locations)
+            search_dirs = [repo_dir, repo_dir / 'bin']
+            binary_source = None
 
-            if not binary_source.exists():
-                logger.error(f"Could not find tanbed binary in {repo_dir}")
-                logger.error(f"Directory contents: {list(repo_dir.glob('*'))}")
-                return False
+            for search_dir in search_dirs:
+                if not search_dir.exists():
+                    continue
+                candidate = search_dir / 'tanbed'
+                if candidate.exists() and os.access(candidate, os.X_OK):
+                    binary_source = candidate
+                    logger.info(f"Found tanbed binary at {candidate}")
+                    break
 
-            if not os.access(binary_source, os.X_OK):
-                logger.error(f"tanbed binary at {binary_source} is not executable")
+            if not binary_source:
+                logger.error(f"Could not find tanbed binary in {repo_dir} or {repo_dir / 'bin'}")
+                logger.error(f"Repository root contents: {list(repo_dir.glob('*'))}")
+                if (repo_dir / 'bin').exists():
+                    logger.error(f"bin/ directory contents: {list((repo_dir / 'bin').glob('*'))}")
                 return False
 
             # Copy binary to satellome bin directory
