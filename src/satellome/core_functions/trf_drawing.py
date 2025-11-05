@@ -8,8 +8,8 @@
 import logging
 import math
 import re
+import csv
 
-import pandas as pd
 from tqdm import tqdm
 
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
@@ -62,9 +62,15 @@ def scaffold_length_sort_dict(
     fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None
 ):
     """Function that calculates length of scaffolds
-    and return table with scaffold data from fasta file
+    and return dict with scaffold data from fasta file
+
+    Returns:
+        dict with keys: 'scaffold', 'start', 'end' (lists)
     """
-    scaffold_length = []
+    scaffolds = []
+    starts = []
+    ends = []
+
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
         if len(seq) < lenght_cutoff:
@@ -75,21 +81,33 @@ def scaffold_length_sort_dict(
                 name = new_name[0]
         if chm2name:
             name = chm2name[name]
-        scaffold_length.append((name, 1, len(seq)))
+        scaffolds.append(name)
+        starts.append(1)
+        ends.append(len(seq))
 
-    scaffold_length.sort(key=lambda x: sort_chrm(x[0]))
+    # Sort by chromosome name
+    sorted_data = sorted(zip(scaffolds, starts, ends), key=lambda x: sort_chrm(x[0]))
 
-    scaffold_df = pd.DataFrame(scaffold_length, columns=["scaffold", "start", "end"])
-    return scaffold_df
+    return {
+        "scaffold": [x[0] for x in sorted_data],
+        "start": [x[1] for x in sorted_data],
+        "end": [x[2] for x in sorted_data]
+    }
 
 
 def scaffold_length_sort_length(
     fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None
 ):
     """Function that calculates length of scaffolds
-    and return table with scaffold data from fasta file
+    and return dict with scaffold data from fasta file, sorted by length
+
+    Returns:
+        dict with keys: 'scaffold', 'start', 'end' (lists), sorted by end descending
     """
-    scaffold_length = []
+    scaffolds = []
+    starts = []
+    ends = []
+
     for header, seq in sc_iter_fasta_brute(fasta_file):
         name = header[1:].split()[0]
         if len(seq) < lenght_cutoff:
@@ -100,53 +118,90 @@ def scaffold_length_sort_length(
                 name = new_name[0]
         if chm2name:
             name = chm2name[name]
-        scaffold_length.append((name, 1, len(seq)))
+        scaffolds.append(name)
+        starts.append(1)
+        ends.append(len(seq))
 
-    scaffold_df = pd.DataFrame(scaffold_length, columns=["scaffold", "start", "end"])
-    scaffold_df.sort_values(by=["end"], inplace=True, ascending=False)
-    return scaffold_df
+    # Sort by length (descending)
+    sorted_data = sorted(zip(scaffolds, starts, ends), key=lambda x: x[2], reverse=True)
+
+    return {
+        "scaffold": [x[0] for x in sorted_data],
+        "start": [x[1] for x in sorted_data],
+        "end": [x[2] for x in sorted_data]
+    }
 
 
 def read_trf_file(trf_file):
-    """Function that convert Aleksey script's trf table to csv."""
+    """Function that convert Aleksey script's trf table to list of dicts.
 
-    
-    data = pd.read_csv(
-        trf_file,
-        sep="\t",
-        low_memory=False,
-    )
-    data["start"] = data["trf_l_ind"]
-    data["end"] = data["trf_r_ind"]
-    data["period"] = data["trf_period"]
-    data["pmatch"] = data["trf_pmatch"]
-    data["mono"] = data["trf_consensus"]
-    data["array"] = data["trf_array"]
-    data["gc"] = data["trf_array_gc"]
-    data["scaffold"] = data["trf_head"]
-    data["length"] = data["trf_array_length"]
-    data["seq"] = data["array"]
-    data["mono*3"] = data["mono"] * 3
-    data["centromere"] = [1 if CENPB_REGEXP.findall(i) else 0 for i in data["array"]]
-    data["telomere"] = [1 if TELOMERE_REGEXP.findall(i) else 0 for i in data["array"]]
-    data["final_id"] = [f"{x['scaffold']}_{x['id']}" for i, x in data.iterrows()]
-    data["class_name"] = [
-        "CENPB" if x["centromere"] else "UNK" for i, x in data.iterrows()
-    ]
-    data["class_name"] = [
-        "TEL" if x["telomere"] else x["class_name"] for i, x in data.iterrows()
-    ]
-    data["family_name"] = None
-    data["locus_name"] = None
-    data["log_length"] = [math.log(x["length"]) for i, x in data.iterrows()]
-    data["scaffold"] = [x["scaffold"].split()[0] for i, x in data.iterrows()]
+    Returns:
+        list of dicts, each representing one TRF record
+    """
+    data = []
+
+    with open(trf_file, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t')
+
+        for row in reader:
+            # Create computed fields
+            record = dict(row)  # Copy all original fields
+
+            # Add renamed/computed fields
+            record["start"] = row.get("trf_l_ind")
+            record["end"] = row.get("trf_r_ind")
+            record["period"] = row.get("trf_period")
+            record["pmatch"] = row.get("trf_pmatch")
+            record["mono"] = row.get("trf_consensus")
+            record["array"] = row.get("trf_array")
+            record["gc"] = row.get("trf_array_gc")
+            record["scaffold"] = row.get("trf_head")
+            record["length"] = row.get("trf_array_length")
+            record["seq"] = record["array"]
+            record["mono*3"] = record["mono"] * 3 if record.get("mono") else None
+
+            # Pattern matching
+            array_val = record.get("array", "")
+            record["centromere"] = 1 if CENPB_REGEXP.findall(array_val) else 0
+            record["telomere"] = 1 if TELOMERE_REGEXP.findall(array_val) else 0
+
+            # Computed fields that need other fields first
+            record["final_id"] = f"{record['scaffold']}_{record.get('id', '')}"
+            record["class_name"] = "CENPB" if record["centromere"] else "UNK"
+            record["class_name"] = "TEL" if record["telomere"] else record["class_name"]
+            record["family_name"] = None
+            record["locus_name"] = None
+
+            # Numeric computations
+            length_val = record.get("length")
+            if length_val:
+                try:
+                    record["log_length"] = math.log(float(length_val))
+                except (ValueError, TypeError):
+                    record["log_length"] = None
+            else:
+                record["log_length"] = None
+
+            # Clean scaffold name
+            if record.get("scaffold"):
+                record["scaffold"] = record["scaffold"].split()[0]
+
+            data.append(record)
+
     return data
 
 
 def check_patterns(data):
-    """ """
-    centromers = data.loc[data["centromere"] == 1]
-    telomers = data.loc[data["telomere"] == 1]
+    """Filter data for centromere and telomere patterns.
+
+    Args:
+        data: list of dicts from read_trf_file()
+
+    Returns:
+        tuple of (centromers, telomers) - both are lists of dicts
+    """
+    centromers = [record for record in data if record.get("centromere") == 1]
+    telomers = [record for record in data if record.get("telomere") == 1]
     return (centromers, telomers)
 
 

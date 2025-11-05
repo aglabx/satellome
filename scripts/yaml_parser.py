@@ -7,9 +7,9 @@
 
 
 import pathlib
+import csv
 
 import click
-import pandas as pd
 import yaml
 
 
@@ -47,30 +47,32 @@ def make_table(directory_path):
 )
 def make_csv(directory_path, output_file):
     table = make_table(directory_path)
-    df = pd.DataFrame(
-        table,
-        columns=[
-            "Species",
-            "total length of assembly",
-            "# of 10kb repeat",
-            "% in genome of 10kb repeat",
-            "# of 3kb repeat",
-            "% in genome of 3kb repeat",
-            "# of 1kb repeat",
-            "% in genome of 1kb repeat",
-            "# of complex",
-            "% of complex",
-            "# of fSSR",
-            "% of fSSR",
-            "# of tSSR",
-            "% of tSSR",
-            "# of micro",
-            "% of micro",
-            "# of pmicro",
-            "% of pmicro",
-        ],
-    )
-    df.to_csv(output_file, sep="\t")
+    columns = [
+        "Species",
+        "total length of assembly",
+        "# of 10kb repeat",
+        "% in genome of 10kb repeat",
+        "# of 3kb repeat",
+        "% in genome of 3kb repeat",
+        "# of 1kb repeat",
+        "% in genome of 1kb repeat",
+        "# of complex",
+        "% of complex",
+        "# of fSSR",
+        "% of fSSR",
+        "# of tSSR",
+        "% of tSSR",
+        "# of micro",
+        "% of micro",
+        "# of pmicro",
+        "% of pmicro",
+    ]
+
+    # Write to TSV file using csv.writer
+    with open(output_file, 'w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        writer.writerow(columns)  # Header
+        writer.writerows(table)   # Data rows
 
 
 if __name__ == "__main__":

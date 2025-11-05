@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Works in any environment: containers, minimal installs, headless servers
   - matplotlib backend (Agg) handles PNG/SVG export without X11/display
   - Significantly simpler installation and smaller footprint
+- **Removed pandas dependency** (SAT-40): Replaced with stdlib csv module and native Python data structures
+  - **Completely eliminates six.moves compatibility issues in containers**
+  - Reduces dependencies by ~20MB
+  - Faster module imports
+  - DataFrame operations replaced with list of dicts (simpler, more Pythonic)
+  - pd.read_csv() → csv.DictReader() for TRF file parsing
+  - All data filtering/transformation uses native Python (list comprehensions, dict operations)
+  - No datetime functionality was used, so no loss of features
 
 ## [1.4.0] - 2025-01-04
 

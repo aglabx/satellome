@@ -9,7 +9,6 @@ import os
 import logging
 from collections import Counter
 
-import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from intervaltree import IntervalTree
@@ -187,7 +186,7 @@ def name_clusters(distances, tr2vector, df_trs, level=1):
         items = []
         singl = []
         for c in comps:
-            ids = [(G.node2id[id1], df_trs.loc[G.node2id[id1]].period) for id1 in c]
+            ids = [(G.node2id[id1], df_trs[G.node2id[id1]].get("period")) for id1 in c]
             if len(ids) > 3:  # Why 3? It should be 1
                 items.append(ids)
             else:
@@ -275,7 +274,7 @@ def _deprecated_draw_sankey(
         name2id = {}
 
         for c in comps:
-            ids = [(G.node2id[id1], df_trs.loc[G.node2id[id1]].period) for id1 in c]
+            ids = [(G.node2id[id1], df_trs[G.node2id[id1]].get("period")) for id1 in c]
             if len(ids) > 3:
                 items.append(ids)
             else:
@@ -702,23 +701,31 @@ def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
     Returns:
         None (modifies fig in place)
     """
-    names = set(df_trs["family_name"].unique())
+    # Get unique family names from list of dicts
+    names = set(record.get("family_name") for record in df_trs if record.get("family_name"))
 
     for name in names:
         if names_filter and not names_filter(name):
             continue
 
-        items = df_trs[df_trs["family_name"] == name]
+        # Filter items by family_name
+        items = [record for record in df_trs if record.get("family_name") == name]
 
+        # Apply enhancement if specified
         if enhance:
-            items = items.copy()
-            items.loc[:, "length"] = items["length"].apply(lambda x: max(x, enhance))
+            for item in items:
+                item["length"] = max(item.get("length", 0), enhance)
+
+        # Extract data for plotly
+        starts = [item.get("start") for item in items]
+        lengths = [item.get("length") for item in items]
+        chrms = [item.get("chrm") for item in items]
 
         fig.add_trace(
             go.Bar(
-                base=items["start"],
-                x=items["length"],
-                y=items["chrm"],
+                base=starts,
+                x=lengths,
+                y=chrms,
                 orientation="h",
                 name=name,
             )
@@ -762,56 +769,65 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
     """
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
 
-    repeats_with_gap_df = pd.DataFrame(
-        repeats_with_gap,
-        columns=["chrm", "start", "end", "family_name", "gap_type", "length"],
-    )
+    # Convert repeats_with_gap (list of tuples/lists) to list of dicts
+    repeats_with_gap_records = [
+        {
+            "chrm": row[0],
+            "start": row[1],
+            "end": row[2],
+            "family_name": row[3],
+            "gap_type": row[4],
+            "length": row[5]
+        }
+        for row in repeats_with_gap
+    ]
 
-    aN = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "aN") & (repeats_with_gap_df.length < size)
-    ]
-    Na = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "Na") & (repeats_with_gap_df.length < size)
-    ]
-    aNa = repeats_with_gap_df.loc[
-        (repeats_with_gap_df.gap_type == "aNa") & (repeats_with_gap_df.length < size)
-    ]
+    # Filter by gap type and size
+    aN_records = [r for r in repeats_with_gap_records if r["gap_type"] == "aN" and r["length"] < size]
+    Na_records = [r for r in repeats_with_gap_records if r["gap_type"] == "Na" and r["length"] < size]
+    aNa_records = [r for r in repeats_with_gap_records if r["gap_type"] == "aNa" and r["length"] < size]
 
     # Add aN traces
-    if len(aN) > 0:
+    if len(aN_records) > 0:
+        aN_starts = [r["start"] for r in aN_records]
+        aN_chrms = [r["chrm"] for r in aN_records]
         fig.add_trace(go.Bar(
-            base=aN["start"], x=[size] * len(aN), y=aN["chrm"],
+            base=aN_starts, x=[size] * len(aN_records), y=aN_chrms,
             orientation="h", name="Tandem Repeat_with gap aN", marker_color="#FF00FF"
         ))
         fig.add_trace(go.Bar(
-            base=aN["start"] + size, x=[size] * len(aN), y=aN["chrm"],
+            base=[s + size for s in aN_starts], x=[size] * len(aN_records), y=aN_chrms,
             orientation="h", name="gaps aN", marker_color="#663399"
         ))
 
     # Add Na traces
-    if len(Na) > 0:
+    if len(Na_records) > 0:
+        Na_starts = [r["start"] for r in Na_records]
+        Na_chrms = [r["chrm"] for r in Na_records]
         fig.add_trace(go.Bar(
-            base=Na["start"], x=[size] * len(Na), y=Na["chrm"],
+            base=Na_starts, x=[size] * len(Na_records), y=Na_chrms,
             orientation="h", name="Tandem Repeat_with gap Na", marker_color="#00CED1"
         ))
         fig.add_trace(go.Bar(
-            base=Na["start"] + size, x=[size] * len(Na), y=Na["chrm"],
+            base=[s + size for s in Na_starts], x=[size] * len(Na_records), y=Na_chrms,
             orientation="h", name="gaps Na", marker_color="#00BFFF"
         ))
 
     # Add aNa traces
-    if len(aNa) > 0:
+    if len(aNa_records) > 0:
         third_size = size * 2 / 3
+        aNa_starts = [r["start"] for r in aNa_records]
+        aNa_chrms = [r["chrm"] for r in aNa_records]
         fig.add_trace(go.Bar(
-            base=aNa["start"], x=[third_size] * len(aNa), y=aNa["chrm"],
+            base=aNa_starts, x=[third_size] * len(aNa_records), y=aNa_chrms,
             orientation="h", name="Tandem Repeat_with gap aNa", marker_color="#00FF7F"
         ))
         fig.add_trace(go.Bar(
-            base=aNa["start"] + third_size, x=[third_size] * len(aNa), y=aNa["chrm"],
+            base=[s + third_size for s in aNa_starts], x=[third_size] * len(aNa_records), y=aNa_chrms,
             orientation="h", name="gaps aNa", marker_color="#228B22"
         ))
         fig.add_trace(go.Bar(
-            base=aNa["start"] + third_size * 2, x=[third_size] * len(aNa), y=aNa["chrm"],
+            base=[s + third_size * 2 for s in aNa_starts], x=[third_size] * len(aNa_records), y=aNa_chrms,
             orientation="h", marker_color="#00FF7F"
         ))
 
@@ -867,10 +883,13 @@ def draw_karyotypes(
     in various configurations (raw, enhanced, with/without singletons, etc.).
     """
 
+    # Filter df_trs by scaffolds in scaffold_for_plot
     if use_chrm:
-        _df_trs = df_trs[df_trs["chrm"].isin(scaffold_for_plot["chrm"])]
+        allowed_scaffolds = set(scaffold_for_plot["chrm"])
+        _df_trs = [record for record in df_trs if record.get("chrm") in allowed_scaffolds]
     else:
-        _df_trs = df_trs[df_trs["chrm"].isin(scaffold_for_plot["scaffold"])]
+        allowed_scaffolds = set(scaffold_for_plot["scaffold"])
+        _df_trs = [record for record in df_trs if record.get("chrm") in allowed_scaffolds]
 
     ### 1. Raw gaps
     _create_and_save_bar_chart(
@@ -889,8 +908,15 @@ def draw_karyotypes(
     )
 
     ### 2. Enhanced gaps
-    _gaps_df = gaps_df[gaps_df["length"] > gap_cutoff].copy()
-    _gaps_df.loc[:, "length"] = _gaps_df["length"].apply(lambda x: max(x, enhance))
+    # Filter gaps by cutoff and enhance length
+    filtered_indices = [i for i, length in enumerate(gaps_df["length"]) if length > gap_cutoff]
+    _gaps_df = {
+        "scaffold": [gaps_df["scaffold"][i] for i in filtered_indices],
+        "start": [gaps_df["start"][i] for i in filtered_indices],
+        "end": [gaps_df["end"][i] for i in filtered_indices],
+        "length": [max(gaps_df["length"][i], enhance) for i in filtered_indices]
+    }
+
     _create_and_save_bar_chart(
         scaffold_for_plot,
         title_text + "(enlarged gaps)",
@@ -1053,7 +1079,8 @@ def draw_all(
 
     logger.info("Loading trs...")
     df_trs = read_trf_file(trf_file)
-    df_trs = df_trs.loc[df_trs.period > 5]
+    # Filter by period > 5
+    df_trs = [record for record in df_trs if float(record.get("period", 0)) > 5]
     logger.info(f"Quantity of TRs: {len(df_trs)}")
 
     if len(df_trs) > SAMPLE_SIZE_FOR_CLUSTERING:
@@ -1131,9 +1158,17 @@ def draw_all(
     else:
         logger.info("No gaps found in the genome!")
 
-    gaps_df = pd.DataFrame(gaps_data, columns=["scaffold", "start", "end", "length"])
+    # Convert gaps_data (list of tuples) to dict format
+    gaps_df = {
+        "scaffold": [row[0] for row in gaps_data],
+        "start": [row[1] for row in gaps_data],
+        "end": [row[2] for row in gaps_data],
+        "length": [row[3] for row in gaps_data]
+    }
 
-    df_trs["chrm"] = [x["scaffold"] for i, x in df_trs.iterrows()]
+    # Add chrm field to df_trs records (list of dicts)
+    for record in df_trs:
+        record["chrm"] = record.get("scaffold")
 
     chrms = set([x[0] for x in gaps_data])
     if chrms:
