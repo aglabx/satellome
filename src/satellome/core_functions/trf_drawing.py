@@ -61,11 +61,39 @@ def sort_chrm(name):
 def scaffold_length_sort_dict(
     fasta_file, lenght_cutoff=100000, name_regexp=None, chm2name=None
 ):
-    """Function that calculates length of scaffolds
-    and return dict with scaffold data from fasta file
+    """
+    Calculate scaffold lengths and return sorted scaffold data from FASTA file.
+
+    Reads a FASTA file, filters scaffolds by minimum length, optionally
+    applies name transformations, and returns scaffold coordinates sorted
+    by chromosome name.
+
+    Args:
+        fasta_file (str): Path to FASTA file containing genomic scaffolds
+        lenght_cutoff (int, optional): Minimum scaffold length in bp.
+                                       Scaffolds shorter than this are excluded.
+                                       Defaults to 100000 (100kb).
+        name_regexp (str, optional): Regular expression pattern to extract
+                                     scaffold name from FASTA header.
+                                     If None, uses first space-delimited word.
+                                     Defaults to None.
+        chm2name (dict, optional): Dictionary mapping scaffold names to
+                                   chromosome names for renaming.
+                                   Defaults to None.
 
     Returns:
-        dict with keys: 'scaffold', 'start', 'end' (lists)
+        dict: Dictionary with three keys, each containing a list:
+            - 'scaffold' (list of str): Scaffold/chromosome names
+            - 'start' (list of int): Start coordinates (all set to 1)
+            - 'end' (list of int): End coordinates (scaffold lengths)
+            All lists are sorted by chromosome name using sort_chrm().
+
+    Example:
+        >>> data = scaffold_length_sort_dict("genome.fasta", lenght_cutoff=50000)
+        >>> data['scaffold']
+        ['Chr1', 'Chr2', 'Chr3']
+        >>> data['end']
+        [150000, 200000, 180000]
     """
     scaffolds = []
     starts = []

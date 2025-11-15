@@ -5,6 +5,16 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 """
+GFF3 (Generic Feature Format version 3) data models and I/O handlers.
+
+This module provides classes for parsing, manipulating, and writing GFF3 files,
+which are commonly used for genome annotations. GFF3 is a tab-delimited format
+with 9 columns: seqid, source, type, start, end, score, strand, phase, attributes.
+
+Classes:
+    Gff3Model: Data model for a single GFF3 record
+    Gff3FeatureDict: Dictionary for storing GFF3 feature attributes
+    Gff3FileIO: File I/O handler for reading/writing GFF3 files
 """
 
 
@@ -66,15 +76,60 @@ class Gff3Model(AbstractModel):
         return abs(self.end - self.start)
 
     def get_coordinates(self):
+        """
+        Get normalized genomic coordinates as a tuple.
+
+        Returns coordinates in ascending order regardless of strand direction.
+        Handles cases where end < start (reverse strand features).
+
+        Returns:
+            tuple: (start, end) coordinates in ascending order
+
+        Example:
+            >>> record = Gff3Model()
+            >>> record.start, record.end = 1000, 2000
+            >>> record.get_coordinates()
+            (1000, 2000)
+            >>> record.start, record.end = 2000, 1000  # Reverse strand
+            >>> record.get_coordinates()
+            (1000, 2000)
+        """
         if self.end < self.start:
             return (self.end, self.start)
         return (self.start, self.end)
 
     def save_original(self, line):
+        """
+        Store the original GFF3 line for reference.
+
+        Args:
+            line (str): Original GFF3 line from file
+        """
         self.original = line
 
     def as_gff3(self):
-        """ """
+        """
+        Convert the GFF3 record to a properly formatted GFF3 line.
+
+        Serializes all dumpable attributes into a tab-delimited GFF3 format string.
+        Handles both simple and dict-type attributes in the attributes field.
+        Dict-type attributes are formatted as key:value pairs separated by colons.
+
+        Returns:
+            str: GFF3-formatted line ending with newline character
+
+        Example:
+            >>> record = Gff3Model()
+            >>> record.seqid = "chr1"
+            >>> record.source = "test"
+            >>> record.type = "gene"
+            >>> record.start, record.end = 1000, 2000
+            >>> record.score, record.strand, record.phase = ".", "+", "."
+            >>> record.attributes = {"ID": "gene001", "Name": "test_gene"}
+            >>> line = record.as_gff3()
+            >>> "chr1\\ttest\\tgene\\t1000\\t2000" in line
+            True
+        """
         s = []
         for attr in self.dumpable_attributes:
             if not attr == "attributes":
@@ -134,15 +189,52 @@ class Gff3FeatureDict(MutableMapping):
 
 
 class Gff3FileIO(TabDelimitedFileIO):
-    """ """
+    """
+    File I/O handler for reading and writing GFF3 format files.
+
+    Extends TabDelimitedFileIO with GFF3-specific parsing logic:
+    - Preserves header/comment lines starting with '#'
+    - Parses the 9-column GFF3 format
+    - Handles complex attribute fields with key=value pairs
+    - Supports filtering by feature type
+
+    Attributes:
+        headers (list): List of GFF3 header/comment lines from the file
+    """
 
     def __init__(self, *args, **kwargs):
-        """ """
+        """
+        Initialize GFF3 file I/O handler.
+
+        Args:
+            *args: Positional arguments passed to parent TabDelimitedFileIO
+            **kwargs: Keyword arguments passed to parent TabDelimitedFileIO
+        """
         super(TabDelimitedFileIO, self).__init__(*args, **kwargs)
         self.headers = []
 
     def read_online(self, file_name, only_fields=None):
-        """Overrided. Yield items online from data from input_file."""
+        """
+        Stream GFF3 records from file one at a time (memory-efficient).
+
+        Reads GFF3 file line by line, yielding Gff3Model objects without loading
+        the entire file into memory. Preserves header lines and parses attributes
+        field into structured dictionaries. Handles special cases like Dbxref
+        attributes with multiple colon-separated values.
+
+        Args:
+            file_name (str): Path to GFF3 file
+            only_fields (list, optional): List of feature types to include (e.g., ["gene", "CDS"]).
+                                         If None, returns all features. Defaults to None.
+
+        Yields:
+            Gff3Model: Parsed GFF3 record object
+
+        Example:
+            >>> io_handler = Gff3FileIO()
+            >>> for record in io_handler.read_online("annotations.gff3", only_fields=["gene"]):
+            ...     print(record.seqid, record.start, record.end)
+        """
 
         def skip_comments(iterable):
             for line in iterable:

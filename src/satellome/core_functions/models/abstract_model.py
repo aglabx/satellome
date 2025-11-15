@@ -12,26 +12,36 @@ logger = logging.getLogger(__name__)
 
 
 class AbstractModel(object):
-    """Сlass for data wrapping.
+    """
+    Abstract base class for data model objects with automatic attribute handling.
 
+    Provides automatic type conversion and serialization for model classes.
+    Subclasses define their schema via class attributes, and this base class
+    handles initialization, type conversion, and serialization/deserialization.
 
-    Private methods:
+    Class Attributes:
+        dumpable_attributes (list): List of attribute names to include in serialization
+        int_attributes (list): Attributes that should be converted to integers
+        float_attributes (list): Attributes that should be converted to floats
+        list_attributes (list): Attributes that should be converted to lists
+        list_attributes_types (dict): Mapping of list attribute names to element types
+        other_attributes (dict): Additional attributes with custom handling
 
-    - __str__(self) used dumpable_attributes
-    - set_with_dict(self, dictionary)
+    Methods:
+        set_with_dict: Initialize attributes from a dictionary
+        get_as_dict: Serialize to dictionary
+        get_as_json: Serialize to JSON string
+        preprocess_data: Hook for data preprocessing before serialization
+        preprocess_pair: Hook for data preprocessing during initialization
 
-    Initiation. Create attributes accordong to
-
-    public properties:
-
-
-    - dumpable_attributes
-    - int_attributes
-    - float_attributes
-    - list_attributes
-    - list_attributes_types
-    - other_attributes
-
+    Example:
+        >>> class MyModel(AbstractModel):
+        ...     dumpable_attributes = ["name", "count"]
+        ...     int_attributes = ["count"]
+        >>> obj = MyModel()
+        >>> obj.set_with_dict({"name": "test", "count": "42"})
+        >>> obj.count  # Automatically converted to int
+        42
     """
 
     dumpable_attributes = []
@@ -176,12 +186,39 @@ class AbstractModel(object):
             setattr(self, key, value)
 
     def as_dict(self):
-        """ """
+        """
+        Get dictionary representation of the model.
+
+        Alias for get_as_dict(). Calls preprocess_data() before serialization
+        to allow subclasses to perform any necessary data transformations.
+
+        Returns:
+            dict: Dictionary with keys from dumpable_attributes
+
+        See Also:
+            get_as_dict: The underlying implementation
+        """
         return self.get_as_dict()
 
     def get_as_dict(self):
-        """Get dictionary representation with fields
-        defined in dumpable_attributes"""
+        """
+        Get dictionary representation with fields defined in dumpable_attributes.
+
+        Calls preprocess_data() to allow subclass-specific transformations,
+        then builds a dictionary containing only the attributes listed in
+        the dumpable_attributes class variable.
+
+        Returns:
+            dict: Dictionary with keys from dumpable_attributes and their current values
+
+        Example:
+            >>> class MyModel(AbstractModel):
+            ...     dumpable_attributes = ["name", "value"]
+            >>> obj = MyModel()
+            >>> obj.name, obj.value = "test", 42
+            >>> obj.get_as_dict()
+            {'name': 'test', 'value': 42}
+        """
         self.preprocess_data()
         result = {}
         for attr in self.dumpable_attributes:
@@ -197,11 +234,59 @@ class AbstractModel(object):
         return json.dumps(d)
 
     def preprocess_data(self):
-        """Any data preprocessing before returning."""
+        """
+        Hook for preprocessing data before serialization.
+
+        Override this method in subclasses to perform any necessary data
+        transformations before the object is serialized to dict/JSON.
+        Called automatically by get_as_dict() and get_as_json().
+
+        Common use cases:
+        - Computing derived fields
+        - Formatting values for output
+        - Cleaning up temporary attributes
+
+        Note:
+            Base implementation does nothing. Subclasses should override as needed.
+
+        Example:
+            >>> class MyModel(AbstractModel):
+            ...     def preprocess_data(self):
+            ...         # Ensure uppercase before serialization
+            ...         if hasattr(self, 'name'):
+            ...             self.name = self.name.upper()
+        """
         pass
 
     def preprocess_pair(self, key, value):
-        """Any data preprocessing before initiation from dictionary."""
+        """
+        Hook for preprocessing key-value pairs during initialization.
+
+        Override this method in subclasses to transform or validate data
+        before it's assigned to object attributes. Called by set_with_dict()
+        for each key-value pair in the input dictionary.
+
+        Args:
+            key (str): Attribute name
+            value: Attribute value (any type)
+
+        Returns:
+            tuple: (processed_key, processed_value)
+
+        Note:
+            Base implementation returns the pair unchanged.
+            Subclasses can override to:
+            - Rename keys
+            - Transform values
+            - Validate input
+            - Skip unwanted attributes
+
+        Example:
+            >>> class MyModel(AbstractModel):
+            ...     def preprocess_pair(self, key, value):
+            ...         # Convert all keys to lowercase
+            ...         return key.lower(), value
+        """
         return key, value
 
     def __getitem__(self, key):
