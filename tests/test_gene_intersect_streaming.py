@@ -29,6 +29,82 @@ from satellome.core_functions.tools.gene_intersect_streaming import (
 from satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
 
 
+# Counter for generating unique TRF IDs
+_trf_id_counter = 0
+
+def create_trf_line(
+    trf_head="chr1",
+    trf_l_ind=1000,
+    trf_r_ind=1100,
+    trf_period=5,
+    trf_n_copy=20.0,
+    trf_pmatch=80.0,
+    trf_consensus="ACGT",
+    trf_array="ACGTACGTACGTACGTACGT"
+):
+    """
+    Helper function to create a valid TRF tab-delimited line.
+
+    TRModel expects 36 tab-separated fields corresponding to dumpable_attributes:
+    project, id, trf_id, trf_type, trf_family, trf_family_prob, trf_l_ind, trf_r_ind,
+    trf_period, trf_n_copy, trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,
+    trf_array_gc, trf_consensus_gc, trf_gi, trf_head, trf_param, trf_array_length,
+    trf_chr, trf_joined, trf_superfamily, trf_superfamily_ref, trf_superfamily_self,
+    trf_subfamily, trf_subsubfamily, trf_family_network, trf_family_self,
+    trf_family_ref, trf_hor, trf_n_chrun, trf_ref_annotation, trf_bands_refgenome,
+    trf_repbase, trf_strand
+    """
+    global _trf_id_counter
+    _trf_id_counter += 1
+
+    trf_pvar = 100 - trf_pmatch
+    trf_array_length = len(trf_array)
+    trf_chr = trf_head  # Simple chromosome name extraction
+
+    # Create tab-delimited line with all 36 fields
+    # Use unique IDs for each TRF record
+    fields = [
+        "test_project",  # project
+        str(_trf_id_counter),  # id - UNIQUE for each call
+        str(_trf_id_counter),  # trf_id - UNIQUE for each call
+        "",  # trf_type
+        "",  # trf_family
+        "0.0",  # trf_family_prob
+        str(trf_l_ind),  # trf_l_ind
+        str(trf_r_ind),  # trf_r_ind
+        str(trf_period),  # trf_period
+        str(trf_n_copy),  # trf_n_copy
+        str(trf_pmatch),  # trf_pmatch
+        str(trf_pvar),  # trf_pvar
+        "1.5",  # trf_entropy
+        trf_consensus,  # trf_consensus
+        trf_array,  # trf_array
+        "50.0",  # trf_array_gc
+        "50.0",  # trf_consensus_gc
+        "",  # trf_gi
+        trf_head,  # trf_head - CRITICAL FIELD!
+        "0",  # trf_param
+        str(trf_array_length),  # trf_array_length
+        trf_chr,  # trf_chr
+        "0",  # trf_joined
+        "",  # trf_superfamily
+        "",  # trf_superfamily_ref
+        "",  # trf_superfamily_self
+        "",  # trf_subfamily
+        "",  # trf_subsubfamily
+        "",  # trf_family_network
+        "",  # trf_family_self
+        "",  # trf_family_ref
+        "0",  # trf_hor
+        "0",  # trf_n_chrun
+        "",  # trf_ref_annotation
+        "",  # trf_bands_refgenome
+        "",  # trf_repbase
+        "",  # trf_strand
+    ]
+    return "\t".join(fields) + "\n"
+
+
 class TestGetTRFChromosomes:
     """Test chromosome identification from TRF files."""
 
@@ -36,10 +112,10 @@ class TestGetTRFChromosomes:
         """Test extracting chromosome names from TRF file."""
         trf_file = tmp_path / "test.trf"
         trf_file.write_text(
-            "chr1 1000 1100 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr1 2000 2100 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr2 1000 1100 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr3 1000 1100 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+            create_trf_line(trf_head="chr1", trf_l_ind=1000, trf_r_ind=1100) +
+            create_trf_line(trf_head="chr1", trf_l_ind=2000, trf_r_ind=2100) +
+            create_trf_line(trf_head="chr2", trf_l_ind=1000, trf_r_ind=1100) +
+            create_trf_line(trf_head="chr3", trf_l_ind=1000, trf_r_ind=1100)
         )
 
         chrm_counts = get_trf_chromosomes(str(trf_file))
@@ -77,10 +153,10 @@ class TestLoadChromosomeAnnotationsGFF:
         # Should load only chr1 annotations
         assert len(annotations) == 2
 
-        # Check intervals
-        assert len(annotations[150:150]) > 0  # Should hit gene1
-        assert len(annotations[350:350]) > 0  # Should hit gene2
-        assert len(annotations[500:500]) == 0  # Should not hit anything
+        # Check intervals (use point queries)
+        assert len(annotations[150]) > 0  # Should hit gene1 (100-200)
+        assert len(annotations[350]) > 0  # Should hit gene2 (300-400)
+        assert len(annotations[500]) == 0  # Should not hit anything
 
     def test_load_nonexistent_chromosome(self, tmp_path):
         """Test loading annotations for chromosome not in file."""
@@ -112,9 +188,9 @@ class TestLoadChromosomeAnnotationsRM:
         # Should load only chr1 annotations
         assert len(annotations) == 2
 
-        # Check intervals
-        assert len(annotations[150:150]) > 0  # Should hit first repeat
-        assert len(annotations[350:350]) > 0  # Should hit second repeat
+        # Check intervals (use point queries)
+        assert len(annotations[150]) > 0  # Should hit first repeat (100-200)
+        assert len(annotations[350]) > 0  # Should hit second repeat (300-400)
 
     def test_load_rm_with_malformed_lines(self, tmp_path):
         """Test handling malformed RepeatMasker lines."""
@@ -141,9 +217,9 @@ class TestProcessTRFChromosome:
         # Create TRF file
         trf_file = tmp_path / "test.trf"
         trf_file.write_text(
-            "chr1 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr1 300 400 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr2 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+            create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200) +
+            create_trf_line(trf_head="chr1", trf_l_ind=300, trf_r_ind=400) +
+            create_trf_line(trf_head="chr2", trf_l_ind=100, trf_r_ind=200)
         )
 
         # Create annotations for chr1
@@ -169,7 +245,7 @@ class TestProcessTRFChromosome:
         # Create TRF file
         trf_file = tmp_path / "test.trf"
         trf_file.write_text(
-            "chr1 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+            create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200)
         )
 
         # Empty annotations
@@ -192,9 +268,9 @@ class TestStreamingIntegration:
         # Create test files
         trf_file = tmp_path / "test.trf"
         trf_file.write_text(
-            "chr1 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr1 300 400 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
-            "chr2 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+            create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200) +
+            create_trf_line(trf_head="chr1", trf_l_ind=300, trf_r_ind=400) +
+            create_trf_line(trf_head="chr2", trf_l_ind=100, trf_r_ind=200)
         )
 
         gff_file = tmp_path / "test.gff"
@@ -237,7 +313,7 @@ class TestStreamingIntegration:
         # Create test files
         trf_file = tmp_path / "test.trf"
         trf_file.write_text(
-            "chr1 100 200 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+            create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200)
         )
 
         gff_file = tmp_path / "test.gff"
@@ -275,7 +351,7 @@ class TestStreamingIntegration:
                 start = i * 1000
                 end = start + 100
                 trf_lines.append(
-                    f"{chrm} {start} {end} 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+                    create_trf_line(trf_head=chrm, trf_l_ind=start, trf_r_ind=end)
                 )
         trf_file.write_text(''.join(trf_lines))
 
@@ -323,7 +399,7 @@ class TestMemoryEfficiency:
                 start = i * 1000
                 end = start + 100
                 trf_lines.append(
-                    f"{chrm} {start} {end} 5 20 20 80 10 100 0 100 50 1.50 ACGT ACGTACGTACGTACGTACGT\n"
+                    create_trf_line(trf_head=chrm, trf_l_ind=start, trf_r_ind=end)
                 )
         trf_file.write_text(''.join(trf_lines))
 
