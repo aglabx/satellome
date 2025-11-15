@@ -22,11 +22,26 @@ from satellome.core_functions.trf_embedings import create_vector, token2id, toke
 
 
 def clear_sequence(sequence):
-    """Clear sequence (full alphabet):
+    """
+    Normalize and clean DNA/RNA sequence to uppercase IUPAC nucleotides.
 
-    - lower case
-    - \\s -> ""
-    - [^actgn] -> ""
+    Removes whitespace and non-nucleotide characters, keeping only valid
+    IUPAC nucleotide codes (including ambiguity codes and gaps).
+
+    Args:
+        sequence (str): Raw DNA/RNA sequence string
+
+    Returns:
+        str: Cleaned sequence in uppercase with:
+            - All whitespace removed
+            - Only valid IUPAC codes retained: ACTGNUWSMKRYBDHV-
+            - Uppercase format
+
+    Example:
+        >>> clear_sequence("  acgt nnnn  ")
+        'ACGTNNNN'
+        >>> clear_sequence("acgt123xyz")
+        'ACGT'
     """
     sequence = sequence.strip().upper()
     sequence = re.sub(r"\s+", "", sequence)
@@ -192,18 +207,36 @@ class TRModel(AbstractModel):
     ]
 
     def set_project_data(self, project):
-        """Add project data to self.project."""
+        """
+        Set the project identifier for this tandem repeat.
+
+        Args:
+            project (str): Project name or identifier to associate with this TR
+        """
         self.project = project
 
     def set_raw_trf(self, head, body, line):
-        """Init object with data from parsed trf ouput.
+        """
+        Initialize TR object from raw TRF (Tandem Repeat Finder) output.
 
-        Parameters:
+        Parses TRF output format into structured TRModel attributes, including:
+        - Sequence header parsing for chromosome/GI extraction
+        - TRF data line parsing for coordinates, period, copy number, etc.
+        - Sequence cleaning and normalization
+        - GC content computation
 
-        - trf_obj: TRFObj instance
-        - head: parsed trf head
-        - body: parsed trf body
-        - line: parsed trf line
+        Args:
+            head (str): TRF sequence header line (e.g., "Sequence: chr1")
+            body (str): TRF output body (currently unused, kept for compatibility)
+            line (str): TRF data line with 15 space-separated fields:
+                       [start, end, period, copies, consensus_size, %match, %indels,
+                        score, %A, %C, %G, %T, entropy, consensus, sequence]
+
+        Note:
+            - Automatically cleans sequences (uppercase, removes invalid chars)
+            - Computes GC% for both consensus and array sequences
+            - Sets trf_param to 0 by default
+            - Handles parsing errors gracefully (logs and sets defaults)
         """
         self.trf_param = 0
         parsed_head = trf_parse_head(head)
@@ -388,7 +421,38 @@ class TRModel(AbstractModel):
         properties=None,
         force_header=False,
     ):
-        """Return TR in gff format."""
+        """
+        Format tandem repeat as GFF3 (Generic Feature Format version 3) line.
+
+        Generates a standard GFF3 line with 9 tab-separated columns for genome
+        annotation visualization and analysis.
+
+        Args:
+            chromosome (bool, optional): Use chromosome name instead of GI for seqid.
+                                        Defaults to True.
+            trs_type (str, optional): GFF3 feature type (column 3).
+                                     Defaults to "complex_tandem_repeat".
+            probability (int, optional): Score value (column 6).
+                                        Defaults to 1000.
+            tool (str, optional): Source/tool name (column 2).
+                                 Defaults to "PySatDNA".
+            prefix (str, optional): Prefix to add to seqid.
+                                   Defaults to None.
+            properties (dict, optional): Dictionary mapping property names to
+                                       attribute names for custom GFF3 attributes.
+                                       Defaults to None.
+            force_header (bool, optional): Force use of trf_head as seqid.
+                                          Defaults to False.
+
+        Returns:
+            str: GFF3-formatted line with 9 columns:
+                seqid, source, type, start, end, score, strand, phase, attributes
+
+        Note:
+            - Automatically determines strand from coordinate order
+            - Swaps coordinates if trf_l_ind > trf_r_ind (reverse strand)
+            - Falls back to trf_gi or trf_head if chromosome unavailable
+        """
         if chromosome and self.trf_chr and self.trf_chr != "?":
             seqid = self.trf_chr
         elif self.trf_gi and self.trf_gi != "Unknown":
@@ -425,7 +489,26 @@ class TRModel(AbstractModel):
         return "%s\n" % "\t".join(map(str, d))
 
     def get_bed_string(self):
-        """Return TR in bed format."""
+        """
+        Format tandem repeat as BED (Browser Extensible Data) format line.
+
+        Generates a minimal 3-column BED format line for genome browser visualization.
+        BED format uses 0-based, half-open coordinates [start, end).
+
+        Returns:
+            str: Tab-delimited BED line with 3 columns: chr, start, end
+
+        Note:
+            - Automatically swaps coordinates if trf_l_ind > trf_r_ind (reverse strand)
+            - Uses trf_head as chromosome/sequence identifier
+            - Strand information is computed but not included in output (minimal BED3)
+
+        Example:
+            >>> tr = TRModel()
+            >>> tr.trf_head, tr.trf_l_ind, tr.trf_r_ind = "chr1", 1000, 1100
+            >>> tr.get_bed_string()
+            'chr1\\t1000\\t1100\\n'
+        """
         if self.trf_l_ind < self.trf_r_ind:
             strand = "+"
         else:
