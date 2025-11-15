@@ -12,7 +12,6 @@ from collections import Counter
 import plotly.express as px
 import plotly.graph_objects as go
 from intervaltree import IntervalTree
-import pickle
 from tqdm import tqdm
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for server environments
@@ -1201,47 +1200,57 @@ def draw_all(
     for suffix in ['.1kb', '.3kb', '.10kb', '.micro', '.complex', '.pmicro', '.tssr']:
         project_name = project_name.replace(suffix, '')
 
-    # Create gaps cache file path using project name instead of taxon to avoid "Unknown.gaps.pkl"
-    gaps_cache_file = os.path.join(output_folder, f"{project_name}.gaps.pkl")
+    # Use BED file as the only storage format (no .pkl cache)
+    bed_output_file = os.path.join(os.path.dirname(output_folder), f"{project_name}.gaps.bed")
 
-    if os.path.isfile(gaps_cache_file) and os.path.getsize(gaps_cache_file) > 0 and not force_rerun:
-        logger.info("Loading cached gaps data...")
-        with open(gaps_cache_file, 'rb') as f:
-            gaps_data = pickle.load(f)
+    # Check if BED file exists and load from it, or compute and create it
+    if os.path.isfile(bed_output_file) and os.path.getsize(bed_output_file) > 0 and not force_rerun:
+        logger.info(f"Loading gaps data from existing BED file: {bed_output_file}")
+        gaps_data = []
+        try:
+            with open(bed_output_file, 'r') as f:
+                for line in f:
+                    if line.startswith('#'):
+                        continue
+                    parts = line.strip().split('\t')
+                    if len(parts) >= 5:
+                        chrm, start, end, name, length = parts[:5]
+                        gaps_data.append((chrm, int(start), int(end), int(length)))
+            logger.info(f"✓ Loaded {len(gaps_data)} gaps from BED file")
+        except Exception as e:
+            logger.warning(f"Failed to load gaps from BED file: {e}")
+            logger.info("Computing gaps annotation...")
+            gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
     else:
-        if force_rerun and os.path.isfile(gaps_cache_file):
+        if force_rerun and os.path.isfile(bed_output_file):
             logger.info("Force rerun: Computing gaps annotation...")
         else:
             logger.info("Computing gaps annotation (this may take a while)...")
         gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
-        logger.info("Saving gaps data to cache...")
-        with open(gaps_cache_file, 'wb') as f:
-            pickle.dump(gaps_data, f)
 
-    # Export gaps to BED format in output root directory (not in images/)
+    # Export/update gaps to BED format in output root directory (not in images/)
+    # Only write if we computed new data or force_rerun
+    if not os.path.isfile(bed_output_file) or force_rerun or len(gaps_data) == 0:
+        logger.info(f"Exporting gaps to BED format: {bed_output_file}")
+        try:
+            with open(bed_output_file, 'w') as f:
+                # BED format header
+                f.write("# Gaps annotation from Satellome\n")
+                f.write(f"# Project: {project_name}\n")
+                f.write(f"# Taxon: {taxon}\n")
+                f.write(f"# Total gaps: {len(gaps_data)}\n")
+                f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
 
-    bed_output_file = os.path.join(os.path.dirname(output_folder), f"{project_name}.gaps.bed")
-    logger.info(f"Exporting gaps to BED format: {bed_output_file}")
+                # Write gaps in BED6 format
+                for chrm, start, end, length in gaps_data:
+                    # BED format: chr, start, end, name, score, strand
+                    # score = length of gap (for filtering)
+                    # strand = . (not applicable for gaps)
+                    f.write(f"{chrm}\t{start}\t{end}\tgap\t{length}\t.\n")
 
-    try:
-        with open(bed_output_file, 'w') as f:
-            # BED format header
-            f.write("# Gaps annotation from Satellome\n")
-            f.write(f"# Project: {project_name}\n")
-            f.write(f"# Taxon: {taxon}\n")
-            f.write(f"# Total gaps: {len(gaps_data)}\n")
-            f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
-
-            # Write gaps in BED6 format
-            for chrm, start, end, length in gaps_data:
-                # BED format: chr, start, end, name, score, strand
-                # score = length of gap (for filtering)
-                # strand = . (not applicable for gaps)
-                f.write(f"{chrm}\t{start}\t{end}\tgap\t{length}\t.\n")
-
-        logger.info(f"✓ Exported {len(gaps_data)} gaps to BED format")
-    except Exception as e:
-        logger.warning(f"Failed to export gaps to BED format: {e}")
+            logger.info(f"✓ Exported {len(gaps_data)} gaps to BED format")
+        except Exception as e:
+            logger.warning(f"Failed to export gaps to BED format: {e}")
 
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
