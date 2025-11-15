@@ -6,10 +6,46 @@
 # @contact: ad3002@gmail.com
 
 """
+TRF (Tandem Repeat Finder) file I/O and processing module.
+
+Provides parsers, filters, and converters for TRF output files. Handles both
+raw TRF .dat format and tab-delimited parsed format. Includes consensus
+canonicalization, overlap resolution, and format conversion utilities.
+
 Classes:
+    TRFFileIO: Main parser for raw TRF .dat files with filtering capabilities
 
-- TRFFileIO(AbstractBlockFileIO)
+Functions:
+    join_overlapped: Merge two overlapping tandem repeats if similar
+    get_int_gc: Calculate GC content as integer percentage
+    get_shifts_variants: Generate all circular rotations of a sequence
+    sort_dictionary_by_value: Sort dictionary by values
+    remove_consensus_redundancy: Canonicalize consensus sequences to minimal form
+    sc_parse_raw_trf_folder: Batch parse all TRF files in a folder
+    sc_trf_to_fasta: Convert parsed TRF file to FASTA format
 
+Key Features:
+    - Memory-efficient streaming parser for large genomes
+    - Automatic overlap detection and merging of similar repeats
+    - Consensus sequence canonicalization (minimal lexicographic form)
+    - Filtering of nested, duplicate, and dissimilar overlaps
+    - Multimer detection (e.g., ACTACTACT → ACT)
+    - Tab-delimited and FASTA output formats
+
+Example:
+    >>> # Parse TRF output and write to tab-delimited file
+    >>> reader = TRFFileIO()
+    >>> reader.parse_to_file("genome.dat", "genome_repeats.tab", project="hg38")
+    >>>
+    >>> # Convert to FASTA
+    >>> sc_trf_to_fasta("genome_repeats.tab", "repeats.fasta")
+    >>>
+    >>> # Batch process folder
+    >>> sc_parse_raw_trf_folder("trf_output/", "all_repeats.tab", project="hg38")
+
+See Also:
+    satellome.core_functions.models.trf_model: TRModel data model
+    satellome.core_functions.io.tab_file: Tab-delimited file I/O
 """
 import logging
 import os
@@ -30,10 +66,32 @@ from satellome.core_functions.trf_embedings import get_cosine_distance
 
 
 def join_overlapped(obj1, obj2, cutoff_distance=0.1):
+    """
+    Join two overlapping tandem repeat objects if they are similar.
 
-    """Join overlapping sequences."""
-    """ Join two overlapped objects.
-    We will join two objects if they are overlapped and have the consinus distance by 5-mers vectors less than 0.1. 
+    Determines if two TR objects should be merged based on:
+    1. Genomic overlap (obj1.trf_r_ind > obj2.trf_l_ind)
+    2. Sequence similarity via cosine distance of 5-mer vectors
+    3. Intersection fraction threshold
+
+    Objects are joined if either:
+    - Cosine distance < cutoff_distance (default 0.1), OR
+    - Intersection fraction > 0.2
+
+    Args:
+        obj1 (TRModel): First tandem repeat object (left position)
+        obj2 (TRModel): Second tandem repeat object (right position)
+        cutoff_distance (float, optional): Maximum cosine distance for merging.
+                                          Defaults to 0.1.
+
+    Returns:
+        bool: True if objects were joined (obj1 extended with obj2 data),
+              False if not overlapping or too dissimilar
+
+    Note:
+        - Modifies obj1 in-place via set_form_overlap(obj2)
+        - Uses 5-mer embedding vectors for similarity comparison
+        - Requires obj1.trf_r_ind > obj2.trf_l_ind (overlap condition)
     """
     # a ------
     # b    -----
@@ -54,13 +112,42 @@ def join_overlapped(obj1, obj2, cutoff_distance=0.1):
 
 
 def get_int_gc(sequence):
-    """Get GC content from 0 to 100."""
+    """
+    Calculate GC content as integer percentage (0-100).
+
+    Args:
+        sequence (str): DNA sequence
+
+    Returns:
+        int: GC content as integer from 0 to 100
+
+    Example:
+        >>> get_int_gc("ATGC")
+        50
+        >>> get_int_gc("AAAA")
+        0
+    """
     gc = get_gc_content(sequence)
     return int(100 * round(gc, 2))
 
 
 def get_shifts_variants(sequence):
-    """ """
+    """
+    Generate all circular rotations of a sequence.
+
+    Args:
+        sequence (str): Input sequence (e.g., DNA monomer)
+
+    Returns:
+        list: All unique circular rotations of the sequence
+
+    Raises:
+        SequenceError: If sequence cannot generate shift variants
+
+    Example:
+        >>> get_shifts_variants("ACGT")
+        ['ACGT', 'CGTA', 'GTAC', 'TACG']
+    """
     shifts = set()
     for i in range(len(sequence)):
         shifts.add(sequence[i:] + sequence[:i])
@@ -68,20 +155,73 @@ def get_shifts_variants(sequence):
 
 
 def sort_dictionary_by_value(d, reverse=False):
-    """Sort dictionary by value. Retrun list of (v, k) pairs."""
+    """
+    Sort dictionary by values in ascending or descending order.
+
+    Args:
+        d (dict): Dictionary to sort
+        reverse (bool, optional): If True, sort descending. Defaults to False.
+
+    Returns:
+        list: List of (value, key) tuples sorted by value
+
+    Example:
+        >>> sort_dictionary_by_value({"a": 3, "b": 1, "c": 2})
+        [(1, 'b'), (2, 'c'), (3, 'a')]
+    """
     result = [(v, k) for k, v in list(d.items())]
     result.sort(reverse=reverse, key=lambda x: x[0])
     return result
 
 
 def remove_consensus_redundancy(trf_objs):
-    """Take a minimal sequence from lexicographically sorted rotations of sequence and its reverse complement
-    Example: ACT, underlined - reverse complement seqeunces
-    ACT, AGT, CTA, GTA, TAC, TAG
-    Find all possible multimers, e.g. replace GTAGTAGTA consensus sequence with ACT
-    Return:
-    1) list of sorted TRs
-    2) list of (df, consensus) pairs
+    """
+    Canonicalize tandem repeat consensus sequences to minimal lexicographic form.
+
+    For each consensus sequence, generates all circular rotations and reverse
+    complements, then selects the lexicographically minimal variant as the
+    canonical form. Also detects and collapses multimers (e.g., "GTAGTAGTA"
+    becomes "ACT" if ACT is the minimal form).
+
+    Canonicalization ensures that equivalent repeat units (rotations and reverse
+    complements) share the same consensus representation, enabling proper
+    clustering and frequency counting.
+
+    Args:
+        trf_objs (list of TRModel): Tandem repeat objects to canonicalize
+
+    Returns:
+        tuple: (canonical_trf_objs, consensus_frequencies) where:
+            - canonical_trf_objs (list): TRF objects with updated trf_consensus
+                                        (None values removed)
+            - consensus_frequencies (list): List of (count, consensus) tuples
+                                           sorted by count (descending)
+
+    Raises:
+        SequenceError: If a monomer cannot generate shift variants (indicates
+                      invalid non-ACGT characters or data corruption)
+
+    Example:
+        >>> # Input: Multiple representations of same repeat
+        >>> trf1 = TRModel()
+        >>> trf1.trf_consensus = "ACT"  # Original
+        >>> trf2 = TRModel()
+        >>> trf2.trf_consensus = "CTA"  # Rotation
+        >>> trf3 = TRModel()
+        >>> trf3.trf_consensus = "AGT"  # Reverse complement
+        >>> trf4 = TRModel()
+        >>> trf4.trf_consensus = "ACTACTACT"  # Multimer
+        >>> objs, freqs = remove_consensus_redundancy([trf1, trf2, trf3, trf4])
+        >>> all(obj.trf_consensus == "ACT" for obj in objs)
+        True
+        >>> freqs[0]  # (count, consensus)
+        (4, 'ACT')
+
+    Note:
+        - Modifies trf_consensus attribute of input objects in-place
+        - Objects with empty consensus are filtered out (set to None)
+        - Multimer detection works by GC content matching and period division
+        - Uses lexicographic ordering: e.g., ACT < AGT < CTA < GTA < TAC < TAG
     """
     # sort by length
     consensuses = [x.trf_consensus for x in trf_objs]
@@ -154,56 +294,100 @@ def remove_consensus_redundancy(trf_objs):
 
 
 class TRFFileIO(AbstractBlockFileIO):
-    """Working with raw ouput from TRF, where each block starts with '>' token.
+    """
+    Parser and processor for raw TRF (Tandem Repeat Finder) output files.
 
-    Public parameters:
+    Handles TRF .dat format output, which consists of blocks starting with
+    "Sequence:" lines. Each block contains tandem repeat records for one
+    sequence (chromosome/scaffold). Provides filtering, overlap resolution,
+    and consensus canonicalization.
 
-    - self.use_mongodb -- Bool
+    Key Features:
+        - Streaming parser for memory-efficient chromosome-by-chromosome processing
+        - Automatic overlap detection and merging of similar repeats
+        - Redundancy removal via consensus canonicalization
+        - Filtering of nested and duplicate repeats
+        - Tab-delimited output format compatible with downstream tools
 
-    Public methods:
+    Attributes:
+        use_mongodb (bool): Enable MongoDB integration (inherited)
+        token (str): Block start token ("Sequence:"), set in __init__
 
-    - iter_parse(self, trf_file, filter=True)
-    - parse_to_file(self, file_path, output_path, trf_id=0) -> trf_id
+    Public Methods:
+        iter_parse: Iterate over TRF file yielding filtered TRModel objects
+        parse_to_file: Parse TRF file and write to tab-delimited output
+        refine_old_to_file: Legacy parsing method (same as parse_to_file)
 
-    Private methods:
+    Private Methods:
+        _gen_data_line: Extract data lines from TRF block body
+        _filter_obj_set: Filter overlapping/nested repeats from a sequence
+        _join_overlapped: Wrapper for join_overlapped() function
 
-    - _gen_data_line(self, data)
-    - _filter_obj_set(self, obj_set)
-    - _join_overlapped(self, obj1, obj2)
+    Inherited Attributes:
+        data: Iterable of (head, body) tuples representing TRF blocks
+        N: Number of blocks in data
 
-    Inherited public properties:
+    Inherited Methods:
+        read_from_file, read_online, get_block_sequence, get_blocks,
+        gen_block_sequences, write_to_file, iterate, clear, and others
+        (see AbstractBlockFileIO for full API)
 
-    - data  - iterable data, each item is tuple (head, body)
-    - N     - a number of items in data
+    Example:
+        >>> reader = TRFFileIO()
+        >>> # Parse and iterate
+        >>> for trf_obj_set in reader.iter_parse("genome.fasta.2.7.7.80.10.50.500.dat"):
+        ...     for trf_obj in trf_obj_set:
+        ...         print(f"{trf_obj.trf_head}: {trf_obj.trf_consensus}")
+        >>> # Parse to file
+        >>> reader.parse_to_file("input.dat", "output.tab", project="my_genome")
 
-    Inherited public methods:
-
-    - [OR] __init__(self)
-    - read_from_file(self, input_file)
-    - read_online(self, input_file) ~> item
-    - get_block_sequence(self, head_start, next_head, fh)
-    - get_blocks(self, token, fh)
-    - gen_block_sequences(self, token, fh)
-    - read_from_db(self, db_cursor)
-    - write_to_file(self, output_file)
-    - write_to_db(self, db_cursor)
-    - read_as_iter(self, source)
-    - iterate(self) ~> item of data
-    - do(self, cf, args) -> result
-    - process(self, cf, args)
-    - clear(self)
-    - do_with_iter(self, cf, args) -> [result,]
-    - process_with_iter(self, cf, args)
-
+    Note:
+        - TRF output format: 15 space-separated fields per repeat
+        - Filtering removes exact duplicates, nested repeats, and dissimilar overlaps
+        - Similar overlapping repeats (cosine distance < 0.1) are merged
+        - Consensus sequences are canonicalized to minimal lexicographic form
     """
 
     def __init__(self):
-        """Overrided. Hardcoded start token."""
+        """
+        Initialize TRF file reader with "Sequence:" block delimiter.
+
+        Sets the block start token to "Sequence:" which marks the beginning
+        of each chromosome/scaffold block in TRF .dat output files.
+        """
         token = "Sequence:"
         super(TRFFileIO, self).__init__(token)
 
     def iter_parse(self, trf_file, filter=True):
-        """Iterate over raw trf data and yield TRFObjs."""
+        """
+        Parse TRF file and yield filtered tandem repeat objects per chromosome.
+
+        Processes TRF .dat format file chromosome-by-chromosome, parsing each
+        repeat, optionally filtering overlaps/duplicates, canonicalizing consensus
+        sequences, and assigning unique IDs.
+
+        Args:
+            trf_file (str): Path to TRF output file (.dat format)
+            filter (bool, optional): Apply overlap/duplicate filtering.
+                                    Defaults to True.
+
+        Yields:
+            list of TRModel: Filtered and canonicalized tandem repeat objects
+                            for each chromosome/scaffold block
+
+        Example:
+            >>> reader = TRFFileIO()
+            >>> for chromosome_repeats in reader.iter_parse("genome.dat"):
+            ...     print(f"Chromosome has {len(chromosome_repeats)} repeats")
+            ...     for tr in chromosome_repeats:
+            ...         print(f"  {tr.trf_consensus} at {tr.trf_l_ind}-{tr.trf_r_ind}")
+
+        Note:
+            - Assigns sequential trf_id starting from 1
+            - Filtering includes duplicate removal, nested repeat removal,
+              and overlap merging for similar sequences
+            - All consensus sequences are canonicalized to minimal lexicographic form
+        """
         trf_id = 1
         for ii, (head, body, start, next) in enumerate(self.read_online(trf_file)):
             head = head.replace("\t", " ")
@@ -227,7 +411,40 @@ class TRFFileIO(AbstractBlockFileIO):
     def parse_to_file(
         self, file_path, output_path, trf_id=0, project=None, verbose=True
     ):
-        """Parse trf file in tab delimited file."""
+        """
+        Parse TRF file and write filtered repeats to tab-delimited output.
+
+        Processes entire TRF .dat file, applies filtering and canonicalization,
+        assigns sequential IDs, optionally sets project metadata, and writes
+        results in tab-delimited format compatible with downstream analysis tools.
+
+        Args:
+            file_path (str): Path to input TRF .dat file
+            output_path (str): Path to output tab-delimited file
+            trf_id (int, optional): Starting ID number for repeat numbering.
+                                   If 0, creates new file (mode 'w').
+                                   If >0, appends to existing file (mode 'a').
+                                   Defaults to 0.
+            project (str, optional): Project name to add to metadata fields.
+                                    Defaults to None.
+            verbose (bool, optional): Enable verbose logging (currently unused).
+                                     Defaults to True.
+
+        Returns:
+            int: Next available trf_id (total repeats processed + 1)
+
+        Example:
+            >>> reader = TRFFileIO()
+            >>> # Process first file
+            >>> next_id = reader.parse_to_file("chr1.dat", "all_repeats.tab", project="hg38")
+            >>> # Append second file with continuing IDs
+            >>> next_id = reader.parse_to_file("chr2.dat", "all_repeats.tab", trf_id=next_id, project="hg38")
+
+        Note:
+            - Output format: tab-delimited with header defined by TRModel.dumpable_attributes
+            - Calls refine_name() to generate standardized IDs and normalize sequences
+            - Creates output file if trf_id=0, appends otherwise
+        """
         if trf_id == 0:
             mode = "w"
         else:
@@ -250,7 +467,24 @@ class TRFFileIO(AbstractBlockFileIO):
     def refine_old_to_file(
         self, file_path, output_path, trf_id=0, project=None, verbose=True
     ):
-        """Parse trf file in tab delimited file."""
+        """
+        Legacy method for parsing TRF file to tab-delimited output.
+
+        Identical to parse_to_file(). Retained for backward compatibility.
+
+        Args:
+            file_path (str): Path to input TRF .dat file
+            output_path (str): Path to output tab-delimited file
+            trf_id (int, optional): Starting ID number. Defaults to 0.
+            project (str, optional): Project name. Defaults to None.
+            verbose (bool, optional): Enable verbose logging. Defaults to True.
+
+        Returns:
+            int: Next available trf_id
+
+        See Also:
+            parse_to_file: Recommended method with identical functionality
+        """
         if trf_id == 0:
             mode = "w"
         else:
@@ -271,6 +505,22 @@ class TRFFileIO(AbstractBlockFileIO):
         return trf_id
 
     def _gen_data_line(self, data):
+        """
+        Extract TRF data lines from block body, skipping headers and blank lines.
+
+        Filters out "Sequence:" headers, "Parameters:" lines, and empty lines,
+        yielding only the 15-field tandem repeat data lines.
+
+        Args:
+            data (str): Raw block body text from TRF output
+
+        Yields:
+            str: Individual TRF data lines (15 space-separated fields each)
+
+        Note:
+            - Called internally during iter_parse() to extract repeat records
+            - Each yielded line represents one tandem repeat annotation
+        """
         for line in data.split("\n"):
             line = line.strip()
             if line.startswith("Sequence"):
@@ -282,6 +532,41 @@ class TRFFileIO(AbstractBlockFileIO):
             yield line
 
     def _filter_obj_set(self, obj_set):
+        """
+        Filter and merge overlapping/nested tandem repeats from a chromosome.
+
+        Implements complex filtering logic to handle various overlap patterns:
+        - Exact duplicates: keeps higher percent match
+        - Nested repeats: keeps outer (longer) repeat
+        - Partial overlaps: merges if similar (via _join_overlapped)
+
+        Filtering happens in two passes:
+        1. First pass: remove exact duplicates, nested repeats, merge similar overlaps
+        2. Second pass: iteratively merge remaining similar overlaps (disabled)
+
+        Args:
+            obj_set (list of TRModel): Unfiltered tandem repeat objects for one
+                                      chromosome, sorted by (trf_l_ind, trf_r_ind)
+
+        Returns:
+            list of TRModel: Filtered repeat objects with duplicates/nested removed
+                            and similar overlaps merged (None values removed)
+
+        Note:
+            - Modifies objects in-place via _join_overlapped()
+            - Overlap patterns handled:
+                a ------ (obj1)
+                b ------ (exact duplicate → keep higher pmatch)
+
+                a ------ ------ (obj1 contains obj2)
+                b ---    ---    (nested → remove obj2)
+
+                a ------
+                b    ----- (partial overlap → merge if similar)
+
+            - Second pass is currently disabled (is_overlapping always False)
+              due to "suspicious results" in original implementation
+        """
         # NB: I removed the overlaping part due to suspicious results.
         # Complex filter
         is_overlapping = False
@@ -417,11 +702,46 @@ class TRFFileIO(AbstractBlockFileIO):
         return obj_set
 
     def _join_overlapped(self, obj1, obj2, cutoff_distance=0.1):
+        """
+        Wrapper method for join_overlapped() function.
+
+        Args:
+            obj1 (TRModel): First tandem repeat object
+            obj2 (TRModel): Second tandem repeat object
+            cutoff_distance (float, optional): Maximum cosine distance for merging.
+                                              Defaults to 0.1.
+
+        Returns:
+            bool: True if objects were joined, False otherwise
+
+        See Also:
+            join_overlapped: The underlying implementation function
+        """
         return join_overlapped(obj1, obj2, cutoff_distance=cutoff_distance)
 
 
 def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
-    """Parse raw TRF output in given folder to output_trf_file."""
+    """
+    Parse all TRF .dat files in a folder and write to single tab-delimited output.
+
+    Processes all .dat files found in the specified folder, applies filtering
+    and canonicalization, and writes results to a single output file with
+    continuous ID numbering across all files.
+
+    Args:
+        trf_raw_folder (str): Path to folder containing TRF .dat output files
+        output_trf_file (str): Path to output tab-delimited file
+        project (str, optional): Project name for metadata. Defaults to None.
+
+    Example:
+        >>> sc_parse_raw_trf_folder("/path/to/trf_output/", "all_repeats.tab", project="hg38")
+
+    Note:
+        - Removes output file if it already exists (fresh write)
+        - Only processes files ending with .dat extension
+        - IDs are assigned sequentially starting from 1 across all files
+        - Logs progress for each file processed
+    """
     reader = TRFFileIO()
     trf_id = 1
     if os.path.isfile(output_trf_file):
@@ -436,7 +756,25 @@ def sc_parse_raw_trf_folder(trf_raw_folder, output_trf_file, project=None):
 
 
 def sc_trf_to_fasta(trf_file, fasta_file):
-    """Convert TRF file to fasta file."""
+    """
+    Convert tab-delimited TRF file to FASTA format.
+
+    Reads parsed TRF data from tab-delimited file and writes tandem repeat
+    sequences in FASTA format. Uses the fasta property of TRModel objects
+    which includes proper headers and sequence data.
+
+    Args:
+        trf_file (str): Path to input tab-delimited TRF file
+        fasta_file (str): Path to output FASTA file
+
+    Example:
+        >>> sc_trf_to_fasta("genome_repeats.tab", "repeats.fasta")
+
+    Note:
+        - Input must be tab-delimited format from TRFFileIO.parse_to_file()
+        - Output FASTA headers include repeat ID and genomic coordinates
+        - Sequence data is the tandem repeat array (trf_array field)
+    """
     with open(fasta_file, "w") as fw:
         for trf_obj in sc_iter_tab_file(trf_file, TRModel):
             fw.write(trf_obj.fasta)

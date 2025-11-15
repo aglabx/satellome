@@ -5,19 +5,57 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 """
-    Classes:
-    
-    - WiseOpener(object)
-    - AbstractFileIO(object)
-    - AbstractFolderIO(object)
-    
-    Shortcuts:
-    
-    - sc_iter_filepath_folder(folder, mask=".")
-    - sc_iter_filename_folder(folder, mask=".")
-    - sc_iter_filedata_folder(folder, mask=".")
-    - sc_move_files(folder, dist_folder, mask=".")
+Abstract base classes and utilities for file and folder I/O operations.
 
+Provides flexible file handling with automatic compression detection (.gz, .bz2),
+abstract base classes for building custom readers/writers, and convenient
+folder iteration utilities. Designed for genomic data processing workflows.
+
+Classes:
+    WiseOpener: Context manager for opening regular, gzip, and bz2 files
+    AbstractFileIO: Base class for file I/O with batch and streaming operations
+    AbstractFolderIO: Base class for iterating files in folders with regex filtering
+
+Folder Shortcuts:
+    sc_iter_filepath_folder: Iterate file paths in folder
+    sc_iter_filename_folder: Iterate filenames (no paths)
+    sc_iter_folders: Iterate subfolder names
+    sc_iter_path_name_folder: Iterate (filename, path) tuples
+    sc_iter_filedata_folder: Iterate file contents
+    sc_move_files: Move files matching pattern
+
+Processing Shortcuts:
+    sc_process_file: Process single file in-place
+    sc_process_folder: Process all files in folder in-place
+    sc_process_folder_to_other: Process folder to output folder
+    read_pickle_file: Load pickled data
+
+Key Features:
+    - Automatic compression handling (.gz, .bz2) via WiseOpener
+    - Streaming and batch file processing
+    - Regex-based file filtering in folders
+    - MongoDB integration (deprecated, for legacy support)
+    - Functional processing with arbitrary functions
+    - Safe atomic file operations
+
+Example:
+    >>> # Automatic compression detection
+    >>> with WiseOpener("data.txt.gz", "r") as fh:
+    ...     lines = fh.readlines()
+    >>>
+    >>> # Iterate over FASTA files in a folder
+    >>> for filepath in sc_iter_filepath_folder("genomes/", mask=r"\\.fa$"):
+    ...     process_fasta(filepath)
+    >>>
+    >>> # Build custom reader
+    >>> class MyReader(AbstractFileIO):
+    ...     def read_from_file(self, input_file):
+    ...         # Custom parsing logic
+    ...         pass
+
+See Also:
+    satellome.core_functions.io.tab_file: Tab-delimited file I/O
+    satellome.core_functions.io.trf_file: TRF format I/O
 """
 import bz2
 import gzip
@@ -33,9 +71,53 @@ logger = logging.getLogger(__name__)
 
 
 class WiseOpener(object):
-    """Opener to open usual files and gzip or bzip archives."""
+    """
+    Context manager for opening regular, gzip, and bz2 files transparently.
+
+    Automatically detects and handles compressed files (.gz, .bz2) based on
+    file extension, while maintaining a consistent API for all file types.
+    Ensures proper binary mode for compressed files.
+
+    Attributes:
+        file_name (str): Path to file to open
+        mode (str): File opening mode ('r', 'w', 'a', 'rb', 'wb', 'ab')
+        fh (file object): File handle (set during context entry)
+
+    Example:
+        >>> # Transparent gzip handling
+        >>> with WiseOpener("data.txt.gz", "r") as fh:
+        ...     content = fh.read()
+        >>>
+        >>> # Regular file (same API)
+        >>> with WiseOpener("data.txt", "w") as fh:
+        ...     fh.write("Hello")
+        >>>
+        >>> # Bzip2 files
+        >>> with WiseOpener("archive.bz2", "rb") as fh:
+        ...     binary_data = fh.read()
+
+    Note:
+        - Automatically adds 'b' mode for .gz and .bz2 files
+        - Valid modes: 'r', 'w', 'a', 'rb', 'wb', 'ab'
+        - Logs compression detection at INFO level
+        - Use as context manager (with statement) for proper cleanup
+    """
 
     def __init__(self, file_name, mode=None):
+        """
+        Initialize file opener with path and mode.
+
+        Args:
+            file_name (str): Path to file (can be .gz, .bz2, or regular)
+            mode (str, optional): File opening mode. Defaults to "r".
+                                 Valid: 'r', 'w', 'a', 'rb', 'wb', 'ab'
+
+        Raises:
+            FileFormatError: If mode is invalid
+
+        Note:
+            Binary mode ('b' suffix) is automatically added for compressed files
+        """
         self.file_name = file_name
         if not mode:
             mode = "r"
@@ -51,6 +133,20 @@ class WiseOpener(object):
         self.fh = None
 
     def __enter__(self):
+        """
+        Open file with appropriate handler based on extension.
+
+        Detects compression from extension and opens with:
+        - gzip.open() for .gz files
+        - bz2.BZ2File() for .bz2 files
+        - built-in open() for other files
+
+        Returns:
+            file object: Opened file handle
+
+        Note:
+            Automatically adds 'b' mode for compressed files if not present
+        """
         if self.file_name.endswith(".gz"):
             logger.info("Open as gz archive")
             if not "b" in self.mode:
@@ -66,6 +162,16 @@ class WiseOpener(object):
         return self.fh
 
     def __exit__(self, *args):
+        """
+        Close file handle when exiting context.
+
+        Args:
+            *args: Exception info (exc_type, exc_value, traceback)
+                  Passed by context manager protocol
+
+        Note:
+            Ensures file is properly closed even if exception occurs
+        """
         self.fh.close()
 
 
