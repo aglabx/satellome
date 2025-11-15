@@ -187,9 +187,29 @@ def _add_annotation(trf_file, gff_file, rm_file):
     return trf_id2annotation
 
 
-def add_annotation_from_gff(trf_file, gff_file, report_file, rm_file=None):
-    ''' Add annotation to TRF file from GFF file.'''
+def add_annotation_from_gff(trf_file, gff_file, report_file, rm_file=None, use_streaming=True):
+    """
+    Add annotation to TRF file from GFF file.
 
+    Args:
+        trf_file: Path to TRF file
+        gff_file: Path to GFF file
+        report_file: Path to output report file
+        rm_file: Path to RepeatMasker file (optional)
+        use_streaming: If True, use memory-efficient streaming mode (default: True)
+                      If False, use legacy in-memory mode (faster but uses more RAM)
+    """
+    # Use streaming mode by default for large files (memory-efficient)
+    if use_streaming:
+        from satellome.core_functions.tools.gene_intersect_streaming import (
+            add_annotation_from_gff_streaming
+        )
+        logger.info("Using streaming annotation mode (memory-efficient)")
+        add_annotation_from_gff_streaming(trf_file, gff_file, report_file, rm_file)
+        return
+
+    # Legacy in-memory mode (kept for backwards compatibility)
+    logger.info("Using in-memory annotation mode (legacy)")
     trf_id2annotation = _add_annotation(trf_file, gff_file, rm_file)
 
     c = Counter()
