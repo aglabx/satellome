@@ -21,6 +21,7 @@ Core functions related to classification of microsatellites tandem repeats.
 import os
 from collections import defaultdict
 
+from satellome.core_functions.exceptions import SequenceError
 from satellome.core_functions.io.gff_file import sc_gff3_reader
 from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
@@ -366,7 +367,12 @@ def cf_separate_true_ssr(settings, project):
         elif a or t:
             name = "tSSR_A"
         else:
-            raise Exception([a, c, t, g])
+            raise SequenceError(
+                f"Cannot classify tSSR sequence: nucleotide counts A={a}, C={c}, T={t}, G={g}. "
+                f"Expected at least one nucleotide type to be present. "
+                f"This may indicate an empty or invalid consensus sequence in TRF output. "
+                f"Check trf_array field for sequence data."
+            )
 
         trf_obj.trf_family = name
         gff = trf_obj.get_gff3_string(
@@ -482,7 +488,12 @@ def cf_separate_fuzzy_ssr(settings, project):
         elif a or t:
             name = "fSSR_A"
         else:
-            raise Exception([a, c, t, g])
+            raise SequenceError(
+                f"Cannot classify fSSR sequence: after filtering, A={a}, C={c}, T={t}, G={g}. "
+                f"No nucleotide type meets the threshold (≥1% frequency and ≥4 count). "
+                f"This may indicate a very short or homogeneous sequence that doesn't qualify as fuzzy SSR. "
+                f"Check trf_array field and sequence length."
+            )
 
         trf_obj.trf_family = name
         gff = trf_obj.get_gff3_string(

@@ -281,8 +281,11 @@ def trf_search_by_splitting(
                     # Get result (will raise exception if TRF failed)
                     result = future.result()
                     successful_files += 1
+                except (OSError, IOError, subprocess.SubprocessError) as e:
+                    logger.error(f"TRF failed for {fa_file} (subprocess/I/O error): {e}")
+                    failed_files.append(fa_file)
                 except Exception as e:
-                    logger.error(f"TRF failed for {fa_file}: {e}")
+                    logger.error(f"TRF failed for {fa_file} (unexpected error: {type(e).__name__}): {e}")
                     failed_files.append(fa_file)
                 finally:
                     pbar.update()
@@ -676,8 +679,15 @@ def recompute_failed_chromosomes(
 
         logger.info("✅ TRF completed successfully for missing scaffolds")
 
+    except (OSError, IOError, subprocess.SubprocessError) as e:
+        logger.error(f"❌ TRF failed for missing scaffolds (subprocess/I/O error): {e}")
+        logger.error("Cannot proceed with recomputation. Please investigate the errors.")
+        # Clean up temporary files
+        if os.path.exists(temp_fasta):
+            os.remove(temp_fasta)
+        raise
     except Exception as e:
-        logger.error(f"❌ TRF failed for missing scaffolds: {e}")
+        logger.error(f"❌ TRF failed for missing scaffolds (unexpected error: {type(e).__name__}): {e}")
         logger.error("Cannot proceed with recomputation. Please investigate the errors.")
         # Clean up temporary files
         if os.path.exists(temp_fasta):

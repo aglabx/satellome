@@ -50,9 +50,10 @@ def get_taxon_name(taxid):
             logger.error("Error parsing the XML response from NCBI.")
             time.sleep(5)
         except Exception as e:
-            # General catch-all for any other exceptions
-            logger.error(f"An unexpected error occurred: {e}")
+            # General catch-all for any other unexpected exceptions
+            logger.error(f"An unexpected error occurred ({type(e).__name__}): {e}")
             logger.info(f"Attempt {attempts} of 7")
             time.sleep(5)
+            # Note: After all retries exhausted, function returns None
 
     return None  # Return None if any errors occurred

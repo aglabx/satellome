@@ -10,6 +10,7 @@ Collection of functions related to simple statistics.
 
 import math
 from collections import defaultdict
+from satellome.core_functions.exceptions import StatisticsError
 
 
 def get_variance(data):
@@ -19,7 +20,10 @@ def get_variance(data):
     @return: variance
     """
     if not data:
-        raise Exception("Empty arrays for variance computation.")
+        raise StatisticsError(
+            "Cannot compute variance: empty data array. "
+            "Ensure the input contains at least one valid data point."
+        )
     mean = get_mean(data)
     N = float(len(data))
     return sum([(x - mean) ** 2 for x in data]) / N
@@ -32,7 +36,10 @@ def get_sigma(data):
     @return: sigma
     """
     if not data:
-        raise Exception("Empty arrays for variance computation.")
+        raise StatisticsError(
+            "Cannot compute sigma: empty data array. "
+            "Ensure the input contains at least one valid data point."
+        )
     n = len(data)
     if n == 1:
         return 0
@@ -47,7 +54,10 @@ def get_mean(data):
     @return: arithmetic mean
     """
     if not data:
-        raise Exception("Empty data.")
+        raise StatisticsError(
+            "Cannot compute mean: empty data array. "
+            "Ensure the input contains at least one valid data point."
+        )
     sum_x = sum(data)
     mean = float(sum_x) / len(data)
     return mean
@@ -60,7 +70,11 @@ def get_standard_deviation(variance):
     @return: standard deviation
     """
     if variance < 0:
-        raise Exception("Wrong variance value %s" % variance)
+        raise StatisticsError(
+            f"Invalid variance value: {variance}. "
+            f"Variance must be non-negative. "
+            f"Check input data for outliers or computation errors."
+        )
     return math.sqrt(variance)
 
 
@@ -74,9 +88,17 @@ def t_test(sample_mean, dist_mean, variance, N):
     @return: t_test
     """
     if N <= 0:
-        raise Exception("Wrong N value %s" % N)
+        raise StatisticsError(
+            f"Invalid sample size: N={N}. "
+            f"Sample size must be positive (N > 0). "
+            f"Check that the data array is not empty and N is correctly computed."
+        )
     if variance <= 0:
-        raise Exception("Wrong variance value %s" % variance)
+        raise StatisticsError(
+            f"Invalid variance value: {variance}. "
+            f"Variance must be positive for t-test computation. "
+            f"Check input data variance calculation or use alternative statistical test."
+        )
     return (sample_mean - dist_mean) / float(math.sqrt(variance / N))
 
 

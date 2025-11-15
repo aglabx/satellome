@@ -14,6 +14,7 @@ import csv
 import os
 import tempfile
 
+from satellome.core_functions.exceptions import ConfigurationError
 from satellome.core_functions.io.abstract_reader import AbstractFileIO
 
 csv.field_size_limit(1000000000)
@@ -98,7 +99,12 @@ class TabDelimitedFileIO(AbstractFileIO):
 
         line = line.strip().split(self.delimeter)
         if self.format_func:
-            assert hasattr(self.format_func, "__call__")
+            if not callable(self.format_func):
+                raise ConfigurationError(
+                    f"format_func must be callable, got {type(self.format_func).__name__}. "
+                    f"Provide a function that takes a list of tab-separated fields and returns processed list. "
+                    f"Example: lambda fields: [field.strip() for field in fields]"
+                )
             line = self.format_func(line)
         return line
 

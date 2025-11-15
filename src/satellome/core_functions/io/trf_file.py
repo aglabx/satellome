@@ -15,6 +15,7 @@ import logging
 import os
 from collections import defaultdict
 
+from satellome.core_functions.exceptions import SequenceError
 from satellome.core_functions.io.abstract_reader import WiseOpener
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,12 @@ def remove_consensus_redundancy(trf_objs):
             get_shifts_variants(monomer) + get_shifts_variants(get_revcomp(monomer))
         )
         if not variants:
-            raise Exception("Wrong monomer sequence for '%s'" % monomer)
+            raise SequenceError(
+                f"Invalid monomer sequence '{monomer}': cannot generate shift variants. "
+                f"This may indicate non-ACGT characters or issues with sequence rotation/reverse-complement. "
+                f"Valid monomers must contain only A, C, G, T nucleotides. "
+                f"Check TRF output for data corruption or invalid consensus sequences."
+            )
         lex_consensus = min(variants)
         result_rules[monomer] = lex_consensus
         while n <= max_consensus_length:

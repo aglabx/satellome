@@ -214,8 +214,11 @@ def split_genome_smart(
             
             try:
                 run_varprofiler(fasta_file, bed_file, threads=threads)
+            except (OSError, IOError, subprocess.SubprocessError) as e:
+                logger.warning(f"k-mer profiling failed (I/O or subprocess error), falling back to standard splitting: {e}")
+                use_kmer_filter = False
             except Exception as e:
-                logger.warning(f"k-mer profiling failed, falling back to standard splitting: {e}")
+                logger.warning(f"k-mer profiling failed (unexpected error: {type(e).__name__}), falling back to standard splitting: {e}")
                 use_kmer_filter = False
         
         if use_kmer_filter:
@@ -229,8 +232,11 @@ def split_genome_smart(
                     repeat_regions[chrom] = merged
                 
                 logger.info(f"Identified {sum(len(r) for r in repeat_regions.values())} repeat-rich regions")
+            except (OSError, IOError, FileNotFoundError, ValueError) as e:
+                logger.warning(f"k-mer profiling failed (file I/O or parsing error), falling back to standard splitting: {e}")
+                use_kmer_filter = False
             except Exception as e:
-                logger.warning(f"k-mer profiling failed, falling back to standard splitting: {e}")
+                logger.warning(f"k-mer profiling failed (unexpected error: {type(e).__name__}), falling back to standard splitting: {e}")
                 use_kmer_filter = False
     
     # Step 2: Split sequences into chunks

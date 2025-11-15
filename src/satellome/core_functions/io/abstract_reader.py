@@ -27,6 +27,8 @@ import pickle
 import re
 import shutil
 
+from satellome.core_functions.exceptions import FileFormatError, ConfigurationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +41,12 @@ class WiseOpener(object):
             mode = "r"
         if not mode in ["w", "r", "a", "wb", "rb", "ab"]:
             logger.error("Wrong file mode: %s" % mode)
-            raise Exception("Wrong file mode: %s" % mode)
+            raise FileFormatError(
+                f"Invalid file mode '{mode}': expected one of ['r', 'w', 'a', 'rb', 'wb', 'ab']. "
+                f"Use 'r' for reading, 'w' for writing, 'a' for appending. "
+                f"Add 'b' suffix for binary mode (required for .gz and .bz2 files). "
+                f"Check file opening mode specification in your code."
+            )
         self.mode = mode
         self.fh = None
 
@@ -193,7 +200,12 @@ class AbstractFileIO(object):
 
     def sort(self, sort_func, reverse=False):
         """Sort data with sort_func and reversed param."""
-        assert hasattr(sort_func, "__call__")
+        if not callable(sort_func):
+            raise ConfigurationError(
+                f"sort_func must be callable, got {type(sort_func).__name__}. "
+                f"Provide a function that takes a data item and returns a sortable key. "
+                f"Example: lambda x: x.some_field"
+            )
         self._data.sort(key=sort_func, reverse=reverse)
 
     @property
@@ -383,7 +395,12 @@ def sc_process_folder_to_other(
 
     To print names set *verbose* to True.
     """
-    assert hasattr(cf, "__call__")
+    if not callable(cf):
+        raise ConfigurationError(
+            f"cf (core function) must be callable, got {type(cf).__name__}. "
+            f"Provide a function that processes file content and returns modified content. "
+            f"Example: lambda text, **args: process(text)"
+        )
     reader = AbstractFolderIO(folder, mask=mask)
     for text, name, file in reader.iter_file_content_and_names():
         args_dict["name"] = name

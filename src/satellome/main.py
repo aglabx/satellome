@@ -232,8 +232,16 @@ def validate_and_prepare_environment(args):
                     logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
                     logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
                     sys.exit(1)
+        except (OSError, IOError, PermissionError) as e:
+            logger.error(f"TRF auto-installation failed (I/O error): {e}")
+            logger.warning("Please install TRF manually:")
+            logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+            logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+            logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
+            sys.exit(1)
         except Exception as e:
-            logger.error(f"TRF auto-installation failed: {e}")
+            # Catch unexpected errors but log them distinctly
+            logger.error(f"TRF auto-installation failed (unexpected error): {type(e).__name__}: {e}")
             logger.warning("Please install TRF manually:")
             logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
             logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")

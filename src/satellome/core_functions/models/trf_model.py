@@ -8,6 +8,7 @@
 import logging
 import re
 
+from satellome.core_functions.exceptions import SequenceError
 from satellome.core_functions.models.abstract_model import AbstractModel
 
 logger = logging.getLogger(__name__)
@@ -280,7 +281,17 @@ class TRModel(AbstractModel):
 
         self.trf_r_ind = obj2.trf_r_ind
         self.trf_array_length = len(self.trf_array)
-        assert self.trf_array_length == self.trf_r_ind - self.trf_l_ind + 1
+
+        # Verify array length matches coordinate range
+        expected_length = self.trf_r_ind - self.trf_l_ind + 1
+        if self.trf_array_length != expected_length:
+            raise SequenceError(
+                f"Array length mismatch after merging tandem repeats: "
+                f"expected {expected_length} bp (from coordinates {self.trf_l_ind}-{self.trf_r_ind}), "
+                f"but got {self.trf_array_length} bp. "
+                f"This indicates a coordinate or sequence extraction error during TR merging. "
+                f"Check overlap calculation and array concatenation logic."
+            )
 
         if not use_first:
             self.trf_period = obj2.trf_period
