@@ -6,8 +6,108 @@
 # @contact: noreply@anthropic.com
 
 """
-Input validation functions for Satellome pipeline.
-Validates FASTA files, GFF files, RepeatMasker files, TRF binary, and output directories.
+Comprehensive input validation for Satellome pipeline.
+
+Provides robust validation functions for all input files and system requirements
+before running tandem repeat analysis. Catches common errors early with helpful
+error messages and installation instructions.
+
+Classes:
+    ValidationError: Base exception for validation failures
+    FastaValidationError: FASTA file validation failures
+    GFFValidationError: GFF3 file validation failures
+    BinaryValidationError: TRF binary validation failures
+    OutputDirValidationError: Output directory validation failures
+
+Functions:
+    validate_fasta_file: Validate FASTA format, sequences, and content
+    validate_gff_file: Validate GFF3 format and coordinates
+    validate_repeatmasker_file: Validate RepeatMasker .out format
+    validate_trf_binary: Validate TRF executable exists and is runnable
+    validate_output_directory: Validate/create output directory with permissions check
+    validate_input_files: Main validation function - validates all inputs at once
+
+Key Features:
+    - Early error detection before pipeline execution
+    - Comprehensive format validation (headers, coordinates, fields)
+    - File size and emptiness checks
+    - Gzip-compressed FASTA support
+    - Detailed error messages with fix suggestions
+    - Installation instructions for missing TRF binary
+    - Disk space warnings for output directory
+    - IUPAC ambiguity code support in sequences
+    - Malformed line detection and reporting
+
+Validation Checks:
+    **FASTA Files:**
+    - File exists and is readable
+    - Not empty (non-zero size)
+    - Valid headers (start with '>')
+    - Sequence content validation (IUPAC codes)
+    - Zero-length sequence detection
+    - Invalid character detection
+    - Gzip format validation
+
+    **GFF Files:**
+    - 9 tab-separated fields per line
+    - Valid integer coordinates
+    - Start <= end positions
+    - 1-based coordinate system check
+
+    **RepeatMasker Files:**
+    - At least 11 whitespace-separated fields
+    - Valid integer coordinates (fields 5-6)
+    - Start <= end positions
+
+    **TRF Binary:**
+    - File exists (full path or in $PATH)
+    - Is executable (chmod +x)
+    - Provides installation instructions if missing
+
+    **Output Directory:**
+    - Directory exists or can be created
+    - Write permissions available
+    - Sufficient disk space (warns if < 1GB)
+
+Example:
+    >>> from satellome.core_functions.tools.validation import validate_input_files
+    >>> results = validate_input_files(
+    ...     fasta_file="genome.fasta",
+    ...     gff_file="annotations.gff3",
+    ...     trf_binary="trf",
+    ...     output_dir="output/"
+    ... )
+    INFO:...Validating FASTA file: genome.fasta
+    INFO:...✓ FASTA validation passed: 24 sequences, 3000000000 bp total
+    INFO:...Validating GFF file: annotations.gff3
+    INFO:...✓ GFF validation passed: 12453 features
+    INFO:...Validating TRF binary: trf
+    INFO:...✓ TRF binary found: /usr/local/bin/trf
+    INFO:...Validating output directory: output/
+    INFO:...✓ Output directory ready: /path/to/output
+    INFO:...All validations passed successfully!
+    >>>
+    >>> # Check statistics
+    >>> print(results['fasta']['num_sequences'])
+    24
+
+Error Handling Example:
+    >>> try:
+    ...     validate_fasta_file("missing.fasta")
+    ... except FastaValidationError as e:
+    ...     print(f"Error: {e}")
+    Error: FASTA file not found: missing.fasta
+
+Typical Use Case:
+    1. Call validate_input_files() at pipeline start
+    2. Catch validation exceptions and display error to user
+    3. If successful, proceed with analysis using validated paths
+    4. Results dict contains statistics for logging/reporting
+
+See Also:
+    satellome.main: Pipeline entry point that uses these validators
+    satellome.core_functions.io.fasta_file: FASTA parsing after validation
+    satellome.core_functions.io.gff3_file: GFF3 parsing after validation
 """
 
 import os

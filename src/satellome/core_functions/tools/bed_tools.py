@@ -6,10 +6,57 @@
 # @description: Tools for working with BED format files
 
 """
-BED format sequence extraction tools.
+BED format sequence extraction and manipulation tools.
 
-This module provides functionality to extract sequences from FASTA files
-based on BED format coordinates and create TRF-like output files.
+Provides utilities for extracting genomic sequences from FASTA files based on
+BED format coordinates (from FasTAN/tanbed output). Handles strand orientation,
+chromosome name parsing, and creates TRF-compatible output with sequences.
+
+Functions:
+    reverse_complement: Compute DNA reverse complement
+    extract_sequences_from_bed: Extract and annotate sequences from BED coordinates
+
+Key Features:
+    - Memory-efficient chromosome-by-chromosome processing
+    - BED6 format support with strand orientation
+    - Automatic reverse complement for negative strand
+    - Duplicate chromosome name validation
+    - Short chromosome name extraction (first word only)
+    - Comprehensive logging and error handling
+    - TRF-compatible output format
+
+BED Format Notes:
+    - Coordinates are 0-based, half-open intervals [start, end)
+    - Python slicing seq[start:end] works directly with BED coords
+    - Strand column (6th field): '+' forward, '-' reverse complement
+    - Chromosome names: Uses first whitespace-delimited word only
+
+Output Format:
+    - Original BED columns + repeat_length + extracted_sequence
+    - Header comments with source file information
+    - Chromosome names normalized to first word
+
+Example:
+    >>> # Extract sequences from BED annotations
+    >>> from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
+    >>> count = extract_sequences_from_bed(
+    ...     "genome.fasta",
+    ...     "tandem_repeats.bed",
+    ...     "repeats_with_seqs.txt"
+    ... )
+    INFO:satellome.core_functions.tools.bed_tools:Extracting sequences from genome.fasta...
+    INFO:satellome.core_functions.tools.bed_tools:✓ Extracted 1523 sequences
+    >>> print(f"Extracted {count} repeat sequences")
+    Extracted 1523 repeat sequences
+
+Typical Use Case:
+    1. Run FasTAN/tanbed on genome to find tandem repeats (generates BED)
+    2. Use extract_sequences_from_bed() to add sequences to BED output
+    3. Result file has coordinates + actual repeat sequences for analysis
+
+See Also:
+    satellome.core_functions.io.fasta_file: FASTA iteration utilities
+    satellome.steps.trf_parse_raw: TRF output parsing
 """
 
 import logging
@@ -47,27 +94,76 @@ def reverse_complement(seq):
 
 def extract_sequences_from_bed(fasta_file, bed_file, output_file):
     """
-    Extract sequences from FASTA file based on BED coordinates and save to TRF-like format.
+    Extract sequences from FASTA based on BED coordinates with strand handling.
 
-    Memory-efficient implementation: reads BED first, sorts by chromosome, then processes
-    FASTA sequentially chromosome by chromosome.
-
-    BED coordinates are 0-based, half-open intervals [start, end).
-    Python slicing works the same way, so seq[start:end] extracts correctly.
+    Memory-efficient implementation that reads BED file once, groups by chromosome,
+    then processes FASTA sequentially chromosome-by-chromosome. Automatically applies
+    reverse complement for negative strand regions.
 
     Args:
-        fasta_file (str): Path to input FASTA file
-        bed_file (str): Path to input BED file from FasTAN/tanbed
-        output_file (str): Path to output file (BED + sequence column)
+        fasta_file (str): Path to input genome FASTA file
+        bed_file (str): Path to BED file with tandem repeat coordinates (FasTAN/tanbed output)
+        output_file (str): Path to output file with BED columns + length + sequence
 
     Returns:
-        int: Number of sequences extracted
+        int: Number of sequences successfully extracted
 
-    Format:
-        Input BED: chr  start  end  name  score  strand  [other_columns...]
-        Output: chr  start  end  name  score  strand  [other_columns...]  length  sequence
+    Raises:
+        ValueError: If duplicate chromosome names detected in FASTA (ambiguous mapping)
 
-        Where length = end - start (repeat length in bp)
+    Example:
+        >>> # Extract repeat sequences from genome
+        >>> count = extract_sequences_from_bed(
+        ...     "hg38.fasta",
+        ...     "tandem_repeats.bed",
+        ...     "repeats_annotated.txt"
+        ... )
+        INFO:...Loaded 1523 BED entries for 24 chromosomes
+        INFO:...✓ Extracted 1523 sequences
+        >>> print(count)
+        1523
+
+    Input BED Format (6+ columns):
+        - Column 1: Chromosome name (uses first word only)
+        - Column 2: Start position (0-based, inclusive)
+        - Column 3: End position (0-based, exclusive)
+        - Column 4: Feature name
+        - Column 5: Score
+        - Column 6: Strand ('+' or '-')
+        - Columns 7+: Additional fields (preserved in output)
+
+    Output Format:
+        - All original BED columns
+        - Column N+1: repeat_length (end - start)
+        - Column N+2: extracted_sequence (reverse complemented if strand '-')
+        - Header comments with source file information
+
+    Processing Steps:
+        1. Load entire BED file, group entries by chromosome
+        2. Sort entries within each chromosome by start position
+        3. Iterate through FASTA chromosomes sequentially
+        4. For each chromosome, extract all BED regions at once
+        5. Apply reverse complement if strand is '-'
+        6. Write annotated BED lines with sequences
+
+    Coordinate System:
+        - BED uses 0-based, half-open intervals: [start, end)
+        - Python slicing seq[start:end] works directly (no adjustment needed)
+        - Example: BED "chr1 100 105" extracts bases at positions 100,101,102,103,104
+
+    Validation and Error Handling:
+        - Skips lines with < 3 columns or invalid coordinates
+        - Validates end <= chromosome_length
+        - Raises ValueError on duplicate chromosome names (critical safety check)
+        - Logs warnings for skipped entries with reasons
+        - Strand defaults to '+' if not specified (column 6 missing)
+
+    Note:
+        - Uses chromosome short names (first whitespace-delimited word only)
+        - Handles both uppercase and lowercase DNA sequences
+        - Memory efficient: only one chromosome loaded at a time
+        - Output includes header comments for reproducibility
+        - Created for SAT-49: BED sequence extraction feature
     """
     logger.info(f"Extracting sequences from {fasta_file} using coordinates from {bed_file}")
 
