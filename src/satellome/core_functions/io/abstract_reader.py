@@ -309,19 +309,58 @@ class AbstractFolderIO(object):
                         yield fh.read(), name, path
 
     def move_files_by_mask(self, dist_folder):
+        """
+        Move files matching the mask to the destination folder.
+
+        Uses atomic operations to prevent data loss:
+        - os.replace() for same-filesystem atomic replacement
+        - Falls back to shutil.move() for cross-filesystem moves
+
+        Args:
+            dist_folder: Destination folder path
+
+        Raises:
+            OSError: If file move fails due to permissions or disk issues
+            PermissionError: If insufficient permissions to move files
+        """
         for file_path in self.iter_filenames():
             dist_file = os.path.join(dist_folder, os.path.split(file_path)[-1])
-            if os.path.isfile(dist_file):
-                os.remove(dist_file)
-                # TODO: fix me
-            os.rename(file_path, dist_file)
+            try:
+                # Use os.replace() for atomic file replacement (Python 3.3+)
+                # This prevents data loss if the operation fails mid-way
+                os.replace(file_path, dist_file)
+            except OSError as e:
+                # os.replace() may fail for cross-filesystem moves
+                # Fall back to shutil.move() which handles this case
+                try:
+                    shutil.move(file_path, dist_file)
+                    logger.warning(f"Used shutil.move() for cross-filesystem move: {file_path} -> {dist_file}")
+                except (OSError, PermissionError) as move_error:
+                    logger.error(f"Failed to move file {file_path} to {dist_file}: {move_error}")
+                    raise
 
     def copy_files_by_mask(self, dist_folder):
+        """
+        Copy files matching the mask to the destination folder.
+
+        Uses shutil.copy2() which preserves metadata and safely overwrites
+        existing files without the risk of data loss.
+
+        Args:
+            dist_folder: Destination folder path
+
+        Raises:
+            OSError: If file copy fails due to permissions or disk issues
+            PermissionError: If insufficient permissions to copy files
+        """
         for file_path in self.iter_filenames():
             dist_file = os.path.join(dist_folder, os.path.split(file_path)[-1])
-            if os.path.isfile(dist_file):
-                os.remove(dist_file)
-            shutil.copy2(file_path, dist_file)
+            try:
+                # shutil.copy2() preserves metadata and safely overwrites destination if it exists
+                shutil.copy2(file_path, dist_file)
+            except (OSError, PermissionError) as e:
+                logger.error(f"Failed to copy file {file_path} to {dist_file}: {e}")
+                raise
 
 
 def sc_iter_filepath_folder(folder, mask="."):
