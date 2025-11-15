@@ -5,7 +5,48 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 """
-Collection of functions related to simple statistics.
+Basic statistical functions for genomic data analysis.
+
+Provides simple descriptive statistics (mean, variance, standard deviation),
+frequency counting, and t-test computations. Designed for analyzing numerical
+properties of tandem repeats and genomic features.
+
+Functions:
+    get_mean: Calculate arithmetic mean
+    get_variance: Calculate population variance
+    get_sigma: Calculate sum of absolute deviations from mean
+    get_standard_deviation: Calculate standard deviation from variance
+    t_test: Perform Student's t-test
+    get_element_frequencies: Count element occurrences
+    get_simple_statistics: Compute all basic statistics at once
+
+Key Features:
+    - Input validation with informative error messages
+    - Efficient frequency counting with defaultdict
+    - Comprehensive statistics dict output
+    - Handles empty data gracefully (where appropriate)
+
+Example:
+    >>> # Basic statistics
+    >>> data = [100, 150, 200, 180, 120]
+    >>> stats = get_simple_statistics(data)
+    >>> print(f"Mean: {stats['mean']:.2f}")
+    >>> print(f"SD: {stats['standard_deviation']:.2f}")
+    >>>
+    >>> # Frequency counting
+    >>> categories = ['A', 'B', 'A', 'C', 'B', 'A']
+    >>> freqs = get_element_frequencies(categories)
+    >>> print(dict(freqs))  # {'A': 3, 'B': 2, 'C': 1}
+    >>>
+    >>> # T-test
+    >>> sample_mean = 150.0
+    >>> dist_mean = 120.0
+    >>> variance = 625.0
+    >>> N = 30
+    >>> t = t_test(sample_mean, dist_mean, variance, N)
+
+See Also:
+    satellome.core_functions.exceptions: StatisticsError for validation failures
 """
 
 import math
@@ -15,9 +56,20 @@ from satellome.core_functions.exceptions import StatisticsError
 
 def get_variance(data):
     """
-    Calculated variance for given list.
-    @param data: list of numbers
-    @return: variance
+    Calculate population variance for numeric data.
+
+    Args:
+        data (list): List of numeric values
+
+    Returns:
+        float: Population variance (mean of squared deviations)
+
+    Raises:
+        StatisticsError: If data is empty
+
+    Example:
+        >>> get_variance([100, 150, 200])
+        1666.67
     """
     if not data:
         raise StatisticsError(
@@ -31,9 +83,20 @@ def get_variance(data):
 
 def get_sigma(data):
     """
-    Calculate sigma, return sum(module(xi - mean).
-    @param data: list of numbers
-    @return: sigma
+    Calculate sum of absolute deviations from mean.
+
+    Args:
+        data (list): List of numeric values
+
+    Returns:
+        float: Sum of |xi - mean| for all values (0 if single element)
+
+    Raises:
+        StatisticsError: If data is empty
+
+    Example:
+        >>> get_sigma([100, 150, 200])
+        100.0
     """
     if not data:
         raise StatisticsError(
@@ -49,9 +112,20 @@ def get_sigma(data):
 
 def get_mean(data):
     """
-    Calculated mean for given list.
-    @param data: list of numbers
-    @return: arithmetic mean
+    Calculate arithmetic mean of numeric data.
+
+    Args:
+        data (list): List of numeric values
+
+    Returns:
+        float: Arithmetic mean (sum / count)
+
+    Raises:
+        StatisticsError: If data is empty
+
+    Example:
+        >>> get_mean([100, 150, 200])
+        150.0
     """
     if not data:
         raise StatisticsError(
@@ -65,9 +139,20 @@ def get_mean(data):
 
 def get_standard_deviation(variance):
     """
-    Get sample deviation for variance.
-    @param variance:
-    @return: standard deviation
+    Calculate standard deviation from variance.
+
+    Args:
+        variance (float): Population or sample variance (must be non-negative)
+
+    Returns:
+        float: Standard deviation (square root of variance)
+
+    Raises:
+        StatisticsError: If variance is negative
+
+    Example:
+        >>> get_standard_deviation(625.0)
+        25.0
     """
     if variance < 0:
         raise StatisticsError(
@@ -80,12 +165,26 @@ def get_standard_deviation(variance):
 
 def t_test(sample_mean, dist_mean, variance, N):
     """
-    Compute t-test.
-    @param sample_mean: sample mean
-    @param dist_mean: distribution mean
-    @param variance: sample variance
-    @param N: sample size
-    @return: t_test
+    Perform Student's t-test for mean comparison.
+
+    Args:
+        sample_mean (float): Observed sample mean
+        dist_mean (float): Expected/population mean
+        variance (float): Sample variance (must be positive)
+        N (int): Sample size (must be positive)
+
+    Returns:
+        float: T-statistic value
+
+    Raises:
+        StatisticsError: If N <= 0 or variance <= 0
+
+    Example:
+        >>> t_test(sample_mean=150, dist_mean=120, variance=625, N=30)
+        6.57...
+
+    Note:
+        Formula: t = (sample_mean - dist_mean) / sqrt(variance / N)
     """
     if N <= 0:
         raise StatisticsError(
@@ -104,9 +203,18 @@ def t_test(sample_mean, dist_mean, variance, N):
 
 def get_element_frequencies(data):
     """
-    Get default dictionary of element frequencies in given list
-    @param data:
-    @return: default dictionary element to tf
+    Count occurrences of each element in data.
+
+    Args:
+        data (iterable): Sequence of hashable elements
+
+    Returns:
+        defaultdict(int): Maps element to occurrence count
+
+    Example:
+        >>> freqs = get_element_frequencies(['A', 'B', 'A', 'C', 'B', 'A'])
+        >>> dict(freqs)
+        {'A': 3, 'B': 2, 'C': 1}
     """
     d = defaultdict(int)
     for element in data:
@@ -116,9 +224,32 @@ def get_element_frequencies(data):
 
 def get_simple_statistics(data):
     """
-    Compute simple statistics
-    @param data: list of numbers
-    @return: dictionary with keys (mean, variance, sigma, standard_deviation)
+    Compute all basic statistics in one call.
+
+    Convenience function that calculates mean, variance, sigma,
+    and standard deviation. Returns zeros for empty data.
+
+    Args:
+        data (list): List of numeric values (empty list returns zeros)
+
+    Returns:
+        dict: Statistics dictionary with keys:
+            - 'mean' (float): Arithmetic mean
+            - 'variance' (float): Population variance
+            - 'sigma' (float): Sum of absolute deviations
+            - 'standard_deviation' (float): Standard deviation
+
+    Example:
+        >>> data = [100, 150, 200, 180, 120]
+        >>> stats = get_simple_statistics(data)
+        >>> print(f"Mean: {stats['mean']:.1f}")
+        Mean: 150.0
+        >>> print(f"SD: {stats['standard_deviation']:.1f}")
+        SD: 35.8
+
+    Note:
+        - Empty data returns all zeros (no exception raised)
+        - Uses population variance (divide by N, not N-1)
     """
     if not data:
         result = {

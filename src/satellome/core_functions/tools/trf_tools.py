@@ -7,12 +7,65 @@
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution.
 """
-TRF search wrapper
+TRF (Tandem Repeat Finder) execution and processing utilities.
 
-- trf_search(file_name="")
-- trf_search_in_dir(folder, verbose=False, file_suffix=".fa")
+Provides wrappers for running TRF on genomic FASTA files with parallel processing,
+smart genome splitting, coordinate restoration, and various filtering utilities.
+Supports large-scale genome analysis with multi-threading and k-mer based optimization.
 
-Command example: **wgs.AADD.1.gbff.fa 2 5 7 80 10 50 2000 -m -f -d -h**
+Key Functions:
+    trf_search_by_splitting: Main TRF execution with parallel chunk processing
+    run_trf: Execute TRF on single file with retry logic
+    restore_coordinates_in_line: Fix coordinates after chunk-based processing
+    recompute_failed_chromosomes: Rerun TRF only on failed/missing scaffolds
+
+Filter Functions:
+    trf_filter_by_array_length: Filter by total repeat length
+    trf_filter_by_monomer_length: Filter by monomer/period length
+    trf_filter_exclude_by_gi_list: Exclude specific sequences by GI
+
+Statistics Functions:
+    count_trs_per_chrs: Count repeats per chromosome
+    count_trf_subset_by_head: Count repeats matching header pattern
+    trf_write_field_n_data: Export field value counts
+    trf_write_two_field_data: Export two-field data pairs
+
+Representation Functions:
+    trf_representation: Convert TRF to various output formats
+    fix_chr_names: Post-process chromosome names for specific assemblies
+
+Key Features:
+    - Parallel TRF execution with configurable thread count
+    - Smart genome splitting (~100kb chunks or k-mer based)
+    - Automatic coordinate restoration after chunking
+    - Retry logic for TRF failures
+    - Progress bars (tqdm) for long operations
+    - k-mer filtering for targeted analysis
+    - Safe temp directory cleanup
+
+TRF Command Format:
+    <input.fa> 2 5 7 80 10 50 2000 -m -f -d -h
+    Parameters: Match Mismatch Delta PM PI Minscore MaxPeriod
+    Flags: -m (masked), -f (flanking), -d (data), -h (html)
+
+Example:
+    >>> # Run TRF on genome with 30 threads
+    >>> output_file = trf_search_by_splitting(
+    ...     "genome.fasta",
+    ...     threads=30,
+    ...     project="hg38",
+    ...     trf_path="/usr/local/bin/trf"
+    ... )
+    >>>
+    >>> # Filter large repeats (>10kb)
+    >>> trf_filter_by_array_length("genome.trf", "large.trf", cutoff=10000)
+    >>>
+    >>> # Count repeats per chromosome
+    >>> count_trs_per_chrs("genome.trf")
+
+See Also:
+    satellome.core_functions.io.trf_file: TRF file parsing and I/O
+    satellome.constants: TRF_DEFAULT_PARAMS, TRF_FLAGS, thresholds
 """
 
 import logging
@@ -187,7 +240,76 @@ def trf_search_by_splitting(
     kmer_bed_file=None,
     abort_on_error=True,
 ):
-    """TRF search by splitting on fasta file in files."""
+    """
+    Run TRF on large genome by splitting into chunks and parallel processing.
+
+    Main pipeline function that:
+    1. Splits genome into ~100kb chunks (or k-mer based regions)
+    2. Runs TRF in parallel on all chunks
+    3. Parses TRF .dat output to tab-delimited format
+    4. Aggregates results into single output file
+    5. Cleans up temporary files
+
+    Supports two splitting strategies:
+    - Standard: Split by sequence length (~100kb chunks)
+    - Smart k-mer based: Target high-repeat regions (requires kmer_splitting module)
+
+    Args:
+        fasta_file (str): Path to input genome FASTA file
+        threads (int, optional): Number of parallel TRF processes. Defaults to 30.
+        wdir (str, optional): Working directory for output. Defaults to ".".
+        project (str, optional): Project name for output file naming. Defaults to "NaN".
+        trf_path (str, optional): Path to TRF binary. Defaults to "trf".
+        parser_program (str, optional): Path to TRF parser script.
+                                       Defaults to "./trf_parse_raw.py".
+        keep_raw (bool, optional): Keep temporary .dat files and chunks.
+                                  Defaults to False.
+        genome_size (int, optional): Genome size in bp (auto-calculated if None).
+                                    Defaults to None.
+        use_kmer_filter (bool, optional): Use k-mer based smart splitting.
+                                         Defaults to False.
+        kmer_threshold (float, optional): K-mer frequency threshold for filtering.
+                                         Defaults to KMER_THRESHOLD_DEFAULT.
+        kmer_bed_file (str, optional): Pre-computed k-mer BED file for filtering.
+                                      Defaults to None.
+        abort_on_error (bool, optional): Abort pipeline if TRF fails for any chunk.
+                                        If False, continues with partial results.
+                                        Defaults to True.
+
+    Returns:
+        str: Path to output TRF file (<fasta_name>.trf in wdir)
+
+    Raises:
+        RuntimeError: If TRF fails and abort_on_error=True
+        FileNotFoundError: If TRF binary or parser script not found
+        OSError: If temp directory operations fail
+
+    Example:
+        >>> # Basic usage
+        >>> output = trf_search_by_splitting("hg38.fasta", threads=40, project="hg38")
+        >>>
+        >>> # With k-mer filtering
+        >>> output = trf_search_by_splitting(
+        ...     "genome.fasta",
+        ...     use_kmer_filter=True,
+        ...     kmer_threshold=0.01,
+        ...     keep_raw=True  # For debugging
+        ... )
+        >>>
+        >>> # Continue on errors (for preliminary analysis)
+        >>> output = trf_search_by_splitting(
+        ...     "genome.fasta",
+        ...     abort_on_error=False
+        ... )
+
+    Note:
+        - Creates temporary directory in wdir with mkdtemp()
+        - TRF versions <4.10.0 return non-zero exit codes on success!
+        - Progress displayed via tqdm bars (splitting, TRF, parsing)
+        - Coordinate restoration automatic for k-mer split regions
+        - Temp folder removed unless keep_raw=True or path is suspiciously short
+        - Parser runs in parallel using ThreadPoolExecutor
+    """
     folder_path = tempfile.mkdtemp(dir=wdir)
 
     if genome_size is None:
@@ -386,6 +508,16 @@ def trf_search_by_splitting(
 
 
 def _filter_by_bottom_array_length(obj, cutoff):
+    """
+    Check if TR array length exceeds cutoff.
+
+    Args:
+        obj (TRModel): Tandem repeat object
+        cutoff (int): Minimum array length threshold
+
+    Returns:
+        bool: True if trf_array_length > cutoff
+    """
     if obj.trf_array_length > cutoff:
         return True
     else:
@@ -393,6 +525,16 @@ def _filter_by_bottom_array_length(obj, cutoff):
 
 
 def _filter_by_bottom_unit_length(obj, cutoff):
+    """
+    Check if TR monomer/period length exceeds cutoff.
+
+    Args:
+        obj (TRModel): Tandem repeat object
+        cutoff (int): Minimum period length threshold
+
+    Returns:
+        bool: True if trf_period > cutoff
+    """
     if obj.trf_period > cutoff:
         return True
     else:
@@ -400,8 +542,23 @@ def _filter_by_bottom_unit_length(obj, cutoff):
 
 
 def trf_filter_by_array_length(trf_file, output_file, cutoff):
-    """Create output TRF file with tandem repeats with length greater than from input file.
-    Function returns number of tandem repeats in output file.
+    """
+    Filter tandem repeats by total array length.
+
+    Creates output file containing only repeats longer than cutoff.
+
+    Args:
+        trf_file (str): Input TRF file path
+        output_file (str): Output TRF file path
+        cutoff (int): Minimum array length in bp
+
+    Returns:
+        int: Number of repeats in output file
+
+    Example:
+        >>> # Keep only large repeats (>10kb)
+        >>> count = trf_filter_by_array_length("all.trf", "large.trf", 10000)
+        >>> print(f"Filtered {count} large repeats")
     """
     i = 0
     with open(output_file, "w") as fw:
