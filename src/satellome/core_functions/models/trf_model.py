@@ -399,21 +399,18 @@ class TRModel(AbstractModel):
         return ">%s\n%s\n" % (self.trf_id, self.trf_consensus)
 
     def get_family_repr(self):
-        """Get str for family index."""
-        return "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
+        """Get str for family index (legacy method - simplified)."""
+        return "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" % (
             self.trf_id,
             self.trf_period,
             self.trf_array_length,
             self.trf_array_gc,
             self.trf_pvar,
-            self.trf_gi,
+            self.trf_gi,  # computed property
             self.trf_l_ind,
             self.trf_r_ind,
-            self.trf_chr,
-            self.trf_repbase,
-            self.trf_superfamily,
+            self.trf_chr,  # computed property
             self.trf_family,
-            self.trf_subfamily,
         )
 
     @property

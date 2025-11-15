@@ -160,21 +160,18 @@ class TestTRModelOutputMethods:
         model = TRModel()
         model.trf_id = 1
         model.project = "test_project"
+        model.trf_head = "chr1"  # Set first - needed for trf_gi and trf_chr properties
         model.trf_period = 2
         model.trf_array_length = 100
         model.trf_array_gc = 0.5
         model.trf_pvar = 5
-        model.trf_gi = "chr1"
+        # trf_gi and trf_chr are now computed properties from trf_head
         model.trf_l_ind = 1000
         model.trf_r_ind = 1100
-        model.trf_chr = "chr1"
         model.trf_array = "ATGC" * 25
         model.trf_consensus = "ATGC"
-        model.trf_head = "chr1"
-        model.trf_repbase = "Unknown"
-        model.trf_superfamily = "Unknown"
         model.trf_family = "Unknown"
-        model.trf_subfamily = "Unknown"
+        # Removed fields: trf_repbase, trf_superfamily, trf_subfamily
         return model
 
     def test_get_string_repr(self, simple_model):
@@ -237,7 +234,7 @@ class TestTRModelOutputMethods:
         assert result.endswith("\n")
         assert "\t" in result
         parts = result.strip().split("\t")
-        assert len(parts) == 13
+        assert len(parts) == 10  # Updated: now returns 10 fields instead of 13
 
     def test_fasta_property(self, simple_model):
         """Test fasta property."""
