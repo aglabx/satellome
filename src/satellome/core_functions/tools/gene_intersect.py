@@ -86,20 +86,68 @@ def _add_annotation(trf_file, gff_file, rm_file):
     if rm_file:
 
         rm_file_lines = count_lines_large_file(rm_file)
+        num_malformed = 0
+        num_parsed = 0
 
         with open(rm_file) as fh:
-            for line in tqdm(fh, total=rm_file_lines, desc="Load RM"):
-                d = line.split()
-                chrm = d[4]
-                if chrm not in chrm2annotation:
-                    chrm2annotation[chrm] = IntervalTree()
-                start = int(d[5])
-                end = int(d[6])
-                fam = d[10]
+            for line_num, line in enumerate(tqdm(fh, total=rm_file_lines, desc="Load RM"), start=1):
+                line = line.strip()
 
-                chrm2annotation[chrm].addi(start-1, end, {
-                    "type": f"RM_{fam}",
-                })
+                # Skip empty lines and headers
+                if not line or line.startswith('SW') or line.startswith('score'):
+                    continue
+
+                d = line.split()
+
+                # Validate RepeatMasker line format (requires at least 11 fields)
+                # Fields: [4]=chrm, [5]=start, [6]=end, [10]=family
+                if len(d) < 11:
+                    num_malformed += 1
+                    if num_malformed <= 10:  # Only log first 10 malformed lines
+                        logger.warning(
+                            f"Malformed RepeatMasker line {line_num} "
+                            f"(expected ≥11 fields, got {len(d)}): {line[:80]}..."
+                        )
+                    continue
+
+                try:
+                    chrm = d[4]
+                    start = int(d[5])
+                    end = int(d[6])
+                    fam = d[10]
+
+                    # Validate coordinates
+                    if start > end:
+                        logger.warning(
+                            f"Invalid coordinates in RepeatMasker line {line_num}: "
+                            f"start ({start}) > end ({end}), skipping"
+                        )
+                        num_malformed += 1
+                        continue
+
+                    if chrm not in chrm2annotation:
+                        chrm2annotation[chrm] = IntervalTree()
+
+                    chrm2annotation[chrm].addi(start-1, end, {
+                        "type": f"RM_{fam}",
+                    })
+                    num_parsed += 1
+
+                except (ValueError, IndexError) as e:
+                    num_malformed += 1
+                    if num_malformed <= 10:
+                        logger.warning(
+                            f"Error parsing RepeatMasker line {line_num}: {e}"
+                        )
+                    continue
+
+        if num_malformed > 0:
+            logger.warning(
+                f"RepeatMasker file: parsed {num_parsed} valid lines, "
+                f"skipped {num_malformed} malformed lines"
+            )
+        else:
+            logger.info(f"RepeatMasker file: parsed {num_parsed} lines successfully")
 
     trf_id2annotation = {}
 

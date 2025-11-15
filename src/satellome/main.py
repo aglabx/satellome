@@ -19,6 +19,12 @@ from satellome.core_functions.tools.reports import create_html_report
 from satellome.core_functions.tools.processing import get_genome_size_with_progress
 from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
+from satellome.core_functions.tools.validation import (
+    validate_input_files, validate_fasta_file, validate_gff_file,
+    validate_repeatmasker_file, validate_trf_binary, validate_output_directory,
+    ValidationError, FastaValidationError, GFFValidationError,
+    BinaryValidationError, OutputDirValidationError
+)
 from satellome.installers import install_fastan, install_tanbed, install_trf_large, install_trf_standard
 from satellome.constants import (
     MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
@@ -117,6 +123,9 @@ def validate_and_prepare_environment(args):
     """Validate arguments and prepare the environment."""
     output_dir = args["output"]
     trf_path = args["trf"]
+    fasta_file = args["input"]
+    gff_file = args.get("gff")
+    rm_file = args.get("rm")
 
     # Convert relative path to absolute path if needed
     if not os.path.isabs(output_dir):
@@ -125,71 +134,125 @@ def validate_and_prepare_environment(args):
         logger.info(f"Converted relative path '{original_path}' to absolute path: {output_dir}")
         args["output"] = output_dir  # Update the args with the absolute path
 
+    logger.info(SEPARATOR_LINE)
+    logger.info("INPUT VALIDATION")
+    logger.info(SEPARATOR_LINE)
+
+    # Validate FASTA file first (required)
+    try:
+        fasta_stats = validate_fasta_file(fasta_file, check_sequences=True)
+        logger.info(
+            f"✓ FASTA: {fasta_stats['num_sequences']} sequences, "
+            f"{fasta_stats['total_length']:,} bp total"
+        )
+        if fasta_stats['warnings']:
+            logger.warning(f"FASTA has {len(fasta_stats['warnings'])} warnings (see details below)")
+            for warning in fasta_stats['warnings'][:3]:
+                logger.warning(f"  - {warning}")
+            if len(fasta_stats['warnings']) > 3:
+                logger.warning(f"  ... and {len(fasta_stats['warnings']) - 3} more warnings")
+    except FastaValidationError as e:
+        logger.error(f"✗ FASTA validation failed: {e}")
+        sys.exit(1)
+
+    # Validate GFF file if provided
+    if gff_file:
+        try:
+            gff_stats = validate_gff_file(gff_file)
+            logger.info(f"✓ GFF: {gff_stats['num_features']} features")
+            if gff_stats['num_malformed'] > 0:
+                logger.warning(
+                    f"GFF has {gff_stats['num_malformed']} malformed lines (will be skipped)"
+                )
+        except GFFValidationError as e:
+            logger.error(f"✗ GFF validation failed: {e}")
+            sys.exit(1)
+
+    # Validate RepeatMasker file if provided
+    if rm_file:
+        try:
+            rm_stats = validate_repeatmasker_file(rm_file)
+            logger.info(f"✓ RepeatMasker: {rm_stats['num_features']} features")
+            if rm_stats['num_malformed'] > 0:
+                logger.warning(
+                    f"RepeatMasker has {rm_stats['num_malformed']} malformed lines (will be skipped)"
+                )
+        except ValidationError as e:
+            logger.error(f"✗ RepeatMasker validation failed: {e}")
+            sys.exit(1)
+
     # Check if TRF is available
     import shutil
-    if trf_path == "trf":
-        trf_found = shutil.which(trf_path)
-        if trf_found:
-            logger.info(f"TRF binary: {trf_found}")
-        else:
-            logger.warning(f"TRF not found in PATH.")
-            logger.info("Attempting to install TRF automatically...")
+    try:
+        trf_found = validate_trf_binary(trf_path)
+        logger.info(f"✓ TRF binary: {trf_found}")
+        args["trf"] = trf_found  # Update with full path
+    except BinaryValidationError:
+        logger.warning(f"TRF not found: {trf_path}")
+        logger.info("Attempting to install TRF automatically...")
 
-            # Try to auto-install TRF
-            try:
-                from satellome.installers import install_trf_large, install_trf_standard
-                from satellome.installers.base import get_satellome_bin_dir
+        # Try to auto-install TRF
+        try:
+            from satellome.installers import install_trf_large, install_trf_standard
+            from satellome.installers.base import get_satellome_bin_dir
 
-                # Try modified TRF first (for large genomes)
-                logger.info("Trying modified TRF (for large genomes >2GB chromosomes)...")
-                if install_trf_large(force=False):
-                    logger.info("✓ Modified TRF installed successfully!")
+            # Try modified TRF first (for large genomes)
+            logger.info("Trying modified TRF (for large genomes >2GB chromosomes)...")
+            if install_trf_large(force=False):
+                logger.info("✓ Modified TRF installed successfully!")
+                trf_bin = get_satellome_bin_dir() / "trf"
+                if trf_bin.exists():
+                    trf_path = str(trf_bin)
+                    args["trf"] = trf_path
+                    logger.info(f"Using installed TRF: {trf_path}")
+                else:
+                    logger.error("TRF installation succeeded but binary not found")
+                    sys.exit(1)
+            else:
+                # Fallback to standard TRF (download pre-compiled binary)
+                logger.warning("Modified TRF installation failed (missing build tools?)")
+                logger.info("Falling back to standard TRF (download pre-compiled binary)...")
+
+                if install_trf_standard(force=False):
+                    logger.info("✓ Standard TRF installed successfully!")
                     trf_bin = get_satellome_bin_dir() / "trf"
                     if trf_bin.exists():
                         trf_path = str(trf_bin)
                         args["trf"] = trf_path
                         logger.info(f"Using installed TRF: {trf_path}")
+                        logger.info("Note: Using standard TRF. For genomes with chromosomes >2GB,")
+                        logger.info("      install build tools and run: satellome --install-trf-large")
                     else:
                         logger.error("TRF installation succeeded but binary not found")
                         sys.exit(1)
                 else:
-                    # Fallback to standard TRF (download pre-compiled binary)
-                    logger.warning("Modified TRF installation failed (missing build tools?)")
-                    logger.info("Falling back to standard TRF (download pre-compiled binary)...")
-
-                    if install_trf_standard(force=False):
-                        logger.info("✓ Standard TRF installed successfully!")
-                        trf_bin = get_satellome_bin_dir() / "trf"
-                        if trf_bin.exists():
-                            trf_path = str(trf_bin)
-                            args["trf"] = trf_path
-                            logger.info(f"Using installed TRF: {trf_path}")
-                            logger.info("Note: Using standard TRF. For genomes with chromosomes >2GB,")
-                            logger.info("      install build tools and run: satellome --install-trf-large")
-                        else:
-                            logger.error("TRF installation succeeded but binary not found")
-                            sys.exit(1)
-                    else:
-                        logger.error("Both TRF installers failed")
-                        logger.warning("Please install TRF manually:")
-                        logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
-                        logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
-                        sys.exit(1)
-            except Exception as e:
-                logger.error(f"TRF auto-installation failed: {e}")
-                logger.warning("Please install TRF manually:")
-                logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
-                logger.warning("  Option 2: Download from https://tandem.bu.edu/trf/trf.html")
-                sys.exit(1)
-    else:
-        # Check if the provided path exists
-        if os.path.exists(trf_path) and os.access(trf_path, os.X_OK):
-            logger.info(f"TRF binary: {trf_path}")
-        else:
-            logger.error(f"TRF not found or not executable at: {trf_path}")
+                    logger.error("Both TRF installers failed")
+                    logger.warning("Please install TRF manually:")
+                    logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+                    logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+                    logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
+                    sys.exit(1)
+        except Exception as e:
+            logger.error(f"TRF auto-installation failed: {e}")
+            logger.warning("Please install TRF manually:")
+            logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+            logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+            logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
             sys.exit(1)
 
-    # Create necessary directories
+    # Validate output directory
+    try:
+        output_path = validate_output_directory(output_dir, create_if_missing=True)
+        logger.info(f"✓ Output directory: {output_path}")
+        args["output"] = output_path  # Update with absolute path
+    except OutputDirValidationError as e:
+        logger.error(f"✗ Output directory validation failed: {e}")
+        sys.exit(1)
+
+    logger.info("All input validations passed!")
+    logger.info(SEPARATOR_LINE)
+
+    # Create necessary subdirectories
     html_report_file = os.path.join(output_dir, "reports", "satellome_report.html")
     if not os.path.exists(os.path.dirname(html_report_file)):
         os.makedirs(os.path.dirname(html_report_file))
