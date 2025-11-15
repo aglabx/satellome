@@ -45,31 +45,23 @@ def create_trf_line(
     """
     Helper function to create a valid TRF tab-delimited line.
 
-    TRModel expects 36 tab-separated fields corresponding to dumpable_attributes:
-    project, id, trf_id, trf_type, trf_family, trf_family_prob, trf_l_ind, trf_r_ind,
-    trf_period, trf_n_copy, trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,
-    trf_array_gc, trf_consensus_gc, trf_gi, trf_head, trf_param, trf_array_length,
-    trf_chr, trf_joined, trf_superfamily, trf_superfamily_ref, trf_superfamily_self,
-    trf_subfamily, trf_subsubfamily, trf_family_network, trf_family_self,
-    trf_family_ref, trf_hor, trf_n_chrun, trf_ref_annotation, trf_bands_refgenome,
-    trf_repbase, trf_strand
+    TRModel expects 18 tab-separated fields corresponding to dumpable_attributes:
+    project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,
+    trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array, trf_array_gc,
+    trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation
     """
     global _trf_id_counter
     _trf_id_counter += 1
 
     trf_pvar = 100 - trf_pmatch
     trf_array_length = len(trf_array)
-    trf_chr = trf_head  # Simple chromosome name extraction
 
-    # Create tab-delimited line with all 36 fields
+    # Create tab-delimited line with all 18 fields
     # Use unique IDs for each TRF record
     fields = [
         "test_project",  # project
-        str(_trf_id_counter),  # id - UNIQUE for each call
         str(_trf_id_counter),  # trf_id - UNIQUE for each call
-        "",  # trf_type
-        "",  # trf_family
-        "0.0",  # trf_family_prob
+        trf_head,  # trf_head - CRITICAL FIELD!
         str(trf_l_ind),  # trf_l_ind
         str(trf_r_ind),  # trf_r_ind
         str(trf_period),  # trf_period
@@ -81,26 +73,10 @@ def create_trf_line(
         trf_array,  # trf_array
         "50.0",  # trf_array_gc
         "50.0",  # trf_consensus_gc
-        "",  # trf_gi
-        trf_head,  # trf_head - CRITICAL FIELD!
-        "0",  # trf_param
         str(trf_array_length),  # trf_array_length
-        trf_chr,  # trf_chr
         "0",  # trf_joined
-        "",  # trf_superfamily
-        "",  # trf_superfamily_ref
-        "",  # trf_superfamily_self
-        "",  # trf_subfamily
-        "",  # trf_subsubfamily
-        "",  # trf_family_network
-        "",  # trf_family_self
-        "",  # trf_family_ref
-        "0",  # trf_hor
-        "0",  # trf_n_chrun
+        "",  # trf_family
         "",  # trf_ref_annotation
-        "",  # trf_bands_refgenome
-        "",  # trf_repbase
-        "",  # trf_strand
     ]
     return "\t".join(fields) + "\n"
 

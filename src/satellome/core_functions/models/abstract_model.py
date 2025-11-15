@@ -113,7 +113,15 @@ class AbstractModel(object):
         return self.__str__()
 
     def set_with_dict(self, dictionary):
-        """Set object with dictionaty."""
+        """Set object with dictionary, auto-detecting legacy format if applicable."""
+        # Auto-detect and convert legacy format if model supports it
+        if hasattr(self, 'legacy_to_new_field_mapping'):
+            # Check if this looks like legacy format by checking for legacy-only fields
+            legacy_only_fields = set(self.legacy_to_new_field_mapping.keys()) - set(self.dumpable_attributes)
+            if any(field in dictionary for field in legacy_only_fields):
+                logger.debug(f"Detected legacy format for {self.__class__.__name__}, converting...")
+                dictionary = self._convert_legacy_dict(dictionary)
+
         for key, value in dictionary.items():
             key, value = self.preprocess_pair(key, value)
             try:
@@ -153,12 +161,41 @@ class AbstractModel(object):
                     f"Check that all fields have correct types."
                 ) from e
 
+    def _convert_legacy_dict(self, legacy_dict):
+        """Convert legacy format dictionary to new format.
+
+        Args:
+            legacy_dict: Dictionary with legacy field names
+
+        Returns:
+            Dictionary with new field names
+        """
+        new_dict = {}
+        for legacy_key, legacy_value in legacy_dict.items():
+            new_key = self.legacy_to_new_field_mapping.get(legacy_key)
+            if new_key is not None:  # Keep only mapped fields
+                new_dict[new_key] = legacy_value
+        return new_dict
+
     def set_with_list(self, data):
-        """Set object with list."""
+        """Set object with list, auto-detecting legacy format if applicable."""
         n = len(data)
         dumpable_attributes = self.dumpable_attributes
+
+        # Auto-detect legacy format
         if n != len(self.dumpable_attributes):
             if (
+                hasattr(self, "legacy_dumpable_attributes")
+                and len(self.legacy_dumpable_attributes) == n
+            ):
+                logger.debug(f"Detected legacy format ({n} fields), converting to new format...")
+                dumpable_attributes = self.legacy_dumpable_attributes
+                # Convert to dict first, then use legacy mapping
+                legacy_dict = {key: value for key, value in zip(dumpable_attributes, data)}
+                new_dict = self._convert_legacy_dict(legacy_dict)
+                self.set_with_dict(new_dict)
+                return
+            elif (
                 hasattr(self, "alt_dumpable_attributes")
                 and len(self.alt_dumpable_attributes) == n
             ):
@@ -169,6 +206,7 @@ class AbstractModel(object):
                         f"Expected {len(self.dumpable_attributes)} fields in {self.__class__.__name__}, "
                         f"got {n}. Sample data: {data[:50]}..."
                         )
+
         for i, value in enumerate(data):
             key = dumpable_attributes[i]
             if value == "None":

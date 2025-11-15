@@ -49,110 +49,50 @@ def clear_sequence(sequence):
 
 
 class TRModel(AbstractModel):
-    """Class for tandem repeat wrapping
+    """Class for tandem repeat wrapping.
 
-    Public properties:
+    Core Attributes:
 
-    Indexes:
-
-    - id,
-    - giid,
-    - trf_id,
-    - project,
-    - trf_gi
+    Identifiers:
+    - project: Project name
+    - trf_id: Unique tandem repeat ID
+    - trf_head: Sequence header from FASTA
 
     Coordinates:
+    - trf_l_ind (int): Left index (start position)
+    - trf_r_ind (int): Right index (end position)
 
-    - trf_l_ind,
-    - trf_r_indel
+    Tandem Repeat Properties:
+    - trf_period (int): Period size (monomer length)
+    - trf_n_copy (float): Number of copies
+    - trf_pmatch (float): Percent match
+    - trf_pvar (float): Percent variation
+    - trf_entropy (float): Sequence entropy
+    - trf_array_length (int): Total array length in bp
 
-    TR:
+    Sequences:
+    - trf_consensus: Consensus monomer sequence
+    - trf_array: Full tandem repeat array sequence
 
-    - trf_period,
-    - trf_n_copy,
-    - trf_pmatch,
-    - trf_pvar,
-    - trf_entropy,
-    - trf_array_length,
-    - trf_joined,
-    - trf_chr
+    GC Content:
+    - trf_array_gc (float): GC content of array
+    - trf_consensus_gc (float): GC content of consensus
 
-    Sequence:
+    Optional Annotation Attributes:
+    - trf_joined (int): 1 if created by merging overlapping TRs, 0 otherwise
+    - trf_family: Family classification (e.g., "(AT)n", "tSSR_AT", "fSSR_ACG")
+    - trf_ref_annotation: Annotations from GFF/RepeatMasker (pipe-separated)
 
-    - trf_consensus,
-    - trf_array
-
-    GC%:
-
-    - trf_array_gc,
-    - trf_consensus_gc
-
-    Other:
-
-    - trf_head,
-    - trf_params
-
-    Annotation:
-
-    - trf_family,
-    - trf_subfamily,
-    - trf_subsubfamily,
-    - trf_hor,
-    - trf_n_chrun,
-    - trf_n_refgenome,
-    - trf_ref_annotation,
-    - trf_bands_refgenome,
-    - trf_repbase,
-    - trf_strand
-
-    Dumpable attributes:
-
-    - "project",
-    - "id" (int),
-    - "trf_id" (int),
-    - "trf_type",
-    - "trf_family",
-    - "trf_family_prob",
-    - "trf_l_ind" (int),
-    - "trf_r_ind" (int),
-    - "trf_period" (int),
-    - "trf_n_copy" (float),
-    - "trf_pmatch" (float),
-    - "trf_pvar" (float),
-    - "trf_consensus",
-    - "trf_array",
-    - "trf_array_gc" (float),
-    - "trf_consensus_gc" (float),
-    - "trf_gi",
-    - "trf_head",
-    - "trf_param",
-    - "trf_array_length" (int),
-    - "trf_chr",
-    - "trf_joined" (int),
-    - "trf_superfamily",
-    - "trf_superfamily_ref",
-    - "trf_superfamily_self",
-    - "trf_subfamily",
-    - "trf_subsubfamily",
-    - "trf_family_network",
-    - "trf_family_self",
-    - "trf_family_ref",
-    - "trf_hor" (int),
-    - "trf_n_chrun" (int),
-    - "trf_ref_annotation",
-    - "trf_bands_refgenome",
-    - "trf_repbase",
-    - "trf_strand",
+    Dynamic Properties (parsed from trf_head on access):
+    - trf_chr: Chromosome name (via @property)
+    - trf_gi: GI identifier (via @property)
 
     """
 
     dumpable_attributes = [
         "project",
-        "id",
         "trf_id",
-        "trf_type",
-        "trf_family",
-        "trf_family_prob",
+        "trf_head",
         "trf_l_ind",
         "trf_r_ind",
         "trf_period",
@@ -164,27 +104,94 @@ class TRModel(AbstractModel):
         "trf_array",
         "trf_array_gc",
         "trf_consensus_gc",
-        "trf_gi",
-        "trf_head",
-        "trf_param",
         "trf_array_length",
-        "trf_chr",
         "trf_joined",
-        "trf_superfamily",
-        "trf_superfamily_ref",
-        "trf_superfamily_self",
-        "trf_subfamily",
-        "trf_subsubfamily",
-        "trf_family_network",
-        "trf_family_self",
-        "trf_family_ref",
-        "trf_hor",
-        "trf_n_chrun",
+        "trf_family",
         "trf_ref_annotation",
-        "trf_bands_refgenome",
-        "trf_repbase",
-        "trf_strand",
     ]
+
+    # Legacy format (v1.4.2 and earlier) - 37 fields
+    # Kept for backward compatibility when reading old TRF files
+    legacy_dumpable_attributes = [
+        "project",
+        "id",  # REMOVED - was duplicate of trf_id
+        "trf_id",
+        "trf_type",  # REMOVED - never used
+        "trf_family",
+        "trf_family_prob",  # REMOVED - never used
+        "trf_l_ind",
+        "trf_r_ind",
+        "trf_period",
+        "trf_n_copy",
+        "trf_pmatch",
+        "trf_pvar",
+        "trf_entropy",
+        "trf_consensus",
+        "trf_array",
+        "trf_array_gc",
+        "trf_consensus_gc",
+        "trf_gi",  # REMOVED - now computed from trf_head
+        "trf_head",
+        "trf_param",  # REMOVED - always 0
+        "trf_array_length",
+        "trf_chr",  # REMOVED - now computed from trf_head
+        "trf_joined",
+        "trf_superfamily",  # REMOVED - never used
+        "trf_superfamily_ref",  # REMOVED - never used
+        "trf_superfamily_self",  # REMOVED - never used
+        "trf_subfamily",  # REMOVED - never used
+        "trf_subsubfamily",  # REMOVED - never used
+        "trf_family_network",  # REMOVED - never used
+        "trf_family_self",  # REMOVED - never used
+        "trf_family_ref",  # REMOVED - never used
+        "trf_hor",  # REMOVED - never used
+        "trf_n_chrun",  # REMOVED - never used
+        "trf_ref_annotation",
+        "trf_bands_refgenome",  # REMOVED - never used
+        "trf_repbase",  # REMOVED - never used
+        "trf_strand",  # REMOVED - never used
+    ]
+
+    # Mapping from legacy fields to new fields (for fields that were kept)
+    legacy_to_new_field_mapping = {
+        "project": "project",
+        "id": None,  # Ignored
+        "trf_id": "trf_id",
+        "trf_type": None,  # Ignored
+        "trf_family": "trf_family",
+        "trf_family_prob": None,  # Ignored
+        "trf_l_ind": "trf_l_ind",
+        "trf_r_ind": "trf_r_ind",
+        "trf_period": "trf_period",
+        "trf_n_copy": "trf_n_copy",
+        "trf_pmatch": "trf_pmatch",
+        "trf_pvar": "trf_pvar",
+        "trf_entropy": "trf_entropy",
+        "trf_consensus": "trf_consensus",
+        "trf_array": "trf_array",
+        "trf_array_gc": "trf_array_gc",
+        "trf_consensus_gc": "trf_consensus_gc",
+        "trf_gi": None,  # Ignored - computed from trf_head
+        "trf_head": "trf_head",
+        "trf_param": None,  # Ignored
+        "trf_array_length": "trf_array_length",
+        "trf_chr": None,  # Ignored - computed from trf_head
+        "trf_joined": "trf_joined",
+        "trf_superfamily": None,  # Ignored
+        "trf_superfamily_ref": None,  # Ignored
+        "trf_superfamily_self": None,  # Ignored
+        "trf_subfamily": None,  # Ignored
+        "trf_subsubfamily": None,  # Ignored
+        "trf_family_network": None,  # Ignored
+        "trf_family_self": None,  # Ignored
+        "trf_family_ref": None,  # Ignored
+        "trf_hor": None,  # Ignored
+        "trf_n_chrun": None,  # Ignored
+        "trf_ref_annotation": "trf_ref_annotation",
+        "trf_bands_refgenome": None,  # Ignored
+        "trf_repbase": None,  # Ignored
+        "trf_strand": None,  # Ignored
+    }
 
     int_attributes = [
         "trf_l_ind",
@@ -192,19 +199,26 @@ class TRModel(AbstractModel):
         "trf_period",
         "trf_array_length",
         "trf_joined",
-        "trf_hor",
-        "trf_n_chrun",
     ]
 
     float_attributes = [
         "trf_n_copy",
-        "trf_family_prob",
         "trf_entropy",
         "trf_pmatch",
         "trf_pvar",
         "trf_array_gc",
         "trf_consensus_gc",
     ]
+
+    @property
+    def trf_chr(self):
+        """Get chromosome name parsed from trf_head."""
+        return parse_chromosome_name(self.trf_head)
+
+    @property
+    def trf_gi(self):
+        """Get GI identifier parsed from trf_head."""
+        return parse_fasta_head(self.trf_head)[0]
 
     def set_project_data(self, project):
         """
@@ -235,14 +249,10 @@ class TRModel(AbstractModel):
         Note:
             - Automatically cleans sequences (uppercase, removes invalid chars)
             - Computes GC% for both consensus and array sequences
-            - Sets trf_param to 0 by default
             - Handles parsing errors gracefully (logs and sets defaults)
         """
-        self.trf_param = 0
         parsed_head = trf_parse_head(head)
         self.trf_head = parsed_head.strip() if parsed_head else "Unknown"
-        self.trf_gi = parse_fasta_head(self.trf_head)[0]
-        self.trf_chr = parse_chromosome_name(self.trf_head)
 
         (
             self.trf_l_ind,
@@ -282,7 +292,6 @@ class TRModel(AbstractModel):
 
         self.trf_array_gc = get_gc_content(self.trf_array)
         self.trf_consensus_gc = get_gc_content(self.trf_consensus)
-        self.trf_chr = parse_chromosome_name(self.trf_head)
         self.trf_array_length = len(self.trf_array)
 
     def set_form_overlap(self, obj2):

@@ -698,7 +698,8 @@ def fix_chr_names(trf_file, temp_file_name=None, case=None):
     if case == "MSGC sequences":
         with open(temp_file_name, "a") as fw:
             for obj in trf_reader(trf_file):
-                obj.trf_chr = obj.trf_gi
+                # Note: trf_chr is now a @property computed from trf_head
+                # No need to set it explicitly
                 fw.write(obj.get_string_repr())
     if os.path.isfile(temp_file_name):
         os.remove(trf_file)
