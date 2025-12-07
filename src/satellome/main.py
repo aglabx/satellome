@@ -655,6 +655,23 @@ def run_fastan(settings, force_rerun):
                 logger.info(f"✓ Sequence extraction completed: {trf_file}")
                 logger.info(f"✓ FASTA output created: {fasta_output}")
                 logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
+
+                # Create size-filtered TRF files (1kb, 3kb, 10kb)
+                from satellome.core_functions.tools.bed_tools import filter_trf_by_size
+
+                size_cutoffs = [
+                    (1000, "1kb"),
+                    (3000, "3kb"),
+                    (10000, "10kb"),
+                ]
+
+                logger.info("Creating size-filtered TRF files...")
+                for cutoff, suffix in size_cutoffs:
+                    filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.trf")
+                    filtered_fasta = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.fasta")
+                    stats = filter_trf_by_size(trf_file, filtered_trf, cutoff, fasta_output_file=filtered_fasta)
+                    logger.info(f"✓ {suffix}: {stats['filtered']} arrays > {cutoff} bp")
+
             except Exception as e:
                 logger.error(f"Sequence extraction failed: {e}")
                 logger.warning("Continuing without sequence extraction...")

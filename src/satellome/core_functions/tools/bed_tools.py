@@ -337,3 +337,75 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
         logger.warning(f"Skipped {skipped_count} entries due to errors")
 
     return extracted_count
+
+
+def filter_trf_by_size(input_trf_file, output_trf_file, min_array_length, fasta_output_file=None):
+    """
+    Filter TRF file by minimum array length.
+
+    Args:
+        input_trf_file (str): Path to input TRF file (18 tab-separated fields)
+        output_trf_file (str): Path to output filtered TRF file
+        min_array_length (int): Minimum array length threshold (exclusive, i.e., > min_array_length)
+        fasta_output_file (str, optional): Path to output FASTA file with filtered sequences
+
+    Returns:
+        dict: Statistics with 'total', 'filtered', 'total_length' keys
+
+    Example:
+        >>> # Filter TRF file to keep only arrays > 1000 bp
+        >>> stats = filter_trf_by_size("all.trf", "1kb.trf", 1000)
+        >>> print(f"Filtered {stats['filtered']} of {stats['total']} entries")
+    """
+    total_count = 0
+    filtered_count = 0
+    total_length = 0
+
+    with open(input_trf_file, 'r') as in_fh:
+        with open(output_trf_file, 'w') as out_fh:
+            fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
+            try:
+                for line in in_fh:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+
+                    total_count += 1
+                    fields = line.split('\t')
+
+                    # TRF format: column 15 (index 14) is trf_array_length
+                    if len(fields) < 15:
+                        continue
+
+                    try:
+                        array_length = int(fields[14])
+                    except ValueError:
+                        continue
+
+                    if array_length > min_array_length:
+                        out_fh.write(line + '\n')
+                        filtered_count += 1
+                        total_length += array_length
+
+                        # Write FASTA if requested
+                        if fasta_fh and len(fields) >= 12:
+                            # fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, ...
+                            # fields[2]=chr, fields[3]=start, fields[4]=end, fields[5]=period, fields[11]=sequence
+                            chr_name = fields[2]
+                            start = fields[3]
+                            end = fields[4]
+                            period = fields[5]
+                            sequence = fields[11]
+                            fasta_header = f">{chr_name}_{start}_{end}_{array_length}_{period}"
+                            fasta_fh.write(f"{fasta_header}\n{sequence}\n")
+            finally:
+                if fasta_fh:
+                    fasta_fh.close()
+
+    logger.info(f"Filtered {filtered_count}/{total_count} entries with array_length > {min_array_length} bp")
+
+    return {
+        'total': total_count,
+        'filtered': filtered_count,
+        'total_length': total_length
+    }
