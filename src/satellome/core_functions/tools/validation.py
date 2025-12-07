@@ -231,10 +231,6 @@ def validate_fasta_file(fasta_path, check_sequences=True):
 
                     current_seq_length += len(line)
 
-                # Check for very long lines (potential file corruption)
-                if len(line) > 1000000:  # 1 MB line
-                    warnings.append(f"Line {line_num}: Unusually long line ({len(line)} chars)")
-
         # Process last sequence
         if current_seq_name:
             if current_seq_length == 0:
