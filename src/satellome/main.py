@@ -789,14 +789,17 @@ def main():
 
     # Resolve taxon name
     if taxon_name is None:
-        if taxid is not None:
-            taxon_name = get_taxon_name(taxid)
-        if taxon_name is None:
-            logger.warning(f"Invalid taxid or NCBI connection problem: {taxid}")
-            logger.warning(f"Taxon set to 'Unknown'")
+        if taxid is None:
+            logger.info(f"No taxid provided, taxon set to '{DEFAULT_TAXON_NAME}'")
             taxon_name = DEFAULT_TAXON_NAME
         else:
-            logger.info(f"Taxon name: {taxon_name}")
+            taxon_name = get_taxon_name(taxid)
+            if taxon_name is None:
+                logger.warning(f"Failed to retrieve taxon name for taxid {taxid} (invalid ID or NCBI connection problem)")
+                logger.warning(f"Taxon set to '{DEFAULT_TAXON_NAME}'")
+                taxon_name = DEFAULT_TAXON_NAME
+            else:
+                logger.info(f"Taxon name: {taxon_name}")
     taxon_name = taxon_name.replace(" ", "_")
 
     # Calculate genome size if needed
