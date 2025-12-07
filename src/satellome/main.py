@@ -127,12 +127,22 @@ def validate_and_prepare_environment(args):
     gff_file = args.get("gff")
     rm_file = args.get("rm")
 
-    # Convert relative path to absolute path if needed
+    # Convert relative paths to absolute paths if needed
     if not os.path.isabs(output_dir):
-        original_path = output_dir
         output_dir = os.path.abspath(output_dir)
-        logger.info(f"Converted relative path '{original_path}' to absolute path: {output_dir}")
-        args["output"] = output_dir  # Update the args with the absolute path
+        args["output"] = output_dir
+
+    if not os.path.isabs(fasta_file):
+        fasta_file = os.path.abspath(fasta_file)
+        args["input"] = fasta_file
+
+    if gff_file and not os.path.isabs(gff_file):
+        gff_file = os.path.abspath(gff_file)
+        args["gff"] = gff_file
+
+    if rm_file and not os.path.isabs(rm_file):
+        rm_file = os.path.abspath(rm_file)
+        args["rm"] = rm_file
 
     logger.info(SEPARATOR_LINE)
     logger.info("INPUT VALIDATION")
@@ -181,72 +191,76 @@ def validate_and_prepare_environment(args):
             logger.error(f"✗ RepeatMasker validation failed: {e}")
             sys.exit(1)
 
-    # Check if TRF is available
-    import shutil
-    try:
-        trf_found = validate_trf_binary(trf_path)
-        logger.info(f"✓ TRF binary: {trf_found}")
-        args["trf"] = trf_found  # Update with full path
-    except BinaryValidationError:
-        logger.warning(f"TRF not found: {trf_path}")
-        logger.info("Attempting to install TRF automatically...")
-
-        # Try to auto-install TRF
+    # Check if TRF is available (only if not skipping TRF)
+    skip_trf = args.get("notrf", False)
+    if not skip_trf:
+        import shutil
         try:
-            from satellome.installers import install_trf_large, install_trf_standard
-            from satellome.installers.base import get_satellome_bin_dir
+            trf_found = validate_trf_binary(trf_path)
+            logger.info(f"✓ TRF binary: {trf_found}")
+            args["trf"] = trf_found  # Update with full path
+        except BinaryValidationError:
+            logger.warning(f"TRF not found: {trf_path}")
+            logger.info("Attempting to install TRF automatically...")
 
-            # Try modified TRF first (for large genomes)
-            logger.info("Trying modified TRF (for large genomes >2GB chromosomes)...")
-            if install_trf_large(force=False):
-                logger.info("✓ Modified TRF installed successfully!")
-                trf_bin = get_satellome_bin_dir() / "trf"
-                if trf_bin.exists():
-                    trf_path = str(trf_bin)
-                    args["trf"] = trf_path
-                    logger.info(f"Using installed TRF: {trf_path}")
-                else:
-                    logger.error("TRF installation succeeded but binary not found")
-                    sys.exit(1)
-            else:
-                # Fallback to standard TRF (download pre-compiled binary)
-                logger.warning("Modified TRF installation failed (missing build tools?)")
-                logger.info("Falling back to standard TRF (download pre-compiled binary)...")
+            # Try to auto-install TRF
+            try:
+                from satellome.installers import install_trf_large, install_trf_standard
+                from satellome.installers.base import get_satellome_bin_dir
 
-                if install_trf_standard(force=False):
-                    logger.info("✓ Standard TRF installed successfully!")
+                # Try modified TRF first (for large genomes)
+                logger.info("Trying modified TRF (for large genomes >2GB chromosomes)...")
+                if install_trf_large(force=False):
+                    logger.info("✓ Modified TRF installed successfully!")
                     trf_bin = get_satellome_bin_dir() / "trf"
                     if trf_bin.exists():
                         trf_path = str(trf_bin)
                         args["trf"] = trf_path
                         logger.info(f"Using installed TRF: {trf_path}")
-                        logger.info("Note: Using standard TRF. For genomes with chromosomes >2GB,")
-                        logger.info("      install build tools and run: satellome --install-trf-large")
                     else:
                         logger.error("TRF installation succeeded but binary not found")
                         sys.exit(1)
                 else:
-                    logger.error("Both TRF installers failed")
-                    logger.warning("Please install TRF manually:")
-                    logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
-                    logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
-                    logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
-                    sys.exit(1)
-        except (OSError, IOError, PermissionError) as e:
-            logger.error(f"TRF auto-installation failed (I/O error): {e}")
-            logger.warning("Please install TRF manually:")
-            logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
-            logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
-            logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
-            sys.exit(1)
-        except Exception as e:
-            # Catch unexpected errors but log them distinctly
-            logger.error(f"TRF auto-installation failed (unexpected error): {type(e).__name__}: {e}")
-            logger.warning("Please install TRF manually:")
-            logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
-            logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
-            logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
-            sys.exit(1)
+                    # Fallback to standard TRF (download pre-compiled binary)
+                    logger.warning("Modified TRF installation failed (missing build tools?)")
+                    logger.info("Falling back to standard TRF (download pre-compiled binary)...")
+
+                    if install_trf_standard(force=False):
+                        logger.info("✓ Standard TRF installed successfully!")
+                        trf_bin = get_satellome_bin_dir() / "trf"
+                        if trf_bin.exists():
+                            trf_path = str(trf_bin)
+                            args["trf"] = trf_path
+                            logger.info(f"Using installed TRF: {trf_path}")
+                            logger.info("Note: Using standard TRF. For genomes with chromosomes >2GB,")
+                            logger.info("      install build tools and run: satellome --install-trf-large")
+                        else:
+                            logger.error("TRF installation succeeded but binary not found")
+                            sys.exit(1)
+                    else:
+                        logger.error("Both TRF installers failed")
+                        logger.warning("Please install TRF manually:")
+                        logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+                        logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+                        logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
+                        sys.exit(1)
+            except (OSError, IOError, PermissionError) as e:
+                logger.error(f"TRF auto-installation failed (I/O error): {e}")
+                logger.warning("Please install TRF manually:")
+                logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+                logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+                logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
+                sys.exit(1)
+            except Exception as e:
+                # Catch unexpected errors but log them distinctly
+                logger.error(f"TRF auto-installation failed (unexpected error): {type(e).__name__}: {e}")
+                logger.warning("Please install TRF manually:")
+                logger.warning("  Option 1: satellome --install-trf-large (requires build tools)")
+                logger.warning("  Option 2: satellome --install-trf (pre-compiled binary)")
+                logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
+                sys.exit(1)
+    else:
+        logger.info("✓ TRF validation skipped (--notrf flag)")
 
     # Validate output directory
     try:
