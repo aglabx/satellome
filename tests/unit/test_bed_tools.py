@@ -44,6 +44,30 @@ class TestReverseComplement:
 class TestExtractSequencesFromBed:
     """Test extract_sequences_from_bed function."""
 
+    # TRF format field indices (18 fields total):
+    # 0: project, 1: trf_id, 2: trf_head, 3: trf_l_ind, 4: trf_r_ind,
+    # 5: trf_period, 6: trf_n_copy, 7: trf_pmatch, 8: trf_pvar, 9: trf_entropy,
+    # 10: trf_consensus, 11: trf_array, 12: trf_array_gc, 13: trf_consensus_gc,
+    # 14: trf_array_length, 15: trf_joined, 16: trf_family, 17: trf_ref_annotation
+    IDX_PROJECT = 0
+    IDX_TRF_ID = 1
+    IDX_TRF_HEAD = 2
+    IDX_TRF_L_IND = 3
+    IDX_TRF_R_IND = 4
+    IDX_TRF_PERIOD = 5
+    IDX_TRF_N_COPY = 6
+    IDX_TRF_PMATCH = 7
+    IDX_TRF_PVAR = 8
+    IDX_TRF_ENTROPY = 9
+    IDX_TRF_CONSENSUS = 10
+    IDX_TRF_ARRAY = 11
+    IDX_TRF_ARRAY_GC = 12
+    IDX_TRF_CONSENSUS_GC = 13
+    IDX_TRF_ARRAY_LENGTH = 14
+    IDX_TRF_JOINED = 15
+    IDX_TRF_FAMILY = 16
+    IDX_TRF_REF_ANNOTATION = 17
+
     @pytest.fixture
     def test_fasta(self, tmp_path):
         """Create a test FASTA file."""
@@ -61,30 +85,27 @@ ACGTACGTACGTACGT
 
     @pytest.fixture
     def test_bed_simple(self, tmp_path):
-        """Create a simple test BED file."""
+        """Create a simple test BED file (tanbed format: chr start end period score)."""
         bed_file = tmp_path / "test.bed"
-        # BED format: chr  start  end  name  score  strand
+        # tanbed BED format: chr  start  end  period  score
         # chr1 is 64bp long (two lines of 32bp)
         # Extract positions 0-10 (should be "ATCGATCGAT")
-        content = """chr1\t0\t10\trepeat1\t100\t+
-chr1\t10\t20\trepeat2\t100\t+
-chr2\t0\t10\trepeat3\t100\t+
-chr3\t0\t16\trepeat4\t100\t+
+        content = """chr1\t0\t10\t5\t100
+chr1\t10\t20\t5\t100
+chr2\t0\t10\t2\t100
+chr3\t0\t16\t4\t100
 """
         bed_file.write_text(content)
         return str(bed_file)
 
     @pytest.fixture
     def test_bed_reverse_strand(self, tmp_path):
-        """Create a BED file with reverse strand."""
+        """Create a BED file with reverse strand (6th column)."""
         bed_file = tmp_path / "test_reverse.bed"
-        # chr1 positions 0-10: "ATCGATCGAT"
-        # Reverse complement: "ATCGATCGAT" -> reverse -> "TAGCTAGCTA" -> complement -> "ATCGATCGAT"
-        # Wait, that's palindromic! Let me use different coordinates
         # chr2 positions 0-10: "GGGGGGGGGG"
         # Reverse complement: "CCCCCCCCCC"
-        content = """chr2\t0\t10\trepeat_minus\t100\t-
-chr2\t10\t20\trepeat_plus\t100\t+
+        content = """chr2\t0\t10\t2\t100\t-
+chr2\t10\t20\t2\t100\t+
 """
         bed_file.write_text(content)
         return str(bed_file)
@@ -96,65 +117,66 @@ chr2\t10\t20\trepeat_plus\t100\t+
         content = """# This is a comment
 # BED format test file
 
-chr1\t0\t10\trepeat1\t100\t+
+chr1\t0\t10\t5\t100
 
 # Another comment
-chr2\t0\t5\trepeat2\t100\t+
+chr2\t0\t5\t2\t100
 """
         bed_file.write_text(content)
         return str(bed_file)
 
     def test_basic_extraction(self, test_fasta, test_bed_simple, tmp_path):
-        """Test basic sequence extraction."""
+        """Test basic sequence extraction in TRF format."""
         output_file = tmp_path / "output.trf"
-        count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file))
+        count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file), project="test")
 
         assert count == 4  # 4 valid BED entries
         assert output_file.exists()
 
-        # Check output content
-        lines = output_file.read_text().split('\n')
-        # Skip header lines (start with #)
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        # Check output content (no header comments in TRF format)
+        lines = output_file.read_text().strip().split('\n')
+        data_lines = [l for l in lines if l]
 
         assert len(data_lines) == 4
 
         # First entry: chr1 0-10 should extract "ATCGATCGAT"
         fields = data_lines[0].split('\t')
-        assert fields[0] == "chr1"
-        assert fields[1] == "0"
-        assert fields[2] == "10"
-        # Check length field (second to last, before sequence)
-        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
-        assert fields[-1] == "ATCGATCGAT"
+        assert len(fields) == 18, f"Expected 18 TRF fields, got {len(fields)}"
+        assert fields[self.IDX_PROJECT] == "test"
+        assert fields[self.IDX_TRF_HEAD] == "chr1"
+        assert fields[self.IDX_TRF_L_IND] == "1"  # 1-based
+        assert fields[self.IDX_TRF_R_IND] == "10"
+        assert fields[self.IDX_TRF_PERIOD] == "5"
+        assert fields[self.IDX_TRF_ARRAY_LENGTH] == "10"
+        assert fields[self.IDX_TRF_ARRAY] == "ATCGATCGAT"
+        assert fields[self.IDX_TRF_CONSENSUS] == "ATCGA"  # First 5 chars (period=5)
+        assert fields[self.IDX_TRF_PMATCH] == "-1"  # Not available from FasTAN
 
         # Second entry: chr1 10-20 should extract "CGATCGATCG"
         fields = data_lines[1].split('\t')
-        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
-        assert fields[-1] == "CGATCGATCG"
+        assert fields[self.IDX_TRF_ARRAY_LENGTH] == "10"
+        assert fields[self.IDX_TRF_ARRAY] == "CGATCGATCG"
 
     def test_reverse_strand(self, test_fasta, test_bed_reverse_strand, tmp_path):
         """Test reverse strand sequence extraction."""
         output_file = tmp_path / "output_reverse.trf"
-        count = extract_sequences_from_bed(test_fasta, test_bed_reverse_strand, str(output_file))
+        count = extract_sequences_from_bed(test_fasta, test_bed_reverse_strand, str(output_file), project="test")
 
         assert count == 2
 
-        lines = output_file.read_text().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        lines = output_file.read_text().strip().split('\n')
+        data_lines = [l for l in lines if l]
 
         # First entry: chr2 0-10 on minus strand
         # Original: "GGGGGGGGGG"
         # Reverse complement: "CCCCCCCCCC"
         fields = data_lines[0].split('\t')
-        assert fields[5] == "-"
-        assert fields[-1] == "CCCCCCCCCC"
+        assert fields[self.IDX_TRF_ARRAY] == "CCCCCCCCCC"
 
         # Second entry: chr2 10-20 on plus strand
         # Original: "CCCCCCCCCC"
         fields = data_lines[1].split('\t')
-        assert fields[5] == "+"
-        assert fields[-1] == "CCCCCCCCCC"
+        assert fields[self.IDX_TRF_ARRAY] == "CCCCCCCCCC"
 
     def test_with_comments(self, test_fasta, test_bed_with_comments, tmp_path):
         """Test that comments and empty lines are ignored."""
@@ -167,10 +189,11 @@ chr2\t0\t5\trepeat2\t100\t+
         """Test handling of invalid coordinates."""
         bed_file = tmp_path / "invalid.bed"
         # chr1 is 64bp, so 100 is out of bounds
-        content = """chr1\t100\t110\trepeat1\t100\t+
-chr1\t0\t5\trepeat2\t100\t+
-chr1\t-1\t10\trepeat3\t100\t+
-chr1\t20\t10\trepeat4\t100\t+
+        # tanbed format: chr start end period score
+        content = """chr1\t100\t110\t5\t100
+chr1\t0\t5\t2\t100
+chr1\t-1\t10\t5\t100
+chr1\t20\t10\t5\t100
 """
         bed_file.write_text(content)
 
@@ -183,8 +206,8 @@ chr1\t20\t10\trepeat4\t100\t+
     def test_missing_chromosome(self, test_fasta, tmp_path):
         """Test handling of chromosome not in FASTA."""
         bed_file = tmp_path / "missing_chr.bed"
-        content = """chrX\t0\t10\trepeat1\t100\t+
-chr1\t0\t10\trepeat2\t100\t+
+        content = """chrX\t0\t10\t5\t100
+chr1\t0\t10\t5\t100
 """
         bed_file.write_text(content)
 
@@ -197,7 +220,7 @@ chr1\t0\t10\trepeat2\t100\t+
     def test_bed3_format(self, test_fasta, tmp_path):
         """Test BED3 format (no strand information)."""
         bed_file = tmp_path / "bed3.bed"
-        # BED3: only chr, start, end
+        # BED3: only chr, start, end (no period - will default to 1)
         content = """chr1\t0\t10
 chr2\t0\t5
 """
@@ -207,19 +230,20 @@ chr2\t0\t5
         count = extract_sequences_from_bed(test_fasta, str(bed_file), str(output_file))
 
         assert count == 2
-        # Should default to + strand
+        # Should default to + strand and period=1
 
     def test_uppercase_conversion(self, test_fasta, test_bed_simple, tmp_path):
         """Test that sequences are converted to uppercase."""
         output_file = tmp_path / "output_uppercase.trf"
         count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file))
 
-        lines = output_file.read_text().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        lines = output_file.read_text().strip().split('\n')
+        data_lines = [l for l in lines if l]
 
         # All sequences should be uppercase
         for line in data_lines:
-            seq = line.split('\t')[-1]
+            fields = line.split('\t')
+            seq = fields[self.IDX_TRF_ARRAY]
             assert seq == seq.upper()
             assert seq.isupper() or len(seq) == 0  # Empty sequence edge case
 
@@ -234,33 +258,35 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
 
         # Create BED with full chromosome name (like tanbed outputs)
         bed_file = tmp_path / "test_spaces.bed"
-        # BED has full chromosome name in first column
-        bed_content = """NC_000913.3 Escherichia coli str. K-12 substr. MG1655, complete genome\t0\t10\trepeat1\t100\t+
+        # tanbed format: chr start end period score
+        bed_content = """NC_000913.3 Escherichia coli str. K-12 substr. MG1655, complete genome\t0\t10\t5\t100
 """
         bed_file.write_text(bed_content)
 
         output_file = tmp_path / "output_spaces.trf"
-        count = extract_sequences_from_bed(str(fasta_file), str(bed_file), str(output_file))
+        count = extract_sequences_from_bed(str(fasta_file), str(bed_file), str(output_file), project="test")
 
         # Should successfully extract sequence
         assert count == 1
 
-        lines = output_file.read_text().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        # Use rstrip('\n') instead of strip() to preserve trailing tabs (empty fields)
+        lines = output_file.read_text().rstrip('\n').split('\n')
+        data_lines = [l for l in lines if l]
 
         assert len(data_lines) == 1
         fields = data_lines[0].split('\t')
+        assert len(fields) == 18, f"Expected 18 TRF fields, got {len(fields)}"
 
-        # IMPORTANT: Output should have only first word in chromosome column
+        # IMPORTANT: Output should have only first word in trf_head column
         # Input BED: "NC_000913.3 Escherichia coli str. K-12..."
         # Output: "NC_000913.3"
-        assert fields[0] == "NC_000913.3", f"Expected 'NC_000913.3', got '{fields[0]}'"
+        assert fields[self.IDX_TRF_HEAD] == "NC_000913.3", f"Expected 'NC_000913.3', got '{fields[self.IDX_TRF_HEAD]}'"
 
-        # Check length field (coordinates: 0-10, length should be 10)
-        assert fields[-2] == "10", f"Expected length=10, got {fields[-2]}"
+        # Check array length (coordinates: 0-10, length should be 10)
+        assert fields[self.IDX_TRF_ARRAY_LENGTH] == "10", f"Expected length=10, got {fields[self.IDX_TRF_ARRAY_LENGTH]}"
 
         # Should extract "ATCGATCGAT"
-        assert fields[-1] == "ATCGATCGAT"
+        assert fields[self.IDX_TRF_ARRAY] == "ATCGATCGAT"
 
     def test_duplicate_chromosome_names(self, tmp_path):
         """Test that duplicate chromosome names are detected and raise error."""
@@ -274,7 +300,7 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
         fasta_file.write_text(content)
 
         bed_file = tmp_path / "test_duplicate.bed"
-        bed_content = """chr1\t0\t10\trepeat1\t100\t+
+        bed_content = """chr1\t0\t10\t5\t100
 """
         bed_file.write_text(bed_content)
 
@@ -286,3 +312,26 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
 
         assert "Duplicate chromosome name 'chr1' found in FASTA" in str(exc_info.value)
         assert "First word of FASTA headers must be unique" in str(exc_info.value)
+
+    def test_fasta_output(self, test_fasta, test_bed_simple, tmp_path):
+        """Test FASTA output file generation."""
+        output_file = tmp_path / "output.trf"
+        fasta_output = tmp_path / "output.fasta"
+        count = extract_sequences_from_bed(
+            test_fasta, test_bed_simple, str(output_file),
+            fasta_output_file=str(fasta_output), project="test"
+        )
+
+        assert count == 4
+        assert fasta_output.exists()
+
+        # Check FASTA content
+        fasta_content = fasta_output.read_text()
+        lines = fasta_content.strip().split('\n')
+
+        # Should have 8 lines (4 headers + 4 sequences)
+        assert len(lines) == 8
+
+        # Check first entry header format: >chr_start_end_length_period
+        assert lines[0] == ">chr1_0_10_10_5"
+        assert lines[1] == "ATCGATCGAT"

@@ -62,6 +62,7 @@ See Also:
 import logging
 import os
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satellome.core_functions.tools.processing import get_gc_content
 
 logger = logging.getLogger(__name__)
 
@@ -92,18 +93,20 @@ def reverse_complement(seq):
     return ''.join(complement.get(base, 'N') for base in reversed(seq))
 
 
-def extract_sequences_from_bed(fasta_file, bed_file, output_file):
+def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_file=None, project="FasTAN"):
     """
-    Extract sequences from FASTA based on BED coordinates with strand handling.
+    Extract sequences from FASTA based on BED coordinates and output TRF-compatible format.
 
     Memory-efficient implementation that reads BED file once, groups by chromosome,
-    then processes FASTA sequentially chromosome-by-chromosome. Automatically applies
-    reverse complement for negative strand regions.
+    then processes FASTA sequentially chromosome-by-chromosome.
 
     Args:
         fasta_file (str): Path to input genome FASTA file
         bed_file (str): Path to BED file with tandem repeat coordinates (FasTAN/tanbed output)
-        output_file (str): Path to output file with BED columns + length + sequence
+        output_file (str): Path to output TRF-format file (18 tab-separated fields)
+        fasta_output_file (str, optional): Path to output FASTA file with extracted sequences.
+            Headers format: >chr_start_end_length_period. If None, no FASTA file is created.
+        project (str): Project name for TRF output (default: "FasTAN")
 
     Returns:
         int: Number of sequences successfully extracted
@@ -221,15 +224,13 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
     # Step 2: Process FASTA sequentially, extracting sequences for each chromosome
     extracted_count = 0
     seen_chromosomes = set()  # Track chromosome names to detect duplicates
+    trf_id_counter = 0
 
-    with open(output_file, 'w') as out_fh:
-        # Write header
-        out_fh.write("# FasTAN results with extracted sequences\n")
-        out_fh.write("# Format: chr\tstart\tend\tname\tscore\tstrand\t[...]\tlength\tsequence\n")
-        out_fh.write("# Note: length = end - start (repeat length in bp)\n")
-        out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
-        out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
+    # Open output files
+    out_fh = open(output_file, 'w')
+    fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
 
+    try:
         logger.info("Processing FASTA file...")
         for header, sequence in sc_iter_fasta_brute(fasta_file):
             # Remove '>' and take first word as chromosome name
@@ -271,28 +272,67 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file):
                     skipped_count += 1
                     continue
 
-                # Extract sequence
-                # BED coordinates are 0-based, half-open [start, end)
-                # Python slice seq[start:end] works directly!
+                # Extract sequence (BED coordinates are 0-based, half-open [start, end))
                 extracted_seq = sequence[start:end]
 
                 # Apply reverse complement if on negative strand
                 if strand == '-':
                     extracted_seq = reverse_complement(extracted_seq)
 
-                # Calculate repeat length
-                repeat_length = end - start
-
-                # Write output: replace full chromosome name with short name (first word only)
-                # Original BED line might have: "NC_000913.3 Escherichia coli..."
-                # We write: "NC_000913.3\t...\tlength\tsequence"
+                # Get period from BED fields (column 4)
                 fields = line.split('\t')
-                fields[0] = chr_name  # Replace full name with first word
-                output_line = '\t'.join(fields) + '\t' + str(repeat_length) + '\t' + extracted_seq
-                out_fh.write(output_line + '\n')
+                period = int(fields[3]) if len(fields) > 3 else 1
+
+                # Calculate TRF fields
+                trf_id_counter += 1
+                trf_array_length = end - start
+                trf_n_copy = round(trf_array_length / period, 1) if period > 0 else 0
+                trf_consensus = extracted_seq[:period] if period <= len(extracted_seq) else extracted_seq
+                trf_array_gc = round(get_gc_content(extracted_seq), 2)
+                trf_consensus_gc = round(get_gc_content(trf_consensus), 2)
+
+                # TRF format: 18 tab-separated fields
+                # project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,
+                # trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,
+                # trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation
+                trf_fields = [
+                    project,                    # project
+                    str(trf_id_counter),        # trf_id
+                    chr_name,                   # trf_head
+                    str(start + 1),             # trf_l_ind (1-based for TRF compatibility)
+                    str(end),                   # trf_r_ind
+                    str(period),                # trf_period
+                    str(trf_n_copy),            # trf_n_copy
+                    "-1",                       # trf_pmatch (not available from FasTAN)
+                    "-1",                       # trf_pvar (not available from FasTAN)
+                    "-1",                       # trf_entropy (not available from FasTAN)
+                    trf_consensus,              # trf_consensus
+                    extracted_seq,              # trf_array
+                    str(trf_array_gc),          # trf_array_gc
+                    str(trf_consensus_gc),      # trf_consensus_gc
+                    str(trf_array_length),      # trf_array_length
+                    "",                         # trf_joined
+                    "",                         # trf_family
+                    "",                         # trf_ref_annotation
+                ]
+                out_fh.write('\t'.join(trf_fields) + '\n')
+
+                # Write FASTA output if requested
+                # Header format: >chr_start_end_length_period
+                if fasta_fh:
+                    fasta_header = f">{chr_name}_{start}_{end}_{trf_array_length}_{period}"
+                    fasta_fh.write(f"{fasta_header}\n{extracted_seq}\n")
+
                 extracted_count += 1
 
-    logger.info(f"✓ Extracted {extracted_count} sequences")
+    finally:
+        out_fh.close()
+        if fasta_fh:
+            fasta_fh.close()
+
+    logger.info(f"✓ Extracted {extracted_count} sequences to TRF format")
+    if fasta_output_file:
+        logger.info(f"✓ FASTA file created: {fasta_output_file}")
     if skipped_count > 0:
         logger.warning(f"Skipped {skipped_count} entries due to errors")
 

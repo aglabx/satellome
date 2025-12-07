@@ -630,10 +630,16 @@ def run_fastan(settings, force_rerun):
 
             # Extract sequences from FASTA based on BED coordinates
             trf_file = os.path.join(fastan_dir, f"{genome_basename}.trf")
+            fasta_output = os.path.join(fastan_dir, f"{genome_basename}.fasta")
             logger.info("Extracting sequences from FASTA based on BED coordinates...")
             try:
-                extracted_count = extract_sequences_from_bed(fasta_file, bed_file, trf_file)
+                extracted_count = extract_sequences_from_bed(
+                    fasta_file, bed_file, trf_file,
+                    fasta_output_file=fasta_output,
+                    project=project
+                )
                 logger.info(f"✓ Sequence extraction completed: {trf_file}")
+                logger.info(f"✓ FASTA output created: {fasta_output}")
                 logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
             except Exception as e:
                 logger.error(f"Sequence extraction failed: {e}")
