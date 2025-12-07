@@ -133,9 +133,9 @@ chr2\t0\t5\t2\t100
         assert count == 4  # 4 valid BED entries
         assert output_file.exists()
 
-        # Check output content (no header comments in TRF format)
+        # Check output content (filter out header comments starting with #)
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l]
+        data_lines = [l for l in lines if l and not l.startswith('#')]
 
         assert len(data_lines) == 4
 
@@ -165,7 +165,7 @@ chr2\t0\t5\t2\t100
         assert count == 2
 
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l]
+        data_lines = [l for l in lines if l and not l.startswith('#')]
 
         # First entry: chr2 0-10 on minus strand
         # Original: "GGGGGGGGGG"
@@ -238,7 +238,7 @@ chr2\t0\t5
         count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file))
 
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l]
+        data_lines = [l for l in lines if l and not l.startswith('#')]
 
         # All sequences should be uppercase
         for line in data_lines:
@@ -271,7 +271,7 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
 
         # Use rstrip('\n') instead of strip() to preserve trailing tabs (empty fields)
         lines = output_file.read_text().rstrip('\n').split('\n')
-        data_lines = [l for l in lines if l]
+        data_lines = [l for l in lines if l and not l.startswith('#')]
 
         assert len(data_lines) == 1
         fields = data_lines[0].split('\t')
