@@ -230,6 +230,15 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     out_fh = open(output_file, 'w')
     fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
 
+    # Write TRF header
+    out_fh.write(f"# FasTAN results converted to TRF format\n")
+    out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
+    out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
+    out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
+    out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
+    out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
+    out_fh.write(f"# Note: trf_pmatch, trf_pvar, trf_entropy are -1 (not available from FasTAN)\n")
+
     try:
         logger.info("Processing FASTA file...")
         for header, sequence in sc_iter_fasta_brute(fasta_file):
@@ -365,6 +374,13 @@ def filter_trf_by_size(input_trf_file, output_trf_file, min_array_length, fasta_
         with open(output_trf_file, 'w') as out_fh:
             fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
             try:
+                # Write header for filtered file
+                out_fh.write(f"# Filtered TRF file: array_length > {min_array_length} bp\n")
+                out_fh.write(f"# Source: {os.path.basename(input_trf_file)}\n")
+                out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
+                out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
+                out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
+
                 for line in in_fh:
                     line = line.strip()
                     if not line or line.startswith('#'):
