@@ -479,6 +479,14 @@ def trf_search_by_splitting(
     ### 3. Aggregate data
 
     with open(output_file, "w") as fw:
+        # Write header
+        fw.write(f"# TRF (Tandem Repeat Finder) results\n")
+        fw.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
+        fw.write(f"# Project: {project}\n")
+        fw.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
+        fw.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
+        fw.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
+
         for file_path in iter_filepath_folder(folder_path):
             if file_path.endswith(".trf"):
                 with open(file_path) as fh:
