@@ -5,6 +5,43 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-01-15
+
+### Added
+- **Comprehensive input validation** (SAT-5): Validation for FASTA, GFF, RepeatMasker, and TRF binary files
+- **Memory-efficient streaming annotation** (SAT-7): Support for large genomes without loading entire files into memory
+- **Comprehensive docstrings** (SAT-10): Added detailed documentation to all core modules:
+  - I/O module (FASTA, GFF3, TRF, TAB handlers)
+  - Tools module (clustering, statistics, HTML reports)
+  - Analysis and utility tools
+  - TRF model
+- **Informative headers in TRF output files**: Files now include metadata headers with generation info
+- **Size-filtered TRF files**: FasTAN output now includes filtered files (1kb, 3kb, 10kb thresholds)
+- **Repeat length field** (SAT-49): Added to output TRF files for easier analysis
+- **Sequence extraction**: FasTAN BED output now includes extracted sequences
+- **Duplicate chromosome name validation** (SAT-49): Prevents issues with duplicate names in input
+
+### Changed
+- **Reduced TRF output fields from 37 to 18** (SAT-13): Streamlined output with automatic conversion for compatibility
+- **FasTAN output now in TRF-compatible format**: With FASTA export support
+- **Removed .pkl cache files** (SAT-47): Now uses only BED format for gaps data
+- **Short chromosome names in output** (SAT-49): Cleaner output format
+- **All file paths converted to absolute**: Prevents path resolution issues
+- **Improved taxid resolution logging**: Clearer messages during taxonomy lookup
+- **Removed outdated FASTA line length warning**
+
+### Fixed
+- **Atomic file operations** (SAT-54): `move_files_by_mask` now uses atomic operations to prevent data loss
+- **Improved error handling** (SAT-22): Replaced generic exceptions and assertions with specific error types
+- **TRF validation skip** when `--notrf` flag is set
+- **Chromosome name parsing in BED files** (SAT-49): Fixed handling of names with spaces
+- **Test fixes** (SAT-58): Fixed TRF file format in tests
+- **Test compatibility**: Handle TRF header comments correctly
+
+### Documentation
+- **Decomposed TODO comments** (SAT-8): Converted inline TODOs into tracked issues
+- Removed placeholder Zenodo DOI badge from README
+
 ## [1.4.3] - 2025-01-05
 
 ### Added
