@@ -3,7 +3,6 @@ Base utilities for installers
 """
 
 import os
-import sys
 import shutil
 import platform
 import logging
@@ -142,13 +141,13 @@ def verify_installation(binary_name: str, test_command: Optional[str] = None) ->
     if test_command:
         import subprocess
         try:
-            result = subprocess.run(
+            subprocess.run(
                 test_command.split(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=5
+                timeout=5,
+                check=False  # Some programs return non-zero for --help
             )
-            # Some programs return non-zero for --help, so we check if it runs without crash
             logger.info(f"{binary_name} test command executed successfully")
             return True
         except (subprocess.TimeoutExpired, subprocess.SubprocessError, FileNotFoundError) as e:
@@ -156,6 +155,90 @@ def verify_installation(binary_name: str, test_command: Optional[str] = None) ->
             return False
 
     return True
+
+
+def find_system_gcc() -> Optional[str]:
+    """
+    Find system gcc (not conda's gcc which may have linking issues).
+
+    Returns:
+        Optional[str]: Path to system gcc, or None if not found
+    """
+    for gcc_path in ['/usr/bin/gcc', '/usr/local/bin/gcc']:
+        if os.path.exists(gcc_path):
+            return gcc_path
+    return None
+
+
+def run_make_with_fallback(
+    cwd: Path,
+    timeout: int = 300,
+    clean_command: Optional[list] = None
+) -> Tuple[bool, str]:
+    """
+    Run make with fallback to system gcc if conda gcc fails with -lz error.
+
+    Args:
+        cwd: Working directory for make
+        timeout: Timeout in seconds
+        clean_command: Command to clean failed build (default: ['make', 'clean'])
+
+    Returns:
+        Tuple[bool, str]: (success, error_message)
+    """
+    import subprocess
+
+    if clean_command is None:
+        clean_command = ['make', 'clean']
+
+    compile_env = os.environ.copy()
+
+    # First attempt: use default compiler
+    result = subprocess.run(
+        ['make'],
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        env=compile_env
+    )
+
+    if result.returncode == 0:
+        return True, ""
+
+    stderr_output = result.stderr.decode()
+
+    # Check if error is related to conda gcc and -lz linking issue
+    if 'cannot find -lz' in stderr_output and 'conda' in os.environ.get('PATH', ''):
+        logger.warning("Compilation failed with conda gcc (cannot find -lz)")
+        logger.info("Retrying with system gcc...")
+
+        # Clean up failed build
+        subprocess.run(clean_command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        # Try with system gcc
+        system_gcc = find_system_gcc()
+        if system_gcc:
+            compile_env['CC'] = system_gcc
+            logger.info(f"Using system compiler: {system_gcc}")
+
+            result = subprocess.run(
+                ['make'],
+                cwd=cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                env=compile_env
+            )
+
+            if result.returncode == 0:
+                return True, ""
+
+            return False, f"Failed to compile with system gcc:\n{result.stderr.decode()}"
+
+        return False, f"System gcc not found. Original error:\n{stderr_output}"
+
+    return False, f"Compilation failed:\n{stderr_output}"
 
 
 def check_build_dependencies() -> Tuple[bool, str]:

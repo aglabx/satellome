@@ -8,12 +8,12 @@ import subprocess
 import tempfile
 import logging
 from pathlib import Path
-from typing import Optional
 
 from .base import (
     get_satellome_bin_dir,
     check_build_dependencies,
-    verify_installation
+    verify_installation,
+    run_make_with_fallback
 )
 
 logger = logging.getLogger(__name__)
@@ -116,16 +116,10 @@ def install_fastan(force: bool = False) -> bool:
 
             # Build FasTAN
             logger.info("Compiling FasTAN...")
-            result = subprocess.run(
-                ['make'],
-                cwd=repo_dir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                timeout=300
-            )
 
-            if result.returncode != 0:
-                logger.error(f"Failed to compile FasTAN:\n{result.stderr.decode()}")
+            success, error_msg = run_make_with_fallback(repo_dir)
+            if not success:
+                logger.error(f"Failed to compile FasTAN:\n{error_msg}")
                 return False
 
             logger.info("FasTAN compiled successfully")
