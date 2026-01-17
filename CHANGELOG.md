@@ -5,6 +5,11 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2025-01-17
+
+### Fixed
+- **Fallback to system gcc when conda gcc fails**: When compiling tanbed or FasTAN in conda environments, if conda's gcc fails with "cannot find -lz" error, the installer now automatically retries with system gcc (/usr/bin/gcc)
+
 ## [1.5.0] - 2025-01-15
 
 ### Added
