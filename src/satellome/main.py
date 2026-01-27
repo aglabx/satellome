@@ -106,8 +106,9 @@ def parse_arguments():
     parser.add_argument("--kmer_bed", help="Pre-computed k-mer profile BED file from varprofiler", required=False, default=None)
     parser.add_argument("--continue-on-error", help="Continue pipeline even if some TRF runs fail (results may be incomplete)", action='store_true', default=False)
     parser.add_argument("--keep-trf", help="Keep original TRF files before filtering (saved with .original suffix)", action='store_true', default=False)
-    parser.add_argument("--nofastan", help="Skip FasTAN analysis (TRF runs by default)", action='store_true', default=False)
-    parser.add_argument("--notrf", help="Skip TRF analysis (FasTAN runs by default)", action='store_true', default=False)
+    parser.add_argument("--nofastan", help="Skip FasTAN analysis", action='store_true', default=False)
+    parser.add_argument("--run-trf", help="Run TRF analysis (disabled by default, FasTAN is the default tool)", action='store_true', default=False)
+    parser.add_argument("--notrf", help="[DEPRECATED] TRF is now disabled by default. Use --run-trf to enable.", action='store_true', default=False)
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -191,9 +192,9 @@ def validate_and_prepare_environment(args):
             logger.error(f"✗ RepeatMasker validation failed: {e}")
             sys.exit(1)
 
-    # Check if TRF is available (only if not skipping TRF)
-    skip_trf = args.get("notrf", False)
-    if not skip_trf:
+    # Check if TRF is available (only if TRF is enabled)
+    run_trf = args.get("run_trf", False)
+    if run_trf:
         import shutil
         try:
             trf_found = validate_trf_binary(trf_path)
@@ -260,7 +261,7 @@ def validate_and_prepare_environment(args):
                 logger.warning("  Option 3: Download from https://tandem.bu.edu/trf/trf.html")
                 sys.exit(1)
     else:
-        logger.info("✓ TRF validation skipped (--notrf flag)")
+        logger.info("✓ TRF validation skipped (TRF disabled by default, use --run-trf to enable)")
 
     # Validate output directory
     try:
@@ -852,20 +853,25 @@ def main():
     #TODO: use large_cutoff in code
 
     # Extract run mode flags
-    skip_trf = args.get("notrf", False)
+    # TRF is disabled by default, FasTAN is the default tool
+    run_trf = args.get("run_trf", False)  # Note: argparse converts --run-trf to run_trf
     skip_fastan = args.get("nofastan", False)
 
+    # Handle deprecated --notrf flag (warn but ignore since TRF is off by default now)
+    if args.get("notrf", False):
+        logger.warning("--notrf flag is deprecated. TRF is now disabled by default. Use --run-trf to enable TRF.")
+
     # Validate that at least one tool will run
-    if skip_trf and skip_fastan:
-        logger.error("Cannot skip both TRF and FasTAN. At least one tool must run.")
-        logger.error("Remove either --notrf or --nofastan flag.")
+    if not run_trf and skip_fastan:
+        logger.error("Cannot skip FasTAN when TRF is not enabled. At least one tool must run.")
+        logger.error("Either remove --nofastan flag or add --run-trf flag.")
         sys.exit(1)
 
-    # Step 1: TRF Search (unless --notrf)
+    # Step 1: TRF Search (only if --trf flag is set)
     trf_search_result = None
     force_downstream = force_rerun
 
-    if not skip_trf:
+    if run_trf:
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1: TRF SEARCH")
         logger.info(SEPARATOR_LINE)
@@ -875,7 +881,7 @@ def main():
         force_downstream = force_rerun or (trf_search_result == "recomputed")
     else:
         logger.info(SEPARATOR_LINE)
-        logger.info("STEP 1: TRF SEARCH - SKIPPED (--notrf flag)")
+        logger.info("STEP 1: TRF SEARCH - SKIPPED (use --trf to enable)")
         logger.info(SEPARATOR_LINE)
 
     # Step 1b: FasTAN Analysis (unless --nofastan)
@@ -890,7 +896,7 @@ def main():
         logger.info(SEPARATOR_LINE)
 
     # Remaining steps only run if TRF was executed
-    if not skip_trf:
+    if run_trf:
         # Step 2: Add annotations
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 2: ADD ANNOTATIONS")
