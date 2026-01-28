@@ -541,12 +541,33 @@ def run_fastan(settings, force_rerun):
         genome_basename = os.path.splitext(genome_basename)[0]
     aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
     bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
+    trf_file = os.path.join(fastan_dir, f"{genome_basename}.trf")
+    fasta_output = os.path.join(fastan_dir, f"{genome_basename}.fasta")
 
-    # Check if already completed
-    if os.path.exists(aln_file) and os.path.exists(bed_file) and not force_rerun:
-        logger.info(f"FasTAN analysis already completed! Found {aln_file} and {bed_file}")
-        logger.info("Use --force to rerun this step")
-        return True
+    # Check if already completed (all main output files exist)
+    if not force_rerun:
+        existing_files = []
+        missing_files = []
+        for f in [aln_file, bed_file, trf_file, fasta_output]:
+            if os.path.exists(f):
+                existing_files.append(os.path.basename(f))
+            else:
+                missing_files.append(os.path.basename(f))
+
+        if not missing_files:
+            logger.info("FasTAN analysis already completed!")
+            logger.info(f"  Output directory: {fastan_dir}")
+            logger.info(f"  Found files: {', '.join(existing_files)}")
+            # Check for size-filtered files
+            for suffix in ["1kb", "3kb", "10kb"]:
+                filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.trf")
+                if os.path.exists(filtered_trf):
+                    logger.info(f"  Found filtered: {genome_basename}.{suffix}.trf")
+            logger.info("Use --force to rerun this step")
+            return True
+        elif existing_files:
+            logger.info(f"Partial FasTAN results found. Missing: {', '.join(missing_files)}")
+            logger.info("Continuing analysis...")
 
     # Find fastan binary (auto-install if not found)
     fastan_bin = shutil.which("fastan")
@@ -644,8 +665,6 @@ def run_fastan(settings, force_rerun):
             logger.info(f"✓ BED file created: {bed_file}")
 
             # Extract sequences from FASTA based on BED coordinates
-            trf_file = os.path.join(fastan_dir, f"{genome_basename}.trf")
-            fasta_output = os.path.join(fastan_dir, f"{genome_basename}.fasta")
             logger.info("Extracting sequences from FASTA based on BED coordinates...")
             try:
                 extracted_count = extract_sequences_from_bed(
