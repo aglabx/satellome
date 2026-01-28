@@ -563,6 +563,10 @@ def run_fastan(settings, force_rerun):
                 filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
                 if os.path.exists(filtered_trf):
                     logger.info(f"  Found filtered: {genome_basename}.{suffix}.sat")
+            # Check for ArraySplitter output
+            hors_file = os.path.join(fastan_dir, f"{genome_basename}.hors.tsv")
+            if os.path.exists(hors_file):
+                logger.info(f"  Found ArraySplitter: {genome_basename}.hors.tsv")
             logger.info("Use --force to rerun this step")
             return True
         elif existing_files:
@@ -697,6 +701,13 @@ def run_fastan(settings, force_rerun):
                 logger.warning("Continuing without sequence extraction...")
                 # Don't fail the whole pipeline - BED file is still useful
 
+            # Run ArraySplitter on main FASTA to calculate consensus and HORs
+            if os.path.exists(fasta_output) and os.path.getsize(fasta_output) > 0:
+                logger.info("Running ArraySplitter for consensus calculation...")
+                threads = settings.get("threads", 4)
+                arraysplitter_prefix = os.path.join(fastan_dir, genome_basename)
+                run_arraysplitter(fasta_output, arraysplitter_prefix, threads, force_rerun)
+
             logger.info(f"✓ FasTAN analysis completed!")
             return True
         else:
@@ -705,6 +716,81 @@ def run_fastan(settings, force_rerun):
             return False
     except Exception as e:
         logger.error(f"tanbed execution failed: {e}")
+        return False
+
+
+def run_arraysplitter(fasta_file, output_prefix, threads, force_rerun=False):
+    """
+    Run ArraySplitter to calculate consensus sequences and HORs.
+
+    Args:
+        fasta_file: Input FASTA file with arrays
+        output_prefix: Output prefix for ArraySplitter results
+        threads: Number of threads to use
+        force_rerun: Force rerun even if output exists
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    import shutil
+
+    # Check if output already exists
+    hors_file = f"{output_prefix}.hors.tsv"
+    if os.path.exists(hors_file) and not force_rerun:
+        logger.info(f"ArraySplitter output already exists: {hors_file}")
+        return True
+
+    # Check if input file exists and has content
+    if not os.path.exists(fasta_file) or os.path.getsize(fasta_file) == 0:
+        logger.warning(f"Input FASTA file not found or empty: {fasta_file}")
+        return False
+
+    # Find arraysplitter binary
+    arraysplitter_bin = shutil.which("arraysplitter")
+    if not arraysplitter_bin:
+        # Try to install via pip
+        logger.warning("arraysplitter not found. Installing via pip...")
+        try:
+            install_result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "arraysplitter"],
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            if install_result.returncode == 0:
+                logger.info("✓ arraysplitter installed successfully!")
+                arraysplitter_bin = shutil.which("arraysplitter")
+                if not arraysplitter_bin:
+                    logger.error("arraysplitter installed but binary not found in PATH")
+                    return False
+            else:
+                logger.error(f"Failed to install arraysplitter: {install_result.stderr}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to install arraysplitter: {e}")
+            return False
+
+    # Run ArraySplitter
+    logger.info(f"Running ArraySplitter on {os.path.basename(fasta_file)}...")
+    command = f"{arraysplitter_bin} -i {fasta_file} -o {output_prefix} -t {threads}"
+    logger.debug(f"Command: {command}")
+
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=3600)
+
+        if result.returncode == 0:
+            logger.info(f"✓ ArraySplitter completed: {output_prefix}")
+            return True
+        else:
+            logger.error(f"ArraySplitter failed with return code {result.returncode}")
+            if result.stderr:
+                logger.error(f"Error: {result.stderr}")
+            return False
+    except subprocess.TimeoutExpired:
+        logger.error("ArraySplitter timed out (1 hour limit)")
+        return False
+    except Exception as e:
+        logger.error(f"ArraySplitter execution failed: {e}")
         return False
 
 
