@@ -253,7 +253,7 @@ def cf_separate_microsatellites(settings, project):
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_dataset" in project:
         trf_all_file = os.path.join(
-            trf_parsed_folder, project["ref_dataset"] + ".trf_all.trf"
+            trf_parsed_folder, project["ref_dataset"] + ".trf_all.sat"
         )
     else:
         trf_all_file = settings["files"]["trf_all_file"]
@@ -321,7 +321,7 @@ def cf_separate_true_ssr(settings, project):
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_dataset" in project:
         trf_all_file = os.path.join(
-            trf_parsed_folder, project["ref_dataset"] + ".trf_all.trf"
+            trf_parsed_folder, project["ref_dataset"] + ".trf_all.sat"
         )
     else:
         trf_all_file = settings["files"]["trf_all_file"]
@@ -428,7 +428,7 @@ def cf_separate_fuzzy_ssr(settings, project):
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_dataset" in project:
         trf_all_file = os.path.join(
-            trf_parsed_folder, project["ref_dataset"] + ".trf_all.trf"
+            trf_parsed_folder, project["ref_dataset"] + ".trf_all.sat"
         )
     else:
         trf_all_file = settings["files"]["trf_all_file"]
@@ -548,7 +548,7 @@ def cf_separate_complex_trs(settings, project):
     trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
     if "ref_dataset" in project:
         trf_all_file = os.path.join(
-            trf_parsed_folder, project["ref_dataset"] + ".trf_all.trf"
+            trf_parsed_folder, project["ref_dataset"] + ".trf_all.sat"
         )
     else:
         trf_all_file = settings["files"]["trf_all_file"]

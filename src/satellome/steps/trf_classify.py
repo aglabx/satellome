@@ -41,17 +41,17 @@ def classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf=False):
             os.makedirs(folder_path)
                  
     settings["files"] = {
-        "trf_all_file": base_prefix + ".trf",
+        "trf_all_file": base_prefix + ".sat",
         
-        "trf_micro_file": base_prefix + ".micro.trf",
-        "trf_perfect_micro_file": base_prefix + ".pmicro.trf",
-        "trf_tssr_file": base_prefix + ".tssr.trf",
-        "trf_complex_file": base_prefix + ".complex.trf",
+        "trf_micro_file": base_prefix + ".micro.sat",
+        "trf_perfect_micro_file": base_prefix + ".pmicro.sat",
+        "trf_tssr_file": base_prefix + ".tssr.sat",
+        "trf_complex_file": base_prefix + ".complex.sat",
     
-        "trf_1k_file": base_prefix + ".1kb.trf",
-        "trf_10k_file": base_prefix + ".10kb.trf",
+        "trf_1k_file": base_prefix + ".1kb.sat",
+        "trf_10k_file": base_prefix + ".10kb.sat",
         "trf_1k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".1kb.fasta"),
-        "trf_3k_file": base_prefix + ".3kb.trf",
+        "trf_3k_file": base_prefix + ".3kb.sat",
         "trf_3k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".3kb.fasta"),
         "trf_10k_fasta_file": os.path.join(settings["folders"]["fasta"], base_file + ".10kb.fasta"),
         "gff_micro_file": os.path.join(settings["folders"]["data_gff3"], base_file + ".micro.gff"),
@@ -88,7 +88,7 @@ def classify_trf_data(trf_prefix, output_dir, genome_size, keep_trf=False):
     if keep_trf:
         import shutil
         original_trf = settings["files"]["trf_all_file"]
-        backup_trf = original_trf.replace(".trf", ".original.trf")
+        backup_trf = original_trf.replace(".sat", ".original.sat")
         if os.path.exists(original_trf) and not os.path.exists(backup_trf):
             logger.info(f"Saving original TRF file as {backup_trf}")
             shutil.copy2(original_trf, backup_trf)

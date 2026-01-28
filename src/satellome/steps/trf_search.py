@@ -91,7 +91,7 @@ if __name__ == "__main__":
     ### PART 1. Running TRF in parallel
 
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
-    output_file = os.path.join(output_dir, fasta_name + ".trf")
+    output_file = os.path.join(output_dir, fasta_name + ".sat")
 
     if os.path.isfile(output_file) and os.path.getsize(output_file) > 0:
         logger.info(f"TRF output file already exists ({os.path.getsize(output_file):,} bytes). Skipping TRF.")

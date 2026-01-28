@@ -68,9 +68,9 @@ if __name__ == "__main__":
         input_filename_without_extension
     )
     if large_file_suffix:
-        trf_file = f"{trf_prefix}.{large_file_suffix}.trf"
+        trf_file = f"{trf_prefix}.{large_file_suffix}.sat"
     else:
-        trf_file = f"{trf_prefix}.trf"
+        trf_file = f"{trf_prefix}.sat"
 
     if not genome_size:
         genome_size = get_genome_size(fasta_file)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         "trf_search_path": trf_search_path,
         "trf_classify_path": trf_classify_path,
         "gff_file": gff_file,
-        "trf_file": f"{trf_prefix}.trf",
+        "trf_file": f"{trf_prefix}.sat",
         "minimal_scaffold_length": minimal_scaffold_length,
         "drawing_enhancing": drawing_enhancing,
         "taxon_name": taxon_name,

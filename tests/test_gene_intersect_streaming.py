@@ -86,7 +86,7 @@ class TestGetTRFChromosomes:
 
     def test_get_chromosomes_from_trf(self, tmp_path):
         """Test extracting chromosome names from TRF file."""
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_file.write_text(
             create_trf_line(trf_head="chr1", trf_l_ind=1000, trf_r_ind=1100) +
             create_trf_line(trf_head="chr1", trf_l_ind=2000, trf_r_ind=2100) +
@@ -103,7 +103,7 @@ class TestGetTRFChromosomes:
 
     def test_get_chromosomes_empty_file(self, tmp_path):
         """Test with empty TRF file."""
-        trf_file = tmp_path / "empty.trf"
+        trf_file = tmp_path / "empty.sat"
         trf_file.write_text("")
 
         chrm_counts = get_trf_chromosomes(str(trf_file))
@@ -191,7 +191,7 @@ class TestProcessTRFChromosome:
         from intervaltree import IntervalTree
 
         # Create TRF file
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_file.write_text(
             create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200) +
             create_trf_line(trf_head="chr1", trf_l_ind=300, trf_r_ind=400) +
@@ -219,7 +219,7 @@ class TestProcessTRFChromosome:
         from intervaltree import IntervalTree
 
         # Create TRF file
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_file.write_text(
             create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200)
         )
@@ -242,7 +242,7 @@ class TestStreamingIntegration:
     def test_streaming_vs_inmemory_same_results(self, tmp_path):
         """Test that streaming and in-memory modes produce same results."""
         # Create test files
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_file.write_text(
             create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200) +
             create_trf_line(trf_head="chr1", trf_l_ind=300, trf_r_ind=400) +
@@ -287,7 +287,7 @@ class TestStreamingIntegration:
     def test_streaming_with_repeatmasker(self, tmp_path):
         """Test streaming mode with RepeatMasker file."""
         # Create test files
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_file.write_text(
             create_trf_line(trf_head="chr1", trf_l_ind=100, trf_r_ind=200)
         )
@@ -320,7 +320,7 @@ class TestStreamingIntegration:
     def test_streaming_with_multiple_chromosomes(self, tmp_path):
         """Test streaming with multiple chromosomes."""
         # Create test files with multiple chromosomes
-        trf_file = tmp_path / "test.trf"
+        trf_file = tmp_path / "test.sat"
         trf_lines = []
         for chrm in ['chr1', 'chr2', 'chr3', 'chr4', 'chr5']:
             for i in range(10):  # 10 records per chromosome
@@ -363,7 +363,7 @@ class TestMemoryEfficiency:
     def test_large_file_simulation(self, tmp_path):
         """Simulate processing a large file (many chromosomes)."""
         # Create a file with many chromosomes to test memory efficiency
-        trf_file = tmp_path / "large.trf"
+        trf_file = tmp_path / "large.sat"
         gff_file = tmp_path / "large.gff"
         report_file = tmp_path / "report.txt"
 

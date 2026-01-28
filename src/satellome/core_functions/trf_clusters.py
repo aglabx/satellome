@@ -1196,7 +1196,7 @@ def draw_all(
     # Extract project name from TRF file (e.g., GCF_000005845.2_ASM584v2_genomic.1kb.trf -> GCF_000005845.2_ASM584v2_genomic)
     trf_basename = os.path.basename(trf_file)
     # Remove .trf extension and any suffix like .1kb, .3kb, .10kb
-    project_name = trf_basename.replace('.trf', '')
+    project_name = trf_basename.replace('.sat', '')
     for suffix in ['.1kb', '.3kb', '.10kb', '.micro', '.complex', '.pmicro', '.tssr']:
         project_name = project_name.replace(suffix, '')
 

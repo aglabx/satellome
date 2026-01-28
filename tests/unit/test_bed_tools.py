@@ -127,7 +127,7 @@ chr2\t0\t5\t2\t100
 
     def test_basic_extraction(self, test_fasta, test_bed_simple, tmp_path):
         """Test basic sequence extraction in TRF format."""
-        output_file = tmp_path / "output.trf"
+        output_file = tmp_path / "output.sat"
         count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file), project="test")
 
         assert count == 4  # 4 valid BED entries
@@ -159,7 +159,7 @@ chr2\t0\t5\t2\t100
 
     def test_reverse_strand(self, test_fasta, test_bed_reverse_strand, tmp_path):
         """Test reverse strand sequence extraction."""
-        output_file = tmp_path / "output_reverse.trf"
+        output_file = tmp_path / "output_reverse.sat"
         count = extract_sequences_from_bed(test_fasta, test_bed_reverse_strand, str(output_file), project="test")
 
         assert count == 2
@@ -180,7 +180,7 @@ chr2\t0\t5\t2\t100
 
     def test_with_comments(self, test_fasta, test_bed_with_comments, tmp_path):
         """Test that comments and empty lines are ignored."""
-        output_file = tmp_path / "output_comments.trf"
+        output_file = tmp_path / "output_comments.sat"
         count = extract_sequences_from_bed(test_fasta, test_bed_with_comments, str(output_file))
 
         assert count == 2  # Only 2 valid BED entries
@@ -197,7 +197,7 @@ chr1\t20\t10\t5\t100
 """
         bed_file.write_text(content)
 
-        output_file = tmp_path / "output_invalid.trf"
+        output_file = tmp_path / "output_invalid.sat"
         count = extract_sequences_from_bed(test_fasta, str(bed_file), str(output_file))
 
         # Only one valid entry (0-5)
@@ -211,7 +211,7 @@ chr1\t0\t10\t5\t100
 """
         bed_file.write_text(content)
 
-        output_file = tmp_path / "output_missing.trf"
+        output_file = tmp_path / "output_missing.sat"
         count = extract_sequences_from_bed(test_fasta, str(bed_file), str(output_file))
 
         # Only chr1 should be extracted
@@ -226,7 +226,7 @@ chr2\t0\t5
 """
         bed_file.write_text(content)
 
-        output_file = tmp_path / "output_bed3.trf"
+        output_file = tmp_path / "output_bed3.sat"
         count = extract_sequences_from_bed(test_fasta, str(bed_file), str(output_file))
 
         assert count == 2
@@ -234,7 +234,7 @@ chr2\t0\t5
 
     def test_uppercase_conversion(self, test_fasta, test_bed_simple, tmp_path):
         """Test that sequences are converted to uppercase."""
-        output_file = tmp_path / "output_uppercase.trf"
+        output_file = tmp_path / "output_uppercase.sat"
         count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file))
 
         lines = output_file.read_text().strip().split('\n')
@@ -263,7 +263,7 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
 """
         bed_file.write_text(bed_content)
 
-        output_file = tmp_path / "output_spaces.trf"
+        output_file = tmp_path / "output_spaces.sat"
         count = extract_sequences_from_bed(str(fasta_file), str(bed_file), str(output_file), project="test")
 
         # Should successfully extract sequence
@@ -304,7 +304,7 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
 """
         bed_file.write_text(bed_content)
 
-        output_file = tmp_path / "output_duplicate.trf"
+        output_file = tmp_path / "output_duplicate.sat"
 
         # Should raise ValueError due to duplicate chromosome name
         with pytest.raises(ValueError) as exc_info:
@@ -315,7 +315,7 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
 
     def test_fasta_output(self, test_fasta, test_bed_simple, tmp_path):
         """Test FASTA output file generation."""
-        output_file = tmp_path / "output.trf"
+        output_file = tmp_path / "output.sat"
         fasta_output = tmp_path / "output.fasta"
         count = extract_sequences_from_bed(
             test_fasta, test_bed_simple, str(output_file),

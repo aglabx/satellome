@@ -363,7 +363,7 @@ def filter_trf_by_size(input_trf_file, output_trf_file, min_array_length, fasta_
 
     Example:
         >>> # Filter TRF file to keep only arrays > 1000 bp
-        >>> stats = filter_trf_by_size("all.trf", "1kb.trf", 1000)
+        >>> stats = filter_trf_by_size("all.sat", "1kb.sat", 1000)
         >>> print(f"Filtered {stats['filtered']} of {stats['total']} entries")
     """
     total_count = 0

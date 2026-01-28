@@ -19,7 +19,7 @@ def make_fasta(file_path, path):
     file_names = read_file(file_path)
     fasta_table = {}
     for file_name in file_names:
-        with open(f"{path}/{file_name}.1kb.trf") as file:
+        with open(f"{path}/{file_name}.1kb.sat") as file:
             line = file.readline()
             while True:
                 if not line:

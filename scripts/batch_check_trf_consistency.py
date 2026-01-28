@@ -60,7 +60,7 @@ def find_genome_assemblies(base_dir, include_missing=False):
         
         # Expected file paths
         fasta_file = os.path.join(assembly_dir, f"{assembly_name}_genomic.fna")
-        trf_file = os.path.join(assembly_dir, "trf", f"{assembly_name}_genomic.trf")
+        trf_file = os.path.join(assembly_dir, "trf", f"{assembly_name}_genomic.sat")
         
         # Check if both files exist
         if os.path.exists(fasta_file) and os.path.exists(trf_file):

@@ -58,10 +58,10 @@ Example:
     ... )
     >>>
     >>> # Filter large repeats (>10kb)
-    >>> trf_filter_by_array_length("genome.trf", "large.trf", cutoff=10000)
+    >>> trf_filter_by_array_length("genome.sat", "large.sat", cutoff=10000)
     >>>
     >>> # Count repeats per chromosome
-    >>> count_trs_per_chrs("genome.trf")
+    >>> count_trs_per_chrs("genome.sat")
 
 See Also:
     satellome.core_functions.io.trf_file: TRF file parsing and I/O
@@ -367,7 +367,7 @@ def trf_search_by_splitting(
 
     ### 2. Run TRF
     fasta_name = ".".join(fasta_file.split("/")[-1].split(".")[:-1])
-    output_file = os.path.join(wdir, fasta_name + ".trf")
+    output_file = os.path.join(wdir, fasta_name + ".sat")
 
     current_dir = os.getcwd()
 
@@ -454,7 +454,7 @@ def trf_search_by_splitting(
 
     def process_dat_file(dat_file):
         """Process a single .dat file."""
-        output_file_path = f"{dat_file}.trf"
+        output_file_path = f"{dat_file}.sat"
         cmd = [
             python_exe,
             parser_program,
@@ -488,7 +488,7 @@ def trf_search_by_splitting(
         fw.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
 
         for file_path in iter_filepath_folder(folder_path):
-            if file_path.endswith(".trf"):
+            if file_path.endswith(".sat"):
                 with open(file_path) as fh:
                     # If using smart splitting, restore original coordinates
                     if used_smart_splitting:
@@ -565,7 +565,7 @@ def trf_filter_by_array_length(trf_file, output_file, cutoff):
 
     Example:
         >>> # Keep only large repeats (>10kb)
-        >>> count = trf_filter_by_array_length("all.trf", "large.trf", 10000)
+        >>> count = trf_filter_by_array_length("all.sat", "large.sat", 10000)
         >>> print(f"Filtered {count} large repeats")
     """
     i = 0
@@ -828,7 +828,7 @@ def recompute_failed_chromosomes(
 
     # Step 5: Run TRF on missing scaffolds
     logger.info("\nRunning TRF on missing scaffolds...")
-    temp_trf_file = os.path.join(output_dir, f"{project}_missing_scaffolds.trf")
+    temp_trf_file = os.path.join(output_dir, f"{project}_missing_scaffolds.sat")
 
     try:
         # Use trf_search_by_splitting for the missing scaffolds

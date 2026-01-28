@@ -311,7 +311,7 @@ def build_settings(args, fasta_file, output_dir, project, threads, trf_path, gen
         "trf_draw_path": os.path.join(current_directory, "steps", "trf_draw.py"),
         "trf_parse_raw_path": os.path.join(current_directory, "steps", "trf_parse_raw.py"),
         "gff_file": args["gff"],
-        "trf_file": f"{trf_prefix}.trf",
+        "trf_file": f"{trf_prefix}.sat",
         "minimal_scaffold_length": int(args["minimal_scaffold_length"]),
         "drawing_enhancing": int(args["drawing_enhancing"]),
         "taxon_name": taxon_name,
@@ -330,7 +330,7 @@ def run_trf_search(settings, args, force_rerun):
     from satellome.core_functions.tools.trf_tools import recompute_failed_chromosomes
 
     trf_prefix = settings["trf_prefix"]
-    main_trf_file = f"{trf_prefix}.trf"
+    main_trf_file = f"{trf_prefix}.sat"
 
     # Check if recompute-failed mode is enabled
     if args.get("recompute_failed", False) and os.path.exists(main_trf_file) and os.path.getsize(main_trf_file) > 0:
@@ -404,7 +404,7 @@ def add_annotations(settings, force_rerun):
     """Add annotations from GFF and RepeatMasker files."""
     trf_file = settings["trf_file"]
     if settings["large_file_suffix"]:
-        trf_file = f"{settings['trf_prefix']}.{settings['large_file_suffix']}.trf"
+        trf_file = f"{settings['trf_prefix']}.{settings['large_file_suffix']}.sat"
 
     # Check if already annotated
     was_annotated = False
@@ -440,10 +440,10 @@ def run_trf_classification(settings, args, force_rerun):
 
     # Check if main classification files exist
     classification_files = [
-        f"{trf_prefix}.micro.trf",
-        f"{trf_prefix}.complex.trf",
-        f"{trf_prefix}.pmicro.trf",
-        f"{trf_prefix}.tssr.trf"
+        f"{trf_prefix}.micro.sat",
+        f"{trf_prefix}.complex.sat",
+        f"{trf_prefix}.pmicro.sat",
+        f"{trf_prefix}.tssr.sat"
     ]
 
     classification_complete = all(os.path.exists(f) for f in classification_files)
@@ -499,7 +499,7 @@ def run_trf_drawing(settings, force_rerun):
     # Build TRF file path with suffix
     trf_file = settings["trf_file"]
     if settings["large_file_suffix"]:
-        trf_file = f"{settings['trf_prefix']}.{settings['large_file_suffix']}.trf"
+        trf_file = f"{settings['trf_prefix']}.{settings['large_file_suffix']}.sat"
 
     # Add --force flag if force_rerun is True
     force_flag = " --force" if force_rerun else ""
@@ -541,7 +541,7 @@ def run_fastan(settings, force_rerun):
         genome_basename = os.path.splitext(genome_basename)[0]
     aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
     bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
-    trf_file = os.path.join(fastan_dir, f"{genome_basename}.trf")
+    trf_file = os.path.join(fastan_dir, f"{genome_basename}.sat")
     fasta_output = os.path.join(fastan_dir, f"{genome_basename}.fasta")
 
     # Check if already completed (all main output files exist)
@@ -560,9 +560,9 @@ def run_fastan(settings, force_rerun):
             logger.info(f"  Found files: {', '.join(existing_files)}")
             # Check for size-filtered files
             for suffix in ["1kb", "3kb", "10kb"]:
-                filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.trf")
+                filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
                 if os.path.exists(filtered_trf):
-                    logger.info(f"  Found filtered: {genome_basename}.{suffix}.trf")
+                    logger.info(f"  Found filtered: {genome_basename}.{suffix}.sat")
             logger.info("Use --force to rerun this step")
             return True
         elif existing_files:
@@ -687,7 +687,7 @@ def run_fastan(settings, force_rerun):
 
                 logger.info("Creating size-filtered TRF files...")
                 for cutoff, suffix in size_cutoffs:
-                    filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.trf")
+                    filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
                     filtered_fasta = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.fasta")
                     stats = filter_trf_by_size(trf_file, filtered_trf, cutoff, fasta_output_file=filtered_fasta)
                     logger.info(f"✓ {suffix}: {stats['filtered']} arrays > {cutoff} bp")
