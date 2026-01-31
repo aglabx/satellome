@@ -531,21 +531,35 @@ def run_fastan(settings, force_rerun):
     output_dir = settings["output_dir"]
     project = settings["project"]
 
-    # Create fastan output directory
+    # Create output directories
+    # fastan/ - intermediate files only (.1aln, .bed, ArraySplitter outputs)
+    # fasta/ - output FASTA files
+    # gff3/ - output GFF3 files
+    # images/ - visualizations
+    # reports/ - HTML reports
+    # *.sat files go at output_dir level
     fastan_dir = os.path.join(output_dir, "fastan")
-    if not os.path.exists(fastan_dir):
-        os.makedirs(fastan_dir)
-        logger.info(f"Created FasTAN output directory: {fastan_dir}")
+    fasta_dir = os.path.join(output_dir, "fasta")
+    gff3_dir = os.path.join(output_dir, "gff3")
+
+    for dir_path in [fastan_dir, fasta_dir, gff3_dir]:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+            logger.info(f"Created directory: {dir_path}")
 
     # Output files - use genome filename instead of project name
     genome_basename = os.path.splitext(os.path.basename(fasta_file))[0]
     # Remove .gz extension if present
     if genome_basename.endswith('.gz'):
         genome_basename = os.path.splitext(genome_basename)[0]
+
+    # Intermediate files in fastan/
     aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
     bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
-    trf_file = os.path.join(fastan_dir, f"{genome_basename}.sat")
-    fasta_output = os.path.join(fastan_dir, f"{genome_basename}.arrays.fasta")
+
+    # Output files at output_dir level or in dedicated subdirs
+    trf_file = os.path.join(output_dir, f"{genome_basename}.sat")
+    fasta_output = os.path.join(fasta_dir, f"{genome_basename}.arrays.fasta")
 
     # Check if already completed (all main output files exist)
     if not force_rerun:
@@ -559,14 +573,14 @@ def run_fastan(settings, force_rerun):
 
         if not missing_files:
             logger.info("FasTAN analysis already completed!")
-            logger.info(f"  Output directory: {fastan_dir}")
+            logger.info(f"  Output directory: {output_dir}")
             logger.info(f"  Found files: {', '.join(existing_files)}")
-            # Check for size-filtered files
+            # Check for size-filtered files (at output_dir level)
             for suffix in ["1kb", "3kb", "10kb"]:
-                filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
+                filtered_trf = os.path.join(output_dir, f"{genome_basename}.{suffix}.sat")
                 if os.path.exists(filtered_trf):
                     logger.info(f"  Found filtered: {genome_basename}.{suffix}.sat")
-            # Check for ArraySplitter output
+            # Check for ArraySplitter output (in fastan/ intermediate dir)
             hors_file = os.path.join(fastan_dir, f"{genome_basename}.hors.tsv")
             if os.path.exists(hors_file):
                 logger.info(f"  Found ArraySplitter: {genome_basename}.hors.tsv")
@@ -694,8 +708,9 @@ def run_fastan(settings, force_rerun):
 
                 logger.info("Creating size-filtered TRF files...")
                 for cutoff, suffix in size_cutoffs:
-                    filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
-                    filtered_fasta = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.arrays.fasta")
+                    # .sat files at output_dir level, .fasta files in fasta/ subdir
+                    filtered_trf = os.path.join(output_dir, f"{genome_basename}.{suffix}.sat")
+                    filtered_fasta = os.path.join(fasta_dir, f"{genome_basename}.{suffix}.arrays.fasta")
                     stats = filter_trf_by_size(trf_file, filtered_trf, cutoff, fasta_output_file=filtered_fasta)
                     logger.info(f"✓ {suffix}: {stats['filtered']} arrays > {cutoff} bp")
 
@@ -971,22 +986,21 @@ def main():
     # Check for existing FasTAN output when --nofastan is used
     use_existing_fastan = False
     if not run_trf and skip_fastan:
-        # Check if FasTAN output already exists
-        fastan_dir = os.path.join(output_dir, "fastan")
+        # Check if FasTAN output already exists (now at output_dir level)
         genome_basename = os.path.splitext(os.path.basename(fasta_file))[0]
         if genome_basename.endswith('.gz'):
             genome_basename = os.path.splitext(genome_basename)[0]
-        existing_sat_file = os.path.join(fastan_dir, f"{genome_basename}.sat")
+        existing_sat_file = os.path.join(output_dir, f"{genome_basename}.sat")
 
         if os.path.exists(existing_sat_file) and os.path.getsize(existing_sat_file) > 0:
             logger.info(f"Found existing FasTAN output: {existing_sat_file}")
             logger.info("Running downstream steps only (classification, drawing, report)")
             use_existing_fastan = True
-            # Set up settings for existing output
-            settings["trf_prefix"] = os.path.join(fastan_dir, genome_basename)
+            # Set up settings for existing output - all at output_dir level
+            settings["trf_prefix"] = os.path.join(output_dir, genome_basename)
             settings["trf_file"] = existing_sat_file
-            settings["output_image_dir"] = os.path.join(fastan_dir, "images")
-            settings["distance_file"] = os.path.join(fastan_dir, "distances.tsv")
+            settings["output_image_dir"] = os.path.join(output_dir, "images")
+            settings["distance_file"] = os.path.join(output_dir, "distances.tsv")
             if not os.path.exists(settings["output_image_dir"]):
                 os.makedirs(settings["output_image_dir"])
         else:
@@ -1029,14 +1043,14 @@ def main():
             sys.exit(1)
 
         # Update settings to use FasTAN output for downstream steps
-        fastan_dir = os.path.join(settings["output_dir"], "fastan")
+        # Output files are now at output_dir level, not in fastan/
         genome_basename = os.path.splitext(os.path.basename(settings["fasta_file"]))[0]
         if genome_basename.endswith('.gz'):
             genome_basename = os.path.splitext(genome_basename)[0]
-        settings["trf_prefix"] = os.path.join(fastan_dir, genome_basename)
+        settings["trf_prefix"] = os.path.join(settings["output_dir"], genome_basename)
         settings["trf_file"] = f"{settings['trf_prefix']}.sat"
-        settings["output_image_dir"] = os.path.join(fastan_dir, "images")
-        settings["distance_file"] = os.path.join(fastan_dir, "distances.tsv")
+        settings["output_image_dir"] = os.path.join(settings["output_dir"], "images")
+        settings["distance_file"] = os.path.join(settings["output_dir"], "distances.tsv")
         # Create images directory if needed
         if not os.path.exists(settings["output_image_dir"]):
             os.makedirs(settings["output_image_dir"])
