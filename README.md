@@ -236,7 +236,7 @@ pytest tests/unit/ -v
 If you use Satellome in your research, please cite:
 
 ```
-Komissarov A. et al. (2024). Satellome: A comprehensive tool for satellite DNA
+Komissarov A. et al. (2026). Satellome: A comprehensive tool for satellite DNA
 analysis in T2T genome assemblies. [Publication details]
 ```
 
