@@ -363,6 +363,9 @@ def sc_iter_tab_file(
             if skip_starts_with:
                 if data[fields[0]].startswith(skip_starts_with):
                     continue
+            # Skip header row if present (first field value equals first field name)
+            if data[fields[0]] == fields[0]:
+                continue
             obj = data_type()
             obj.set_with_dict(data)
             yield obj
