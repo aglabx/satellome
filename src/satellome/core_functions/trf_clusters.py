@@ -1174,9 +1174,8 @@ def draw_all(
     if len(df_trs) > SAMPLE_SIZE_FOR_CLUSTERING:
         logger.warning("Too many TRs")
         logger.info("Filtering them...")
-        df_trs = df_trs.sort_values(
-            by="length", axis=0, ascending=False, ignore_index=True
-        )[:2000]
+        # Sort by length descending and take top 2000
+        df_trs = sorted(df_trs, key=lambda x: float(x.get("length", 0)), reverse=True)[:2000]
         logger.info(f"Updated quantity of TRs: 2000")
 
     if not os.path.isdir(output_folder):

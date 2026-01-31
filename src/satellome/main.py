@@ -968,11 +968,32 @@ def main():
     if args.get("notrf", False):
         logger.warning("--notrf flag is deprecated. TRF is now disabled by default. Use --run-trf to enable TRF.")
 
-    # Validate that at least one tool will run
+    # Check for existing FasTAN output when --nofastan is used
+    use_existing_fastan = False
     if not run_trf and skip_fastan:
-        logger.error("Cannot skip FasTAN when TRF is not enabled. At least one tool must run.")
-        logger.error("Either remove --nofastan flag or add --run-trf flag.")
-        sys.exit(1)
+        # Check if FasTAN output already exists
+        fastan_dir = os.path.join(output_dir, "fastan")
+        genome_basename = os.path.splitext(os.path.basename(fasta_file))[0]
+        if genome_basename.endswith('.gz'):
+            genome_basename = os.path.splitext(genome_basename)[0]
+        existing_sat_file = os.path.join(fastan_dir, f"{genome_basename}.sat")
+
+        if os.path.exists(existing_sat_file) and os.path.getsize(existing_sat_file) > 0:
+            logger.info(f"Found existing FasTAN output: {existing_sat_file}")
+            logger.info("Running downstream steps only (classification, drawing, report)")
+            use_existing_fastan = True
+            # Set up settings for existing output
+            settings["trf_prefix"] = os.path.join(fastan_dir, genome_basename)
+            settings["trf_file"] = existing_sat_file
+            settings["output_image_dir"] = os.path.join(fastan_dir, "images")
+            settings["distance_file"] = os.path.join(fastan_dir, "distances.tsv")
+            if not os.path.exists(settings["output_image_dir"]):
+                os.makedirs(settings["output_image_dir"])
+        else:
+            logger.error("Cannot skip FasTAN when TRF is not enabled and no existing FasTAN output found.")
+            logger.error(f"Expected file: {existing_sat_file}")
+            logger.error("Either remove --nofastan flag or add --run-trf flag.")
+            sys.exit(1)
 
     # Step 1: TRF Search (only if --trf flag is set)
     trf_search_result = None
@@ -1025,8 +1046,8 @@ def main():
         logger.info("STEP 1b: FASTAN ANALYSIS - SKIPPED (--nofastan flag)")
         logger.info(SEPARATOR_LINE)
 
-    # Remaining steps run if TRF was executed OR FasTAN was successful
-    if run_trf or fastan_success:
+    # Remaining steps run if TRF was executed OR FasTAN was successful OR using existing FasTAN output
+    if run_trf or fastan_success or use_existing_fastan:
         # Step 2: Add annotations (only if GFF provided)
         if settings.get("gff_file") or settings.get("repeatmasker_file"):
             logger.info(SEPARATOR_LINE)

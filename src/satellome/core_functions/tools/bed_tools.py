@@ -334,10 +334,12 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     out_fh.write(f"# FasTAN results converted to TRF format\n")
     out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
     out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
-    out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
-    out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
-    out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
     out_fh.write(f"# Note: pmatch, pvar, entropy are calculated from sequence data\n")
+    # Write actual header row for DictReader
+    header_fields = ["project", "trf_id", "trf_head", "trf_l_ind", "trf_r_ind", "trf_period", "trf_n_copy",
+                     "trf_pmatch", "trf_pvar", "trf_entropy", "trf_consensus", "trf_array",
+                     "trf_array_gc", "trf_consensus_gc", "trf_array_length", "trf_joined", "trf_family", "trf_ref_annotation"]
+    out_fh.write("\t".join(header_fields) + "\n")
 
     try:
         logger.info("Processing FASTA file...")

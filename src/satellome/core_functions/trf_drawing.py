@@ -9,6 +9,7 @@ import logging
 import math
 import re
 import csv
+import sys
 
 from tqdm import tqdm
 
@@ -166,10 +167,27 @@ def read_trf_file(trf_file):
     Returns:
         list of dicts, each representing one TRF record
     """
+    # Increase CSV field size limit for large satellite arrays (can be several megabases)
+    csv.field_size_limit(sys.maxsize)
+
+    # Define expected field names for backward compatibility with files without header
+    TRF_FIELDNAMES = ["project", "trf_id", "trf_head", "trf_l_ind", "trf_r_ind", "trf_period", "trf_n_copy",
+                      "trf_pmatch", "trf_pvar", "trf_entropy", "trf_consensus", "trf_array",
+                      "trf_array_gc", "trf_consensus_gc", "trf_array_length", "trf_joined", "trf_family", "trf_ref_annotation"]
+
     data = []
 
     with open(trf_file, 'r') as f:
-        reader = csv.DictReader(f, delimiter='\t')
+        # Filter out comment lines starting with '#'
+        lines = list(line for line in f if not line.startswith('#'))
+
+        # Check if first line is a header row
+        if lines and lines[0].strip().startswith("project"):
+            # File has header row, use standard DictReader
+            reader = csv.DictReader(iter(lines), delimiter='\t')
+        else:
+            # File has no header row, provide field names
+            reader = csv.DictReader(iter(lines), fieldnames=TRF_FIELDNAMES, delimiter='\t')
 
         for row in reader:
             # Create computed fields
@@ -189,9 +207,9 @@ def read_trf_file(trf_file):
             record["mono*3"] = record["mono"] * 3 if record.get("mono") else None
 
             # Pattern matching
-            array_val = record.get("array", "")
-            record["centromere"] = 1 if CENPB_REGEXP.findall(array_val) else 0
-            record["telomere"] = 1 if TELOMERE_REGEXP.findall(array_val) else 0
+            array_val = record.get("array") or ""
+            record["centromere"] = 1 if array_val and CENPB_REGEXP.findall(array_val) else 0
+            record["telomere"] = 1 if array_val and TELOMERE_REGEXP.findall(array_val) else 0
 
             # Computed fields that need other fields first
             record["final_id"] = f"{record['scaffold']}_{record.get('id', '')}"

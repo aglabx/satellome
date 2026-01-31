@@ -1,4 +1,3 @@
-import re
 import sys
 import os
 
@@ -16,13 +15,14 @@ except ImportError:
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+# Read version from pyproject.toml (single source of truth)
 version = None
-for line in open("./src/satellome/__init__.py"):
-    m = re.search("__version__\s*=\s*(.*)", line)
-    if m:
-        version = m.group(1).strip()[1:-1]  # quotes
-        break
-assert version
+with open("pyproject.toml", "r") as f:
+    for line in f:
+        if line.strip().startswith("version"):
+            version = line.split("=")[1].strip().strip('"')
+            break
+assert version, "Could not read version from pyproject.toml"
 
 setup(
     name="satellome",
