@@ -133,9 +133,9 @@ chr2\t0\t5\t2\t100
         assert count == 4  # 4 valid BED entries
         assert output_file.exists()
 
-        # Check output content (filter out header comments starting with #)
+        # Check output content (filter out comments starting with # and header row starting with 'project')
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        data_lines = [l for l in lines if l and not l.startswith('#') and not l.startswith('project')]
 
         assert len(data_lines) == 4
 
@@ -150,7 +150,7 @@ chr2\t0\t5\t2\t100
         assert fields[self.IDX_TRF_ARRAY_LENGTH] == "10"
         assert fields[self.IDX_TRF_ARRAY] == "ATCGATCGAT"
         assert fields[self.IDX_TRF_CONSENSUS] == "ATCGA"  # First 5 chars (period=5)
-        assert fields[self.IDX_TRF_PMATCH] == "-1"  # Not available from FasTAN
+        assert fields[self.IDX_TRF_PMATCH] == "50"  # Calculated from sequence (ATCGATCGAT with period 5)
 
         # Second entry: chr1 10-20 should extract "CGATCGATCG"
         fields = data_lines[1].split('\t')
@@ -165,7 +165,7 @@ chr2\t0\t5\t2\t100
         assert count == 2
 
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        data_lines = [l for l in lines if l and not l.startswith('#') and not l.startswith('project')]
 
         # First entry: chr2 0-10 on minus strand
         # Original: "GGGGGGGGGG"
@@ -238,7 +238,7 @@ chr2\t0\t5
         count = extract_sequences_from_bed(test_fasta, test_bed_simple, str(output_file))
 
         lines = output_file.read_text().strip().split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        data_lines = [l for l in lines if l and not l.startswith('#') and not l.startswith('project')]
 
         # All sequences should be uppercase
         for line in data_lines:
@@ -271,7 +271,7 @@ ATCGATCGATCGATCGATCGATCGATCGATCG
 
         # Use rstrip('\n') instead of strip() to preserve trailing tabs (empty fields)
         lines = output_file.read_text().rstrip('\n').split('\n')
-        data_lines = [l for l in lines if l and not l.startswith('#')]
+        data_lines = [l for l in lines if l and not l.startswith('#') and not l.startswith('project')]
 
         assert len(data_lines) == 1
         fields = data_lines[0].split('\t')
