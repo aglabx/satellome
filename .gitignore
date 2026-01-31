@@ -142,3 +142,9 @@ AGENTS.md
 # External tool binaries (auto-installed)
 src/satellome/bin/
 PYPI_PUBLISH_INSTRUCTIONS.md
+
+# Large genomic files
+*.fna
+*.fasta
+*.fa
+*.gz

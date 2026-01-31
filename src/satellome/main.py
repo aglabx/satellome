@@ -437,6 +437,8 @@ def add_annotations(settings, force_rerun):
 def run_trf_classification(settings, args, force_rerun):
     """Run TRF classification step."""
     trf_prefix = settings["trf_prefix"]
+    # Use directory containing trf_prefix for output
+    classify_output_dir = os.path.dirname(trf_prefix)
 
     # Check if main classification files exist
     classification_files = [
@@ -449,16 +451,16 @@ def run_trf_classification(settings, args, force_rerun):
     classification_complete = all(os.path.exists(f) for f in classification_files)
 
     if classification_complete and not force_rerun:
-        logger.info(f"TRF classification already completed! Found all classified files.")
+        logger.info(f"Classification already completed! Found all classified files.")
         logger.info("Use --force to rerun this step")
         return True
 
     if force_rerun and classification_complete:
-        logger.info("Force rerun: Running TRF classification...")
+        logger.info("Force rerun: Running classification...")
     else:
-        logger.info("Running TRF classification...")
+        logger.info("Running classification...")
 
-    command = f"{sys.executable} {settings['trf_classify_path']} -i {trf_prefix} -o {settings['output_dir']} -l {settings['genome_size']}"
+    command = f"{sys.executable} {settings['trf_classify_path']} -i {trf_prefix} -o {classify_output_dir} -l {settings['genome_size']}"
     if args["keep_trf"]:
         command += " --keep-trf"
 
@@ -466,35 +468,36 @@ def run_trf_classification(settings, args, force_rerun):
     completed_process = subprocess.run(command, shell=True)
 
     if completed_process.returncode == 0:
-        logger.info("trf_classify.py executed successfully!")
+        logger.info("Classification completed successfully!")
         return True
     else:
-        logger.error(f"trf_classify.py failed with return code {completed_process.returncode}")
+        logger.error(f"Classification failed with return code {completed_process.returncode}")
         sys.exit(1)
 
 
 def run_trf_drawing(settings, force_rerun):
     """Run TRF drawing and report generation step."""
-    output_dir = settings["output_dir"]
+    # Use directory containing trf_prefix for checking outputs
+    drawing_output_dir = os.path.dirname(settings["trf_prefix"])
     html_report_file = settings["html_report_file"]
 
     # Check for distance file with any extension
     distance_files_exist = any(
-        f.startswith("distances.tsv") for f in os.listdir(output_dir)
-        if os.path.isfile(os.path.join(output_dir, f))
-    ) if os.path.exists(output_dir) else False
+        f.startswith("distances.tsv") for f in os.listdir(drawing_output_dir)
+        if os.path.isfile(os.path.join(drawing_output_dir, f))
+    ) if os.path.exists(drawing_output_dir) else False
 
     html_report_exists = os.path.exists(html_report_file)
 
     if distance_files_exist and html_report_exists and not force_rerun:
-        logger.info(f"TRF drawing and HTML report already completed!")
+        logger.info(f"Drawing and HTML report already completed!")
         logger.info("Use --force to rerun this step")
         return True
 
     if force_rerun and distance_files_exist:
-        logger.info("Force rerun: Running TRF drawing...")
+        logger.info("Force rerun: Running drawing...")
     else:
-        logger.info("Running TRF drawing...")
+        logger.info("Running drawing...")
 
     # Build TRF file path with suffix
     trf_file = settings["trf_file"]
@@ -542,7 +545,7 @@ def run_fastan(settings, force_rerun):
     aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
     bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
     trf_file = os.path.join(fastan_dir, f"{genome_basename}.sat")
-    fasta_output = os.path.join(fastan_dir, f"{genome_basename}.fasta")
+    fasta_output = os.path.join(fastan_dir, f"{genome_basename}.arrays.fasta")
 
     # Check if already completed (all main output files exist)
     if not force_rerun:
@@ -645,13 +648,13 @@ def run_fastan(settings, force_rerun):
     logger.debug(f"Command: {fastan_command}")
 
     try:
-        fastan_process = subprocess.run(fastan_command, shell=True, capture_output=True, text=True)
+        # Don't capture output so progress is visible
+        fastan_process = subprocess.run(fastan_command, shell=True)
 
         if fastan_process.returncode == 0:
             logger.info("FasTAN executed successfully!")
         else:
             logger.error(f"FasTAN failed with return code {fastan_process.returncode}")
-            logger.error(f"Error: {fastan_process.stderr}")
             return False
     except Exception as e:
         logger.error(f"FasTAN execution failed: {e}")
@@ -692,7 +695,7 @@ def run_fastan(settings, force_rerun):
                 logger.info("Creating size-filtered TRF files...")
                 for cutoff, suffix in size_cutoffs:
                     filtered_trf = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.sat")
-                    filtered_fasta = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.fasta")
+                    filtered_fasta = os.path.join(fastan_dir, f"{genome_basename}.{suffix}.arrays.fasta")
                     stats = filter_trf_by_size(trf_file, filtered_trf, cutoff, fasta_output_file=filtered_fasta)
                     logger.info(f"✓ {suffix}: {stats['filtered']} arrays > {cutoff} bp")
 
@@ -776,15 +779,14 @@ def run_arraysplitter(fasta_file, output_prefix, threads, force_rerun=False):
     logger.debug(f"Command: {command}")
 
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=3600)
+        # Don't capture output so progress bars are visible
+        result = subprocess.run(command, shell=True, timeout=3600)
 
         if result.returncode == 0:
             logger.info(f"✓ ArraySplitter completed: {output_prefix}")
             return True
         else:
             logger.error(f"ArraySplitter failed with return code {result.returncode}")
-            if result.stderr:
-                logger.error(f"Error: {result.stderr}")
             return False
     except subprocess.TimeoutExpired:
         logger.error("ArraySplitter timed out (1 hour limit)")
@@ -990,33 +992,61 @@ def main():
         logger.info(SEPARATOR_LINE)
 
     # Step 1b: FasTAN Analysis (unless --nofastan)
+    fastan_success = False
     if not skip_fastan:
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1b: FASTAN ANALYSIS")
         logger.info(SEPARATOR_LINE)
-        run_fastan(settings, force_downstream)
+        fastan_success = run_fastan(settings, force_downstream)
+        if not fastan_success:
+            logger.error("FasTAN analysis failed!")
+            logger.error("Please check the error messages above.")
+            logger.error("You can try:")
+            logger.error("  1. Remove existing binaries: rm -rf ~/.satellome/bin/fastan ~/.satellome/bin/tanbed")
+            logger.error("  2. Reinstall: satellome --install-fastan --install-tanbed")
+            logger.error("  3. Run again")
+            sys.exit(1)
+
+        # Update settings to use FasTAN output for downstream steps
+        fastan_dir = os.path.join(settings["output_dir"], "fastan")
+        genome_basename = os.path.splitext(os.path.basename(settings["fasta_file"]))[0]
+        if genome_basename.endswith('.gz'):
+            genome_basename = os.path.splitext(genome_basename)[0]
+        settings["trf_prefix"] = os.path.join(fastan_dir, genome_basename)
+        settings["trf_file"] = f"{settings['trf_prefix']}.sat"
+        settings["output_image_dir"] = os.path.join(fastan_dir, "images")
+        settings["distance_file"] = os.path.join(fastan_dir, "distances.tsv")
+        # Create images directory if needed
+        if not os.path.exists(settings["output_image_dir"]):
+            os.makedirs(settings["output_image_dir"])
+        logger.info(f"Using FasTAN output for downstream analysis: {settings['trf_prefix']}")
     else:
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1b: FASTAN ANALYSIS - SKIPPED (--nofastan flag)")
         logger.info(SEPARATOR_LINE)
 
-    # Remaining steps only run if TRF was executed
-    if run_trf:
-        # Step 2: Add annotations
-        logger.info(SEPARATOR_LINE)
-        logger.info("STEP 2: ADD ANNOTATIONS")
-        logger.info(SEPARATOR_LINE)
-        add_annotations(settings, force_downstream)
+    # Remaining steps run if TRF was executed OR FasTAN was successful
+    if run_trf or fastan_success:
+        # Step 2: Add annotations (only if GFF provided)
+        if settings.get("gff_file") or settings.get("repeatmasker_file"):
+            logger.info(SEPARATOR_LINE)
+            logger.info("STEP 2: ADD ANNOTATIONS")
+            logger.info(SEPARATOR_LINE)
+            add_annotations(settings, force_downstream)
+        else:
+            logger.info(SEPARATOR_LINE)
+            logger.info("STEP 2: ADD ANNOTATIONS - SKIPPED (no GFF/RM files provided)")
+            logger.info(SEPARATOR_LINE)
 
-        # Step 3: TRF Classification
+        # Step 3: Classification
         logger.info(SEPARATOR_LINE)
-        logger.info("STEP 3: TRF CLASSIFICATION")
+        logger.info("STEP 3: CLASSIFICATION")
         logger.info(SEPARATOR_LINE)
         run_trf_classification(settings, args, force_downstream)
 
-        # Step 4: TRF Drawing and HTML report
+        # Step 4: Drawing and HTML report
         logger.info(SEPARATOR_LINE)
-        logger.info("STEP 4: TRF DRAWING AND REPORT")
+        logger.info("STEP 4: DRAWING AND REPORT")
         logger.info(SEPARATOR_LINE)
         run_trf_drawing(settings, force_downstream)
 

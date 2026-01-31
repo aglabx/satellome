@@ -93,6 +93,106 @@ def reverse_complement(seq):
     return ''.join(complement.get(base, 'N') for base in reversed(seq))
 
 
+def calculate_pmatch(array_seq, period):
+    """
+    Calculate percent match (pmatch) for a tandem repeat array.
+
+    Compares each period-length unit to the consensus (first unit) and
+    calculates the average percent identity across all units.
+
+    Args:
+        array_seq (str): The full array sequence
+        period (int): Length of the repeat unit (monomer)
+
+    Returns:
+        int: Percent match (0-100), rounded to nearest integer
+
+    Examples:
+        >>> calculate_pmatch("ATGATGATG", 3)  # Perfect repeats
+        100
+        >>> calculate_pmatch("ATGATCATG", 3)  # One mismatch in middle
+        89
+    """
+    if period <= 0 or len(array_seq) < period:
+        return 0
+
+    array_seq = array_seq.upper()
+    consensus = array_seq[:period]
+
+    total_matches = 0
+    total_bases = 0
+
+    # Compare each repeat unit to consensus
+    for i in range(0, len(array_seq) - period + 1, period):
+        unit = array_seq[i:i + period]
+        if len(unit) == period:
+            matches = sum(1 for a, b in zip(consensus, unit) if a == b)
+            total_matches += matches
+            total_bases += period
+
+    # Handle partial last unit
+    remaining = len(array_seq) % period
+    if remaining > 0:
+        partial_unit = array_seq[-remaining:]
+        partial_consensus = consensus[:remaining]
+        matches = sum(1 for a, b in zip(partial_consensus, partial_unit) if a == b)
+        total_matches += matches
+        total_bases += remaining
+
+    if total_bases == 0:
+        return 0
+
+    return round(100 * total_matches / total_bases)
+
+
+def calculate_entropy(sequence):
+    """
+    Calculate Shannon entropy of a DNA sequence based on nucleotide composition.
+
+    This is the same entropy measure used by TRF (Tandem Repeat Finder).
+    Higher entropy means more complex sequence composition.
+
+    Args:
+        sequence (str): DNA sequence
+
+    Returns:
+        float: Entropy value (0 to ~2.0), rounded to 2 decimal places
+
+    Examples:
+        >>> calculate_entropy("AAAA")  # Low entropy - single nucleotide
+        0.0
+        >>> calculate_entropy("ATCG")  # High entropy - equal distribution
+        2.0
+    """
+    import math
+
+    if not sequence:
+        return 0.0
+
+    sequence = sequence.upper()
+    length = len(sequence)
+
+    if length == 0:
+        return 0.0
+
+    # Count nucleotide frequencies
+    counts = {
+        'A': sequence.count('A'),
+        'C': sequence.count('C'),
+        'G': sequence.count('G'),
+        'T': sequence.count('T')
+    }
+
+    # Calculate entropy: -sum(p * log2(p)) for each nucleotide
+    entropy = 0.0
+    for count in counts.values():
+        if count > 0:
+            p = count / length
+            entropy -= p * math.log2(p)
+
+    return round(entropy, 2)
+
+
 def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_file=None, project="FasTAN"):
     """
     Extract sequences from FASTA based on BED coordinates and output TRF-compatible format.
@@ -237,7 +337,7 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
     out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
     out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
-    out_fh.write(f"# Note: trf_pmatch, trf_pvar, trf_entropy are -1 (not available from FasTAN)\n")
+    out_fh.write(f"# Note: pmatch, pvar, entropy are calculated from sequence data\n")
 
     try:
         logger.info("Processing FASTA file...")
@@ -299,11 +399,14 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
                 trf_consensus = extracted_seq[:period] if period <= len(extracted_seq) else extracted_seq
                 trf_array_gc = round(get_gc_content(extracted_seq), 2)
                 trf_consensus_gc = round(get_gc_content(trf_consensus), 2)
+                # Calculate pmatch from array and period
+                trf_pmatch = calculate_pmatch(extracted_seq, period)
+                # Calculate pvar as 100 - pmatch
+                trf_pvar = 100 - trf_pmatch
+                # Calculate entropy from sequence composition
+                trf_entropy = calculate_entropy(extracted_seq)
 
                 # TRF format: 18 tab-separated fields
-                # project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,
-                # trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,
-                # trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation
                 trf_fields = [
                     project,                    # project
                     str(trf_id_counter),        # trf_id
@@ -312,15 +415,15 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
                     str(end),                   # trf_r_ind
                     str(period),                # trf_period
                     str(trf_n_copy),            # trf_n_copy
-                    "-1",                       # trf_pmatch (not available from FasTAN)
-                    "-1",                       # trf_pvar (not available from FasTAN)
-                    "-1",                       # trf_entropy (not available from FasTAN)
+                    str(trf_pmatch),            # trf_pmatch (calculated from array/period)
+                    str(trf_pvar),              # trf_pvar (100 - pmatch)
+                    str(trf_entropy),           # trf_entropy (calculated from composition)
                     trf_consensus,              # trf_consensus
                     extracted_seq,              # trf_array
                     str(trf_array_gc),          # trf_array_gc
                     str(trf_consensus_gc),      # trf_consensus_gc
                     str(trf_array_length),      # trf_array_length
-                    "",                         # trf_joined
+                    "0",                        # trf_joined (0 = not joined)
                     "",                         # trf_family
                     "",                         # trf_ref_annotation
                 ]
