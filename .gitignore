@@ -148,3 +148,6 @@ PYPI_PUBLISH_INSTRUCTIONS.md
 *.fasta
 *.fa
 *.gz
+
+# Local pipeline visualization
+pipeline_overview.html
