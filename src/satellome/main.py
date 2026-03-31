@@ -81,7 +81,7 @@ def parse_arguments():
 
     parser.add_argument("-i", "--input", help="Input fasta file", required=False)
     parser.add_argument("-o", "--output", help="Output folder (must be an absolute path, e.g., /home/user/output)", required=False)
-    parser.add_argument("-p", "--project", help="Project", required=False)
+    parser.add_argument("-p", "--project", help="Project name [default: derived from input filename]", required=False)
     parser.add_argument("-t", "--threads", help="Threads", required=False)
     parser.add_argument(
         "--trf", help="Path to TRF binary (default: trf in PATH)", required=False, default="trf"
@@ -913,12 +913,23 @@ def main():
         sys.exit(0)
 
     # Validate required arguments for pipeline mode
-    required_args = ["input", "output", "project", "threads"]
+    required_args = ["input", "output", "threads"]
     missing_args = [arg for arg in required_args if not args.get(arg)]
     if missing_args:
         logger.error(f"Missing required arguments: {', '.join(missing_args)}")
         logger.error("Use --help to see all required arguments")
         sys.exit(1)
+
+    # Default project name from input filename if not provided
+    if not args.get("project"):
+        input_basename = os.path.basename(args["input"])
+        # Strip extensions like .fasta, .fa, .fna, .gz
+        project_name = input_basename
+        for ext in [".gz", ".fasta", ".fna", ".fa"]:
+            if project_name.endswith(ext):
+                project_name = project_name[:-len(ext)]
+        args["project"] = project_name
+        logger.info(f"No project name specified, using: {project_name}")
 
     print_logo()
 
