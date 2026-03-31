@@ -1004,11 +1004,15 @@ def main():
                 logger.info(f"Taxon name: {taxon_name}")
     taxon_name = taxon_name.replace(" ", "_")
 
-    # Calculate genome size if needed
+    # Start genome size computation in background thread (runs in parallel with FasTAN)
+    genome_size_future = None
     if not genome_size:
-        genome_size = get_genome_size_with_progress(fasta_file)
+        from concurrent.futures import ThreadPoolExecutor
+        _genome_size_executor = ThreadPoolExecutor(max_workers=1)
+        genome_size_future = _genome_size_executor.submit(get_genome_size_with_progress, fasta_file)
+        logger.info("Genome size computation started in background...")
 
-    # Build settings
+    # Build settings with genome_size=0 initially (updated later)
     settings = build_settings(
         args, fasta_file, output_dir, project, threads, trf_path,
         genome_size, taxon_name, taxid, html_report_file, output_image_dir
@@ -1101,6 +1105,13 @@ def main():
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1b: FASTAN ANALYSIS - SKIPPED (--nofastan flag)")
         logger.info(SEPARATOR_LINE)
+
+    # Collect genome size from background computation before downstream steps
+    if genome_size_future is not None:
+        logger.info("Waiting for genome size computation...")
+        genome_size = genome_size_future.result()
+        settings["genome_size"] = genome_size
+        logger.info(f"Genome size: {genome_size:,} bp")
 
     # Remaining steps run if TRF was executed OR FasTAN was successful OR using existing FasTAN output
     if run_trf or fastan_success or use_existing_fastan:
