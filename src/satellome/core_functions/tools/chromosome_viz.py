@@ -167,10 +167,10 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
         density = []
         for b in chr_bins:
             density.append([
-                round(min(b.get("micro", 0) / BIN_SIZE, 1.0), 3),
-                round(min(b.get("mini", 0) / BIN_SIZE, 1.0), 3),
-                round(min(b.get("satellite", 0) / BIN_SIZE, 1.0), 3),
-                round(min(b.get("macro", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("lt1kb", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("1-10kb", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("10-100kb", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("gt100kb", 0) / BIN_SIZE, 1.0), 3),
             ])
 
         chrom_data.append({
