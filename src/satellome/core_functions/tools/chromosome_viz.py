@@ -701,7 +701,9 @@ function showChromosome(idx){{
     var isFirst=(row===0);
     var isLast=(row===numRows-1);
 
-    html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px">';
+    // Last row: clip width to actual bins
+    var rowWidthPct=(endBin-startBin)/cols*100;
+    html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px;width:'+rowWidthPct+'%">';
 
     // Telomere caps on first/last row
     if(isFirst && LAYERS.telomere){{
