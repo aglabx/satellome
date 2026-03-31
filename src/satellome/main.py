@@ -514,7 +514,7 @@ def run_trf_drawing(settings, force_rerun):
     if completed_process.returncode == 0:
         logger.info("trf_draw.py executed successfully!")
         # Create HTML report only if drawing was successful
-        create_html_report(settings["output_image_dir"], html_report_file)
+        create_html_report(settings["output_image_dir"], html_report_file, taxon_name=settings.get("taxon_name"))
         return True
     else:
         logger.error(f"trf_draw.py failed with return code {completed_process.returncode}")

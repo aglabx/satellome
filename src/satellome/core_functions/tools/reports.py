@@ -5,44 +5,17 @@
 # @author: Aleksey Komissarov
 # @contact: ad3002@gmail.com
 """
-HTML report generation with embedded image support.
+HTML report generation with embedded image and interactive chart support.
 
 Provides utilities for creating self-contained HTML reports from visualization
-images. Converts image files (PNG, SVG) to Base64-encoded data URIs and embeds
-them directly in HTML, eliminating external file dependencies.
+images and Plotly interactive charts. Converts image files (PNG, SVG) to
+Base64-encoded data URIs and embeds them directly in HTML, eliminating
+external file dependencies. Plotly HTML charts are embedded as iframes.
 
 Functions:
     image_to_data_uri: Convert PNG image to Base64 data URI
     svg_to_data_uri: Convert SVG file to Base64 data URI
     create_html_report: Generate HTML report with embedded images from folder
-
-Key Features:
-    - Self-contained HTML output (no external image files needed)
-    - Base64 encoding for portable reports
-    - SVG and PNG image support
-    - Automatic folder scanning for visualization files
-    - Responsive HTML template with 60% width images
-
-Typical Use Case:
-    1. Generate visualization plots (SVG/PNG) in output folder
-    2. Call create_html_report() to bundle all images into single HTML
-    3. Share HTML file without worrying about missing image dependencies
-
-Example:
-    >>> # Generate report from visualization folder
-    >>> from satellome.core_functions.tools.reports import create_html_report
-    >>> create_html_report("output/plots/", "report.html")
-    INFO:satellome.core_functions.tools.reports:HTML file with embedded image created successfully!
-    INFO:satellome.core_functions.tools.reports:File: report.html
-    >>>
-    >>> # Convert single image to data URI
-    >>> from satellome.core_functions.tools.reports import svg_to_data_uri
-    >>> uri = svg_to_data_uri("plot.svg")
-    >>> print(uri[:50])  # First 50 chars
-    data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAw...
-
-See Also:
-    satellome.steps.trf_draw: Generates SVG visualizations for reports
 """
 
 import base64
@@ -52,143 +25,751 @@ import os
 logger = logging.getLogger(__name__)
 
 def image_to_data_uri(image_path):
-    """
-    Convert PNG image file to Base64-encoded data URI.
-
-    Reads binary image data and encodes as Base64 string with PNG MIME type.
-    Result can be embedded directly in HTML <img> src attribute.
-
-    Args:
-        image_path (str): Path to PNG image file to convert
-
-    Returns:
-        str: Data URI string in format "data:image/png;base64,{encoded_data}"
-
-    Example:
-        >>> uri = image_to_data_uri("plot.png")
-        >>> print(uri[:30])
-        data:image/png;base64,iVBORw...
-        >>>
-        >>> # Use in HTML
-        >>> html = f'<img src="{uri}" alt="Plot">'
-
-    Note:
-        - Assumes input is PNG format (hardcoded MIME type)
-        - For SVG files, use svg_to_data_uri() instead
-        - Result string can be large for high-resolution images
-        - Binary file read in 'rb' mode for correct Base64 encoding
-    """
+    """Convert PNG image file to Base64-encoded data URI."""
     with open(image_path, "rb") as image_file:
-        # Convert binary data to Base64 encoded string
         encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
         return f"data:image/png;base64,{encoded_string}"
 
 def svg_to_data_uri(svg_path):
-    """
-    Convert SVG vector graphics file to Base64-encoded data URI.
-
-    Reads binary SVG data and encodes as Base64 string with SVG MIME type.
-    Result can be embedded directly in HTML <img> src attribute while
-    preserving vector graphics quality.
-
-    Args:
-        svg_path (str): Path to SVG file to convert
-
-    Returns:
-        str: Data URI string in format "data:image/svg+xml;base64,{encoded_data}"
-
-    Example:
-        >>> uri = svg_to_data_uri("chromosome_plot.svg")
-        >>> print(uri[:35])
-        data:image/svg+xml;base64,PHN2Zy...
-        >>>
-        >>> # Use in HTML
-        >>> html = f'<img src="{uri}" alt="Chromosome plot" width="800">'
-
-    Note:
-        - Uses image/svg+xml MIME type (not image/svg)
-        - SVG remains scalable even after Base64 encoding
-        - Generally smaller file size than raster PNG for plots
-        - Binary file read in 'rb' mode for correct Base64 encoding
-        - Primary format for Satellome visualization outputs
-    """
+    """Convert SVG vector graphics file to Base64-encoded data URI."""
     with open(svg_path, "rb") as svg_file:
-        # Convert binary data to Base64 encoded string
         encoded_string = base64.b64encode(svg_file.read()).decode('utf-8')
         return f"data:image/svg+xml;base64,{encoded_string}"
 
-def create_html_report(image_folder, report_file):
-    """
-    Generate self-contained HTML report with embedded images from folder.
 
-    Scans folder for SVG visualization files, converts each to Base64 data URI,
-    and embeds all images in single HTML file. Creates portable report that
-    can be shared without external file dependencies.
+# Section definitions: (section_id, title, description, file_patterns)
+# Patterns are matched against filenames (without directory)
+REPORT_SECTIONS = [
+    (
+        "karyotypes",
+        "Chromosome Karyotypes",
+        "Genome-wide distribution of tandem repeat families across chromosomes. "
+        "Enhanced views amplify small arrays for visibility.",
+        [
+            ("karyo.raw.png", "All TR families"),
+            ("karyo.raw.enhanced.png", "All TR families (enhanced)"),
+            ("karyo.nosing.png", "Without singletons"),
+            ("karyo.nosing.enchanced.png", "Without singletons (enhanced)"),
+            ("karyo.sing.png", "Singletons only"),
+            ("karyo.sing.enchanced.png", "Singletons only (enhanced)"),
+        ]
+    ),
+    (
+        "gaps",
+        "Gap Analysis",
+        "Assembly gaps and their proximity to tandem repeat arrays. "
+        "Gap-adjacent repeats may indicate unresolved satellite regions.",
+        [
+            ("karyo.gaps.png", "Assembly gaps"),
+            ("karyo.gaps.1000bp.enhanced.png", "Gaps enhanced (1 kb window)"),
+            ("karyo.repeats.with.gaps.enhanced.png", "Repeats overlapping gaps"),
+            ("karyo.repeats.nogaps.enhanced.png", "Repeats without gaps"),
+        ]
+    ),
+    (
+        "scatter",
+        "Repeat Characteristics",
+        "Scatter plots showing relationships between GC content, period length, "
+        "and percent match across all detected tandem repeat arrays.",
+        [
+            ("spheres.3D.png", "3D scatter: GC vs Period vs Pmatch"),
+            ("spheres.3D.nosingl.png", "3D scatter (no singletons)"),
+            ("spheres.2D.gc_period.png", "GC content vs Period"),
+            ("spheres.2D.gc_pmatch.png", "GC content vs Percent match"),
+            ("spheres.2D.period_period.png", "Period vs Percent match"),
+        ]
+    ),
+    (
+        "flow",
+        "Classification Flow",
+        "Sankey diagram showing how tandem repeats are classified into families "
+        "and the relative abundance of each category.",
+        [
+            ("trs_flow.png", "TR classification flow"),
+        ]
+    ),
+]
+
+
+def _find_files_for_section(image_folder, patterns):
+    """Find files matching section patterns. Returns list of (path, label) tuples."""
+    results = []
+    all_files = set(os.listdir(image_folder))
+
+    for pattern_suffix, label in patterns:
+        for fname in sorted(all_files):
+            if fname.endswith(pattern_suffix):
+                results.append((os.path.join(image_folder, fname), label, fname))
+                break
+    return results
+
+
+def _find_interactive_charts(image_folder):
+    """Find Plotly interactive HTML chart files."""
+    charts = []
+    if not os.path.isdir(image_folder):
+        return charts
+    for fname in sorted(os.listdir(image_folder)):
+        if fname.endswith('.html') and not fname.startswith('satellome_report'):
+            charts.append((os.path.join(image_folder, fname), fname))
+    return charts
+
+
+def _find_uncategorized_images(image_folder, categorized_files):
+    """Find image files not covered by any section."""
+    categorized = set(categorized_files)
+    uncategorized = []
+    for fname in sorted(os.listdir(image_folder)):
+        fpath = os.path.join(image_folder, fname)
+        if fname.endswith(('.png', '.svg')) and fpath not in categorized:
+            uncategorized.append((fpath, fname))
+    return uncategorized
+
+
+def _generate_report_html(sections_data, interactive_charts, uncategorized, taxon_name=None):
+    """Generate the full HTML report string."""
+
+    title = f"Satellome Report — {taxon_name}" if taxon_name else "Satellome Report"
+
+    # Build sections HTML
+    sections_html = ""
+    section_nav = ""
+    anim_delay = 0.1
+
+    for section_id, section_title, section_desc, items in sections_data:
+        if not items:
+            continue
+
+        section_nav += f'<a href="#{section_id}" class="nav-link">{section_title}</a>\n'
+
+        images_html = ""
+        for fpath, label, fname in items:
+            if fname.endswith('.svg'):
+                data_uri = svg_to_data_uri(fpath)
+            else:
+                data_uri = image_to_data_uri(fpath)
+
+            images_html += f'''
+            <div class="image-card" style="animation-delay: {anim_delay:.2f}s;">
+              <div class="image-label">{label}</div>
+              <img src="{data_uri}" alt="{label}" loading="lazy">
+            </div>
+'''
+            anim_delay += 0.05
+
+        sections_html += f'''
+    <section id="{section_id}" class="section" style="animation-delay: {anim_delay:.2f}s;">
+      <h2 class="section-title">{section_title}</h2>
+      <p class="section-desc">{section_desc}</p>
+      <div class="image-grid">
+        {images_html}
+      </div>
+    </section>
+'''
+        anim_delay += 0.1
+
+    # Interactive charts section
+    if interactive_charts:
+        section_nav += '<a href="#interactive" class="nav-link">Interactive Charts</a>\n'
+        charts_html = ""
+        for fpath, fname in interactive_charts:
+            chart_name = os.path.splitext(fname)[0]
+            # Clean up the name for display
+            display_name = chart_name.replace('.', ' ').replace('_', ' ').title()
+            with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+                chart_content = f.read()
+            encoded = base64.b64encode(chart_content.encode('utf-8')).decode('utf-8')
+            charts_html += f'''
+            <div class="chart-card" style="animation-delay: {anim_delay:.2f}s;">
+              <div class="chart-label">{display_name}</div>
+              <iframe srcdoc="" data-src="{encoded}" class="chart-iframe lazy-iframe" loading="lazy"></iframe>
+            </div>
+'''
+            anim_delay += 0.05
+
+        sections_html += f'''
+    <section id="interactive" class="section" style="animation-delay: {anim_delay:.2f}s;">
+      <h2 class="section-title">Interactive Charts</h2>
+      <p class="section-desc">Plotly interactive visualizations. Hover for details, drag to rotate 3D views, scroll to zoom.</p>
+      <div class="charts-grid">
+        {charts_html}
+      </div>
+    </section>
+'''
+        anim_delay += 0.1
+
+    # Uncategorized images
+    if uncategorized:
+        section_nav += '<a href="#other" class="nav-link">Other</a>\n'
+        other_html = ""
+        for fpath, fname in uncategorized:
+            if fname.endswith('.svg'):
+                data_uri = svg_to_data_uri(fpath)
+            else:
+                data_uri = image_to_data_uri(fpath)
+            display_name = os.path.splitext(fname)[0].replace('.', ' ').replace('_', ' ')
+            other_html += f'''
+            <div class="image-card" style="animation-delay: {anim_delay:.2f}s;">
+              <div class="image-label">{display_name}</div>
+              <img src="{data_uri}" alt="{display_name}" loading="lazy">
+            </div>
+'''
+            anim_delay += 0.05
+
+        sections_html += f'''
+    <section id="other" class="section" style="animation-delay: {anim_delay:.2f}s;">
+      <h2 class="section-title">Additional Visualizations</h2>
+      <div class="image-grid">
+        {other_html}
+      </div>
+    </section>
+'''
+
+    return f'''<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Playfair+Display:wght@400;700;900&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  /* === LIGHT THEME (default) === */
+  :root, [data-theme="light"] {{
+    --bg-deep: #f8f6f1;
+    --bg-card: #ffffff;
+    --bg-card-hover: #fafaf8;
+    --border-subtle: #e2ddd5;
+    --text-primary: #1a1a1a;
+    --text-secondary: #555555;
+    --text-muted: #888888;
+    --accent-cyan: #0891b2;
+    --accent-emerald: #059669;
+    --overlay-soft: rgba(0,0,0,0.02);
+    --overlay-medium: rgba(0,0,0,0.03);
+    --overlay-strong: rgba(0,0,0,0.04);
+    --shadow-card: rgba(0,0,0,0.08);
+    --grain-opacity: 0.015;
+    --title-start: #1a1a1a;
+    --smart-bg: rgba(8, 145, 178, 0.05);
+    --smart-border: rgba(8, 145, 178, 0.15);
+    --nav-bg: rgba(255,255,255,0.85);
+    --nav-border: rgba(0,0,0,0.06);
+  }}
+
+  /* === DARK THEME === */
+  [data-theme="dark"] {{
+    --bg-deep: #0a0e17;
+    --bg-card: #111827;
+    --bg-card-hover: #1a2332;
+    --border-subtle: #1e293b;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent-cyan: #22d3ee;
+    --accent-emerald: #34d399;
+    --overlay-soft: rgba(255,255,255,0.02);
+    --overlay-medium: rgba(255,255,255,0.03);
+    --overlay-strong: rgba(255,255,255,0.04);
+    --shadow-card: rgba(0,0,0,0.3);
+    --grain-opacity: 0.03;
+    --title-start: #e2e8f0;
+    --smart-bg: rgba(34, 211, 238, 0.04);
+    --smart-border: rgba(34, 211, 238, 0.12);
+    --nav-bg: rgba(17,24,39,0.9);
+    --nav-border: rgba(255,255,255,0.06);
+  }}
+
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+  body {{
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: 'Source Sans 3', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }}
+
+  /* === GRAIN OVERLAY === */
+  .grain {{
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    pointer-events: none;
+    z-index: 999;
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }}
+
+  /* === THEME TOGGLE === */
+  .theme-toggle {{
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    border-radius: 40px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 12px var(--shadow-card);
+    user-select: none;
+  }}
+
+  .theme-toggle:hover {{
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px var(--shadow-card);
+  }}
+
+  .theme-toggle .toggle-icon {{
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 0.3s ease;
+  }}
+
+  .theme-toggle:hover .toggle-icon {{ transform: rotate(20deg); }}
+
+  .theme-toggle .toggle-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }}
+
+  /* === NAV SIDEBAR === */
+  .nav {{
+    position: fixed;
+    top: 50%;
+    left: 20px;
+    transform: translateY(-50%);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--nav-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--nav-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    animation: fadeUp 0.6s ease-out 0.3s both;
+  }}
+
+  .nav-link {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }}
+
+  .nav-link:hover {{
+    color: var(--accent-cyan);
+    background: var(--overlay-soft);
+  }}
+
+  /* === CONTAINER === */
+  .container {{
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 60px 40px 100px;
+  }}
+
+  /* === HEADER === */
+  .header {{
+    text-align: center;
+    margin-bottom: 70px;
+    animation: fadeUp 0.8s ease-out;
+  }}
+
+  .header-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent-cyan);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }}
+
+  .header-label::before,
+  .header-label::after {{
+    content: '';
+    width: 40px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan));
+  }}
+
+  .header-label::after {{
+    background: linear-gradient(90deg, var(--accent-cyan), transparent);
+  }}
+
+  .header h1 {{
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(32px, 4vw, 48px);
+    font-weight: 900;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    background: linear-gradient(135deg, var(--title-start) 0%, var(--accent-cyan) 50%, var(--accent-emerald) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+  }}
+
+  .header p {{
+    font-size: 17px;
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.6;
+    font-weight: 300;
+  }}
+
+  /* === SECTIONS === */
+  .section {{
+    margin-bottom: 64px;
+    opacity: 0;
+    transform: translateY(24px);
+    animation: fadeUp 0.6s ease-out forwards;
+  }}
+
+  .section-title {{
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+  }}
+
+  .section-desc {{
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 300;
+    line-height: 1.6;
+    margin-bottom: 28px;
+    max-width: 700px;
+  }}
+
+  /* === IMAGE GRID === */
+  .image-grid {{
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }}
+
+  .image-card {{
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.35s ease;
+    position: relative;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.5s ease-out forwards;
+  }}
+
+  .image-card::before {{
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+  }}
+
+  .image-card:hover {{
+    border-color: var(--overlay-medium);
+    box-shadow: 0 8px 32px var(--shadow-card);
+    transform: translateY(-2px);
+  }}
+
+  .image-card:hover::before {{ opacity: 1; }}
+
+  .image-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 16px 20px 8px;
+  }}
+
+  .image-card img {{
+    width: 100%;
+    display: block;
+    padding: 4px 16px 16px;
+    background: var(--bg-card);
+  }}
+
+  /* === CHARTS GRID === */
+  .charts-grid {{
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }}
+
+  .chart-card {{
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: all 0.35s ease;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: fadeUp 0.5s ease-out forwards;
+  }}
+
+  .chart-card:hover {{
+    border-color: var(--overlay-medium);
+    box-shadow: 0 8px 32px var(--shadow-card);
+  }}
+
+  .chart-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 16px 20px 8px;
+  }}
+
+  .chart-iframe {{
+    width: 100%;
+    height: 600px;
+    border: none;
+    display: block;
+  }}
+
+  /* === FOOTER === */
+  .footer {{
+    text-align: center;
+    margin-top: 60px;
+    padding-top: 32px;
+    border-top: 1px solid var(--border-subtle);
+    opacity: 0;
+    animation: fadeUp 0.6s ease-out 1.5s forwards;
+  }}
+
+  .footer p {{
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 300;
+  }}
+
+  .footer a {{
+    color: var(--accent-cyan);
+    text-decoration: none;
+  }}
+
+  /* === ANIMATIONS === */
+  @keyframes fadeUp {{
+    from {{ opacity: 0; transform: translateY(24px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+  }}
+
+  /* === RESPONSIVE === */
+  @media (max-width: 860px) {{
+    .container {{ padding: 40px 16px 60px; }}
+    .nav {{ display: none; }}
+    .image-card img {{ padding: 4px 8px 8px; }}
+  }}
+
+  /* === BACK TO TOP === */
+  .back-top {{
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 12px var(--shadow-card);
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+  }}
+
+  .back-top.visible {{
+    opacity: 1;
+    pointer-events: auto;
+  }}
+
+  .back-top:hover {{
+    transform: translateY(-2px);
+    color: var(--accent-cyan);
+  }}
+</style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<div class="theme-toggle" onclick="toggleTheme()" title="Switch theme">
+  <span class="toggle-icon" id="themeIcon">&#9790;</span>
+  <span class="toggle-label" id="themeLabel">dark</span>
+</div>
+
+<nav class="nav">
+  {section_nav}
+</nav>
+
+<button class="back-top" id="backTop" onclick="window.scrollTo({{top:0,behavior:'smooth'}})" title="Back to top">&#8593;</button>
+
+<div class="container">
+
+  <header class="header">
+    <div class="header-label">Analysis Report</div>
+    <h1>{title}</h1>
+    <p>Tandem repeat detection, classification, and genome-wide distribution analysis.</p>
+  </header>
+
+  {sections_html}
+
+  <footer class="footer">
+    <p>Generated by <a href="https://github.com/ad3002/satellome">Satellome</a></p>
+  </footer>
+
+</div>
+
+<script>
+// Theme toggle
+function toggleTheme() {{
+  var html = document.documentElement;
+  var icon = document.getElementById('themeIcon');
+  var label = document.getElementById('themeLabel');
+  var isDark = html.getAttribute('data-theme') === 'dark';
+
+  if (isDark) {{
+    html.setAttribute('data-theme', 'light');
+    icon.innerHTML = '\\u263E';
+    label.textContent = 'dark';
+    localStorage.setItem('satellome-theme', 'light');
+  }} else {{
+    html.setAttribute('data-theme', 'dark');
+    icon.innerHTML = '\\u263C';
+    label.textContent = 'light';
+    localStorage.setItem('satellome-theme', 'dark');
+  }}
+}}
+
+// Restore saved theme
+(function() {{
+  var saved = localStorage.getItem('satellome-theme');
+  if (saved === 'dark') {{
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('themeIcon').innerHTML = '\\u263C';
+    document.getElementById('themeLabel').textContent = 'light';
+  }}
+}})();
+
+// Back to top button visibility
+window.addEventListener('scroll', function() {{
+  var btn = document.getElementById('backTop');
+  if (window.scrollY > 400) {{
+    btn.classList.add('visible');
+  }} else {{
+    btn.classList.remove('visible');
+  }}
+}});
+
+// Lazy-load iframes for interactive charts
+(function() {{
+  var observer = new IntersectionObserver(function(entries) {{
+    entries.forEach(function(entry) {{
+      if (entry.isIntersecting) {{
+        var iframe = entry.target;
+        var encoded = iframe.getAttribute('data-src');
+        if (encoded) {{
+          var decoded = atob(encoded);
+          iframe.srcdoc = decoded;
+          iframe.removeAttribute('data-src');
+        }}
+        observer.unobserve(iframe);
+      }}
+    }});
+  }}, {{ rootMargin: '200px' }});
+
+  document.querySelectorAll('.lazy-iframe').forEach(function(iframe) {{
+    observer.observe(iframe);
+  }});
+}})();
+</script>
+
+</body>
+</html>'''
+
+
+def create_html_report(image_folder, report_file, taxon_name=None):
+    """
+    Generate self-contained HTML report with embedded images and charts.
+
+    Scans folder for PNG/SVG visualization files and Plotly HTML charts,
+    organizes them into logical sections, and creates a themed interactive
+    HTML report with dark/light mode toggle.
 
     Args:
-        image_folder (str): Path to folder containing SVG/PNG image files
+        image_folder (str): Path to folder containing image and chart files
         report_file (str): Path to output HTML file to create
-
-    Example:
-        >>> # Generate report from output folder
-        >>> create_html_report("output/chromosomes/", "analysis_report.html")
-        INFO:satellome.core_functions.tools.reports:HTML file with embedded image created successfully!
-        INFO:satellome.core_functions.tools.reports:File: analysis_report.html
-        >>>
-        >>> # Creates HTML with all SVG files embedded
-        >>> # Can open report.html in browser without image folder
-
-    Processing Steps:
-        1. Scan image_folder for files ending with '.svg'
-        2. Convert each SVG to Base64 data URI
-        3. Generate <img> tags with 60% width styling
-        4. Wrap images in minimal HTML5 template
-        5. Write complete HTML to report_file
-        6. Log success message with file path
-
-    Generated HTML Structure:
-        - HTML5 DOCTYPE with UTF-8 charset
-        - Responsive viewport meta tag
-        - All images at 60% width (stacked vertically)
-        - No external dependencies (CSS, JS, images)
-
-    Note:
-        - Currently only scans for .svg files (line 30 filter)
-        - SVG conversion via svg_to_data_uri(), PNG via image_to_data_uri()
-        - Images appear in filesystem order (not sorted)
-        - No error handling for missing folder or read failures
-        - Logs completion via module logger (INFO level)
-        - Report file overwritten if already exists (mode 'w')
+        taxon_name (str, optional): Species/taxon name for report title
     """
+    # Collect files for each section
+    sections_data = []
+    categorized_files = set()
 
-    image_files = [os.path.join(image_folder, f) for f in os.listdir(image_folder) if f.endswith('.svg')]
+    for section_id, section_title, section_desc, patterns in REPORT_SECTIONS:
+        items = _find_files_for_section(image_folder, patterns)
+        for fpath, label, fname in items:
+            categorized_files.add(fpath)
+        sections_data.append((section_id, section_title, section_desc, items))
 
-    images_content = ""
+    # Find interactive Plotly charts
+    interactive_charts = _find_interactive_charts(image_folder)
+    for fpath, fname in interactive_charts:
+        categorized_files.add(fpath)
 
-    for image in image_files:
-        if image.endswith('.svg'):
-            data_uri = svg_to_data_uri(image)
-        else:
-            data_uri = image_to_data_uri(image)
-        im = f'<img src="{data_uri}" alt="{image}" width="60%">'
-        images_content += im
-    
-    html_content = f"""<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Embedded Image</title>
-    </head>
-    <body>
-        {images_content}
-    </body>
-    </html>
-    """
+    # Find uncategorized images
+    uncategorized = _find_uncategorized_images(image_folder, categorized_files)
 
-    with open(report_file, 'w') as file:
-        file.write(html_content)
+    total_items = sum(len(items) for _, _, _, items in sections_data)
+    total_items += len(interactive_charts) + len(uncategorized)
 
-    logger.info("HTML file with embedded image created successfully!")
+    if total_items == 0:
+        logger.warning(f"No visualization files found in {image_folder}")
+        return
+
+    # Generate and write report
+    html = _generate_report_html(sections_data, interactive_charts, uncategorized, taxon_name)
+
+    os.makedirs(os.path.dirname(report_file), exist_ok=True)
+    with open(report_file, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    logger.info("HTML report created successfully!")
     logger.info(f"File: {report_file}")
+    logger.info(f"Embedded: {total_items} visualizations")
