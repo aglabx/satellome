@@ -370,6 +370,43 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
   .tooltip .tt-row{{display:flex;justify-content:space-between;gap:12px;line-height:1.6;}}
   .tooltip .tt-val{{font-family:'JetBrains Mono',monospace;font-size:11px;}}
 
+  /* === CHROMOSOME DETAIL VIEW === */
+  .chr-detail{{display:none;}}
+  .chr-detail.active{{display:block;}}
+
+  .chr-detail-header{{
+    display:flex;align-items:center;gap:12px;margin-bottom:20px;
+  }}
+  .back-btn{{
+    padding:6px 12px;border-radius:6px;cursor:pointer;
+    background:var(--card);border:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text2);
+    transition:all .15s;user-select:none;
+  }}
+  .back-btn:hover{{color:var(--c-accent);border-color:var(--c-accent);}}
+
+  .chr-detail-title{{
+    font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--text);
+  }}
+  .chr-detail-sub{{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-left:8px;}}
+
+  .chr-grid{{
+    display:flex;flex-direction:column;gap:1px;
+    background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:8px;overflow:hidden;
+  }}
+  .chr-grid-row{{
+    display:flex;height:6px;position:relative;border-radius:1px;overflow:hidden;
+    background:var(--chr-bg);cursor:crosshair;
+  }}
+  .chr-grid-cell{{position:absolute;top:0;height:100%;}}
+
+  .chr-grid-labels{{
+    display:flex;justify-content:space-between;
+    font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);
+    margin-top:6px;padding:0 8px;
+  }}
+
   .footer{{text-align:center;margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);opacity:0;animation:fadeUp .5s ease-out 1s forwards;}}
 
   @keyframes fadeUp{{from{{opacity:0;transform:translateY(10px);}}to{{opacity:1;transform:translateY(0);}}}}
@@ -463,6 +500,7 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
       <h1>{assembly_name}</h1>
     </div>
     <div class="chr-list" id="chrList"></div>
+    <div class="chr-detail" id="chrDetail"></div>
     <div class="footer">Bin size: {bin_size_kb} kb &middot; satellome</div>
   </div>
 </div>
@@ -492,7 +530,7 @@ function render(){{
     var sizeMb=(c.length/1e6).toFixed(1);
 
     row.innerHTML=
-      '<div class="chr-label">'+c.name+'</div>'+
+      '<div class="chr-label" style="cursor:pointer;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px" onclick="showChromosome('+idx+')">'+c.name+'</div>'+
       '<div class="chr-bar-wrap">'+
         '<div class="chr-bar" style="width:'+c.pct+'%">'+
           '<div class="chr-density" id="d-'+idx+'"></div>'+
@@ -568,12 +606,137 @@ function render(){{
   }});
 }}
 
+var CURRENT_CHR=null;
+var COLS_PER_ROW=200; // bins per row in chromosome detail view
+
+function showChromosome(idx){{
+  CURRENT_CHR=idx;
+  var c=DATA[idx];
+  document.getElementById('chrList').style.display='none';
+  var detail=document.getElementById('chrDetail');
+  detail.classList.add('active');
+
+  // Calculate grid: each row = COLS_PER_ROW bins
+  var bc=c.density.length;
+  var numRows=Math.ceil(bc/COLS_PER_ROW);
+  var bpPerBin=BIN_KB*1000;
+  var bpPerRow=COLS_PER_ROW*bpPerBin;
+
+  var html='<div class="chr-detail-header">'+
+    '<div class="back-btn" onclick="showGenome()">&#8592; Genome</div>'+
+    '<div class="chr-detail-title">'+c.name+'</div>'+
+    '<div class="chr-detail-sub">'+( c.length/1e6).toFixed(1)+' Mb &middot; '+
+    c.telo_left+' / '+c.telo_right+
+    (c.t2t?' &middot; T2T':'')+
+    '</div></div>';
+
+  html+='<div class="chr-grid">';
+  for(var row=0;row<numRows;row++){{
+    var startBin=row*COLS_PER_ROW;
+    var endBin=Math.min(startBin+COLS_PER_ROW,bc);
+    var rowBins=endBin-startBin;
+
+    html+='<div class="chr-grid-row" data-row="'+row+'">';
+    for(var i=startBin;i<endBin;i++){{
+      var d=c.density[i];
+      var total=d[0]+d[1]+d[2]+d[3];
+      if(total<0.005)continue;
+
+      var lp=((i-startBin)/COLS_PER_ROW*100);
+      var wp=(1/COLS_PER_ROW*100);
+
+      // Find dominant category
+      var maxVal=0,maxCat=0;
+      for(var cat=0;cat<4;cat++){{
+        if(!LAYERS[CAT_KEYS[cat]])continue;
+        if(d[cat]>maxVal){{maxVal=d[cat];maxCat=cat;}}
+      }}
+      if(maxVal<0.005)continue;
+
+      html+='<div class="chr-grid-cell" style="'+
+        'left:'+lp+'%;width:'+Math.max(wp,0.3)+'%;'+
+        'background:var('+COLORS[maxCat]+');'+
+        'opacity:'+Math.min(0.25+maxVal*0.75,1)+
+        '"></div>';
+    }}
+
+    // ITS marks on this row
+    if(LAYERS.its){{
+      c.its.forEach(function(s){{
+        var sBin=Math.floor(s.start/bpPerBin);
+        var eBin=Math.ceil(s.end/bpPerBin);
+        if(sBin>=startBin && sBin<endBin){{
+          var lp=((sBin-startBin)/COLS_PER_ROW*100);
+          var wp=Math.max(((eBin-sBin)/COLS_PER_ROW*100),0.3);
+          html+='<div class="chr-grid-cell" style="left:'+lp+'%;width:'+wp+'%;background:var(--c-its);opacity:0.8;z-index:1"></div>';
+        }}
+      }});
+    }}
+
+    html+='</div>';
+  }}
+  html+='</div>';
+
+  // Scale labels
+  html+='<div class="chr-grid-labels">'+
+    '<span>0 Mb</span>'+
+    '<span>'+(bpPerRow/2/1e6).toFixed(1)+' Mb per row</span>'+
+    '<span>'+(c.length/1e6).toFixed(1)+' Mb</span>'+
+    '</div>';
+
+  detail.innerHTML=html;
+
+  // Add tooltip to grid rows
+  detail.querySelectorAll('.chr-grid-row').forEach(function(rowEl){{
+    rowEl.addEventListener('mousemove',function(e){{
+      var rect=rowEl.getBoundingClientRect();
+      var x=(e.clientX-rect.left)/rect.width;
+      var rowIdx=parseInt(rowEl.getAttribute('data-row'));
+      var binIdx=rowIdx*COLS_PER_ROW+Math.floor(x*COLS_PER_ROW);
+      if(binIdx>=bc)binIdx=bc-1;
+      var pos=binIdx*bpPerBin;
+      var d=c.density[binIdx]||[0,0,0,0];
+      var tt=document.getElementById('tooltip');
+      tt.innerHTML=
+        '<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>'+
+        '<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>';
+      tt.style.left=(e.clientX+14)+'px';
+      tt.style.top=(e.clientY-10)+'px';
+      tt.classList.add('visible');
+    }});
+    rowEl.addEventListener('mouseleave',function(){{
+      document.getElementById('tooltip').classList.remove('visible');
+    }});
+  }});
+
+  // Update nav
+  setNavLevel('chromosome');
+}}
+
+function showGenome(){{
+  CURRENT_CHR=null;
+  document.getElementById('chrList').style.display='';
+  var detail=document.getElementById('chrDetail');
+  detail.classList.remove('active');
+  detail.innerHTML='';
+  setNavLevel('genome');
+}}
+
+function setNavLevel(level){{
+  document.querySelectorAll('.nav-level').forEach(function(n){{
+    n.classList.remove('active');
+    if(n.getAttribute('data-level')===level)n.classList.add('active');
+  }});
+}}
+
 function setLevel(el){{
   if(el.classList.contains('disabled'))return;
-  document.querySelectorAll('.nav-level').forEach(function(n){{n.classList.remove('active');}});
-  el.classList.add('active');
   var level=el.getAttribute('data-level');
-  // TODO: implement zoom levels (genome/chromosome/region/repeat/monomer)
+  if(level==='genome')showGenome();
+  else if(level==='chromosome'&&CURRENT_CHR!==null)showChromosome(CURRENT_CHR);
 }}
 
 function setView(el){{
