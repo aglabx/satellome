@@ -912,6 +912,46 @@ def main():
     if handle_installation_commands(args):
         sys.exit(0)
 
+    # If no arguments provided, show version and info
+    if not args.get("input") and not args.get("output"):
+        print_logo()
+        logger.info(f"Satellome v{__version__}")
+        logger.info("Satellite DNA analysis in T2T genome assemblies")
+        logger.info("")
+        logger.info("Usage:")
+        logger.info("  satellome -i genome.fasta -o output_dir -t 8")
+        logger.info("")
+        logger.info("Key options:")
+        logger.info("  -i, --input     Input FASTA file (required)")
+        logger.info("  -o, --output    Output directory (required)")
+        logger.info("  -t, --threads   Number of threads (required)")
+        logger.info("  -p, --project   Project name [default: from filename]")
+        logger.info("  --gff           GFF3 annotation file")
+        logger.info("  --rm            RepeatMasker .ori.out file")
+        logger.info("  --force         Force rerun all steps")
+        logger.info("  --install-all   Install FasTAN, tanbed, and TRF")
+        logger.info("  -v, --version   Show version")
+        logger.info("  -h, --help      Show full help")
+        logger.info("")
+        logger.info("Installed tools:")
+        import shutil
+        from satellome.installers.base import get_satellome_bin_dir
+        bin_dir = get_satellome_bin_dir()
+        for tool in ["fastan", "tanbed", "trf"]:
+            tool_path = bin_dir / tool
+            if tool_path.exists():
+                logger.info(f"  {tool}: {tool_path}")
+            elif shutil.which(tool):
+                logger.info(f"  {tool}: {shutil.which(tool)}")
+            else:
+                logger.info(f"  {tool}: not installed (use --install-all)")
+        arraysplitter_path = shutil.which("arraysplitter")
+        if arraysplitter_path:
+            logger.info(f"  arraysplitter: {arraysplitter_path}")
+        else:
+            logger.info("  arraysplitter: not installed (pip install arraysplitter)")
+        sys.exit(0)
+
     # Validate required arguments for pipeline mode
     required_args = ["input", "output", "threads"]
     missing_args = [arg for arg in required_args if not args.get(arg)]
