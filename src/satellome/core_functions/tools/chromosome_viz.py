@@ -273,6 +273,36 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
   .layer-toggle.off{{opacity:.5;}}
   .layer-toggle .lbl{{flex:1;}}
 
+  /* Nav levels */
+  .nav-level{{
+    display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:5px 8px;border-radius:6px;transition:all .15s;
+    font-size:12px;color:var(--text2);user-select:none;
+  }}
+  .nav-level:hover:not(.disabled){{background:var(--border);}}
+  .nav-level.active{{color:var(--c-accent);font-weight:500;}}
+  .nav-level.active .nav-icon{{color:var(--c-accent);}}
+  .nav-level.disabled{{opacity:.35;cursor:default;}}
+  .nav-icon{{font-size:10px;width:12px;text-align:center;color:var(--muted);}}
+
+  /* View toggles */
+  .view-toggle{{
+    display:flex;align-items:center;gap:6px;cursor:pointer;
+    padding:5px 8px;border-radius:6px;transition:all .15s;
+    font-size:12px;color:var(--text2);user-select:none;
+  }}
+  .view-toggle:hover{{background:var(--border);}}
+  .view-toggle.active{{color:var(--c-accent);font-weight:500;
+    background:rgba(8,145,178,.08);
+  }}
+  [data-theme="dark"] .view-toggle.active{{background:rgba(34,211,238,.08);}}
+  .view-toggle .soon{{
+    font-family:'JetBrains Mono',monospace;font-size:8px;
+    letter-spacing:.5px;text-transform:uppercase;
+    color:var(--muted);background:var(--border);
+    padding:1px 5px;border-radius:3px;margin-left:auto;
+  }}
+
   .theme-btn{{
     margin-top:auto; padding:6px 10px; border-radius:6px;
     background:var(--card); border:1px solid var(--border); cursor:pointer;
@@ -385,6 +415,41 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
       </div>
       <div class="layer-toggle" data-layer="telomere" onclick="toggleLayer(this)">
         <div class="dot" style="background:var(--c-telo-ok)"></div><span class="lbl">Telomeres</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Navigation</div>
+      <div class="nav-level active" data-level="genome" onclick="setLevel(this)">
+        <span class="nav-icon">&#9673;</span><span class="lbl">Genome</span>
+      </div>
+      <div class="nav-level" data-level="chromosome" onclick="setLevel(this)">
+        <span class="nav-icon">&#9656;</span><span class="lbl">Chromosome</span>
+      </div>
+      <div class="nav-level disabled" data-level="region">
+        <span class="nav-icon">&#9656;</span><span class="lbl">Region</span>
+      </div>
+      <div class="nav-level disabled" data-level="repeat">
+        <span class="nav-icon">&#9656;</span><span class="lbl">Repeat</span>
+      </div>
+      <div class="nav-level disabled" data-level="monomer">
+        <span class="nav-icon">&#9656;</span><span class="lbl">Monomer</span>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">View</div>
+      <div class="view-toggle active" data-view="size" onclick="setView(this)">
+        <span class="lbl">By array size</span>
+      </div>
+      <div class="view-toggle" data-view="family" onclick="setView(this)">
+        <span class="lbl">By superfamily</span><span class="soon">soon</span>
+      </div>
+      <div class="view-toggle" data-view="class" onclick="setView(this)">
+        <span class="lbl">By family</span><span class="soon">soon</span>
+      </div>
+      <div class="view-toggle" data-view="monomer" onclick="setView(this)">
+        <span class="lbl">By monomer</span><span class="soon">soon</span>
       </div>
     </div>
 
@@ -501,6 +566,23 @@ function render(){{
       document.getElementById('tooltip').classList.remove('visible');
     }});
   }});
+}}
+
+function setLevel(el){{
+  if(el.classList.contains('disabled'))return;
+  document.querySelectorAll('.nav-level').forEach(function(n){{n.classList.remove('active');}});
+  el.classList.add('active');
+  var level=el.getAttribute('data-level');
+  // TODO: implement zoom levels (genome/chromosome/region/repeat/monomer)
+}}
+
+function setView(el){{
+  if(el.querySelector('.soon'))return;
+  document.querySelectorAll('.view-toggle').forEach(function(v){{v.classList.remove('active');}});
+  el.classList.add('active');
+  var view=el.getAttribute('data-view');
+  // TODO: switch between size/superfamily/family/monomer views
+  render();
 }}
 
 function toggleTheme(){{
