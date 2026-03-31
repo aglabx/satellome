@@ -1,0 +1,16 @@
+[package]
+name = "telomere-check"
+version = "0.1.0"
+edition = "2021"
+description = "Check telomere presence at chromosome ends in FASTA assemblies"
+
+[[bin]]
+name = "telomere-check"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
