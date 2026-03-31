@@ -292,7 +292,7 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
     border-radius:10px;overflow:hidden;transition:box-shadow .2s;
   }}
   .chr-bar:hover{{box-shadow:0 2px 12px var(--shadow);}}
-  .chr-density{{position:absolute;top:0;left:0;height:100%;}}
+  .chr-density{{position:absolute;top:0;left:0;width:100%;height:100%;}}
   .density-bin{{position:absolute;height:100%;}}
 
   .telo-cap{{
