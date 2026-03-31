@@ -505,7 +505,14 @@ def run_trf_drawing(settings, force_rerun):
     if completed_process.returncode == 0:
         logger.info("trf_draw.py executed successfully!")
         # Create HTML report only if drawing was successful
-        create_html_report(settings["output_image_dir"], html_report_file, taxon_name=settings.get("taxon_name"))
+        results_yaml = os.path.join(settings["output_dir"], "results.yaml")
+        create_html_report(
+            settings["output_image_dir"], html_report_file,
+            taxon_name=settings.get("taxon_name"),
+            assembly_name=os.path.basename(settings.get("fasta_file", "")),
+            genome_size=settings.get("genome_size", 0),
+            results_yaml=results_yaml if os.path.exists(results_yaml) else None,
+        )
         return True
     else:
         logger.error(f"trf_draw.py failed with return code {completed_process.returncode}")

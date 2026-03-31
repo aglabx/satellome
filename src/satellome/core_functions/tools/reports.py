@@ -139,14 +139,114 @@ def _build_chart_html(fpath, display_name, anim_delay):
 '''
 
 
-def _generate_report_html(sections, uncategorized, taxon_name=None):
+def _load_results_yaml(yaml_path):
+    """Load results.yaml and return repeat stats dict."""
+    import yaml
+    with open(yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    repeats = {}
+    try:
+        dataset = data['work_files']['ref_assembly_name_for_trf']
+        repeats = data['work_files']['repeats'][dataset]['trevis']
+    except (KeyError, TypeError):
+        pass
+    return repeats
+
+
+def _build_summary_html(assembly_name, genome_size, repeats):
+    """Build the summary statistics section HTML."""
+
+    # Repeat categories with display names and descriptions
+    categories = [
+        ("pmicro", "Perfect Microsatellites", "Period < 6 bp, 100% match"),
+        ("micro", "Microsatellites", "Period < 6 bp"),
+        ("tSSR", "True SSR", "Simple sequence repeats"),
+        ("fSSR", "Fuzzy SSR", "Imperfect simple repeats"),
+        ("compex", "Complex Repeats", "Period > 9 bp"),
+        ("1kb", "Arrays > 1 kb", "Large tandem arrays"),
+        ("3kb", "Arrays > 3 kb", "Very large arrays"),
+        ("10kb", "Arrays > 10 kb", "Megabase-scale arrays"),
+    ]
+
+    genome_size_display = f"{genome_size:,} bp" if genome_size else "N/A"
+    genome_mb = f"{genome_size / 1e6:.1f} Mb" if genome_size else ""
+
+    rows_html = ""
+    for key, display_name, desc in categories:
+        if key not in repeats:
+            continue
+        r = repeats[key]
+        n = r.get('n', 0)
+        pgenome = r.get('pgenome', 0)
+        bar_width = min(pgenome * 10, 100)  # scale for visual bar
+        rows_html += f'''
+        <tr>
+          <td class="stat-name">{display_name}<span class="stat-desc">{desc}</span></td>
+          <td class="stat-count">{n:,}</td>
+          <td class="stat-pct">
+            <div class="pct-bar-wrap">
+              <div class="pct-bar" style="width: {bar_width}%"></div>
+            </div>
+            <span>{pgenome}%</span>
+          </td>
+        </tr>'''
+
+    if not rows_html:
+        return ""
+
+    return f'''
+    <section id="summary" class="section" style="animation-delay: 0.1s;">
+      <h2 class="section-title">Assembly Summary</h2>
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">Assembly</div>
+          <div class="summary-value">{assembly_name}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Genome Size</div>
+          <div class="summary-value">{genome_mb}</div>
+          <div class="summary-sub">{genome_size_display}</div>
+        </div>
+      </div>
+      <div class="stats-table-wrap">
+        <table class="stats-table">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Count</th>
+              <th>% Genome</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows_html}
+          </tbody>
+        </table>
+      </div>
+    </section>
+'''
+
+
+def _generate_report_html(sections, uncategorized, taxon_name=None,
+                          assembly_name=None, genome_size=0, results_yaml=None):
     """Generate the full HTML report string."""
 
-    title = f"Satellome Report — {taxon_name}" if taxon_name else "Satellome Report"
+    display_name = assembly_name or taxon_name or "Satellome Report"
+    title = f"Satellome Report — {display_name}"
 
     sections_html = ""
     section_nav = ""
     anim_delay = 0.1
+
+    # Build summary table from results.yaml
+    summary_html = ""
+    if results_yaml and os.path.exists(results_yaml):
+        repeats = _load_results_yaml(results_yaml)
+        if repeats:
+            summary_html = _build_summary_html(
+                assembly_name or display_name, genome_size, repeats
+            )
+            section_nav += '<a href="#summary" class="nav-link">Summary</a>\n'
+            anim_delay = 0.3
 
     for section_id, section_title, section_desc, items in sections:
         section_nav += f'<a href="#{section_id}" class="nav-link">{section_title}</a>\n'
@@ -543,6 +643,143 @@ def _generate_report_html(sections, uncategorized, taxon_name=None):
     display: block;
   }}
 
+  /* === SUMMARY === */
+  .summary-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }}
+
+  .summary-card {{
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 20px 24px;
+  }}
+
+  .summary-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }}
+
+  .summary-value {{
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }}
+
+  .summary-sub {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }}
+
+  .stats-table-wrap {{
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    overflow: hidden;
+  }}
+
+  .stats-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }}
+
+  .stats-table thead th {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }}
+
+  .stats-table tbody tr {{
+    transition: background 0.15s;
+  }}
+
+  .stats-table tbody tr:hover {{
+    background: var(--overlay-soft);
+  }}
+
+  .stats-table td {{
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }}
+
+  .stats-table tbody tr:last-child td {{
+    border-bottom: none;
+  }}
+
+  .stat-name {{
+    color: var(--text-primary);
+    font-weight: 400;
+  }}
+
+  .stat-desc {{
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 300;
+    margin-top: 2px;
+  }}
+
+  .stat-count {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    text-align: right;
+    white-space: nowrap;
+  }}
+
+  .stat-pct {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 160px;
+  }}
+
+  .stat-pct span {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    white-space: nowrap;
+    min-width: 45px;
+    text-align: right;
+  }}
+
+  .pct-bar-wrap {{
+    flex: 1;
+    height: 6px;
+    background: var(--overlay-soft);
+    border-radius: 3px;
+    overflow: hidden;
+  }}
+
+  .pct-bar {{
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-emerald));
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }}
+
+  @media (max-width: 860px) {{
+    .summary-grid {{ grid-template-columns: 1fr; }}
+    .stat-pct {{ min-width: 100px; }}
+  }}
+
   /* === FOOTER === */
   .footer {{
     text-align: center;
@@ -634,6 +871,8 @@ def _generate_report_html(sections, uncategorized, taxon_name=None):
     <p>Tandem repeat detection, classification, and genome-wide distribution analysis.</p>
   </header>
 
+  {summary_html}
+
   {sections_html}
 
   <footer class="footer">
@@ -710,30 +949,30 @@ window.addEventListener('scroll', function() {{
 </html>'''
 
 
-def create_html_report(image_folder, report_file, taxon_name=None):
+def create_html_report(image_folder, report_file, taxon_name=None,
+                       assembly_name=None, genome_size=0, results_yaml=None):
     """
     Generate self-contained HTML report with embedded images and charts.
-
-    Scans folder for PNG/SVG visualization files and Plotly HTML charts,
-    organizes them into logical sections, and creates a themed interactive
-    HTML report with dark/light mode toggle.
 
     Args:
         image_folder (str): Path to folder containing image and chart files
         report_file (str): Path to output HTML file to create
         taxon_name (str, optional): Species/taxon name for report title
+        assembly_name (str, optional): Input assembly filename
+        genome_size (int, optional): Total genome size in bp
+        results_yaml (str, optional): Path to results.yaml with classification stats
     """
     # Classify charts into sections
     sections, uncategorized = _classify_charts(image_folder)
 
     total_items = sum(len(items) for _, _, _, items in sections) + len(uncategorized)
 
-    if total_items == 0:
-        logger.warning(f"No visualization files found in {image_folder}")
-        return
-
-    # Generate and write report
-    html = _generate_report_html(sections, uncategorized, taxon_name)
+    # Generate and write report (even if no charts, we may have summary)
+    html = _generate_report_html(
+        sections, uncategorized, taxon_name,
+        assembly_name=assembly_name, genome_size=genome_size,
+        results_yaml=results_yaml,
+    )
 
     os.makedirs(os.path.dirname(report_file), exist_ok=True)
     with open(report_file, 'w', encoding='utf-8') as f:
