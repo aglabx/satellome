@@ -197,78 +197,60 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     """
     Extract sequences from FASTA based on BED coordinates and output TRF-compatible format.
 
-    Memory-efficient implementation that reads BED file once, groups by chromosome,
-    then processes FASTA sequentially chromosome-by-chromosome.
+    Uses Rust bed-extract binary for speed. Falls back to Python if unavailable.
 
     Args:
         fasta_file (str): Path to input genome FASTA file
-        bed_file (str): Path to BED file with tandem repeat coordinates (FasTAN/tanbed output)
+        bed_file (str): Path to BED file with tandem repeat coordinates
         output_file (str): Path to output TRF-format file (18 tab-separated fields)
-        fasta_output_file (str, optional): Path to output FASTA file with extracted sequences.
-            Headers format: >chr_start_end_length_period. If None, no FASTA file is created.
+        fasta_output_file (str, optional): Path to output FASTA file with extracted sequences
         project (str): Project name for TRF output (default: "FasTAN")
 
     Returns:
         int: Number of sequences successfully extracted
-
-    Raises:
-        ValueError: If duplicate chromosome names detected in FASTA (ambiguous mapping)
-
-    Example:
-        >>> # Extract repeat sequences from genome
-        >>> count = extract_sequences_from_bed(
-        ...     "hg38.fasta",
-        ...     "tandem_repeats.bed",
-        ...     "repeats_annotated.txt"
-        ... )
-        INFO:...Loaded 1523 BED entries for 24 chromosomes
-        INFO:...✓ Extracted 1523 sequences
-        >>> print(count)
-        1523
-
-    Input BED Format (6+ columns):
-        - Column 1: Chromosome name (uses first word only)
-        - Column 2: Start position (0-based, inclusive)
-        - Column 3: End position (0-based, exclusive)
-        - Column 4: Feature name
-        - Column 5: Score
-        - Column 6: Strand ('+' or '-')
-        - Columns 7+: Additional fields (preserved in output)
-
-    Output Format:
-        - All original BED columns
-        - Column N+1: repeat_length (end - start)
-        - Column N+2: extracted_sequence (reverse complemented if strand '-')
-        - Header comments with source file information
-
-    Processing Steps:
-        1. Load entire BED file, group entries by chromosome
-        2. Sort entries within each chromosome by start position
-        3. Iterate through FASTA chromosomes sequentially
-        4. For each chromosome, extract all BED regions at once
-        5. Apply reverse complement if strand is '-'
-        6. Write annotated BED lines with sequences
-
-    Coordinate System:
-        - BED uses 0-based, half-open intervals: [start, end)
-        - Python slicing seq[start:end] works directly (no adjustment needed)
-        - Example: BED "chr1 100 105" extracts bases at positions 100,101,102,103,104
-
-    Validation and Error Handling:
-        - Skips lines with < 3 columns or invalid coordinates
-        - Validates end <= chromosome_length
-        - Raises ValueError on duplicate chromosome names (critical safety check)
-        - Logs warnings for skipped entries with reasons
-        - Strand defaults to '+' if not specified (column 6 missing)
-
-    Note:
-        - Uses chromosome short names (first whitespace-delimited word only)
-        - Handles both uppercase and lowercase DNA sequences
-        - Memory efficient: only one chromosome loaded at a time
-        - Output includes header comments for reproducibility
-        - Created for SAT-49: BED sequence extraction feature
     """
+    import shutil
+    import subprocess
+    from pathlib import Path
+
     logger.info(f"Extracting sequences from {fasta_file} using coordinates from {bed_file}")
+
+    # Try Rust binary first
+    bed_extract_bin = None
+    bin_dir = Path(__file__).parent.parent.parent / "bin"
+    candidate = bin_dir / "bed-extract"
+    if candidate.exists():
+        bed_extract_bin = str(candidate)
+    else:
+        bed_extract_bin = shutil.which("bed-extract")
+
+    if bed_extract_bin:
+        cmd = [bed_extract_bin, fasta_file, bed_file, output_file]
+        if fasta_output_file:
+            cmd.append(fasta_output_file)
+        cmd.append(project)
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
+            if result.returncode == 0:
+                # Parse extracted count from stderr
+                for line in result.stderr.strip().split('\n'):
+                    if line.startswith('Extracted'):
+                        count = int(line.split()[1])
+                        logger.info(f"✓ Extracted {count} sequences (Rust)")
+                        return count
+                # If we can't parse count, count lines in output
+                with open(output_file, 'r') as f:
+                    count = sum(1 for line in f if not line.startswith('#') and not line.startswith('project'))
+                logger.info(f"✓ Extracted {count} sequences (Rust)")
+                return count
+            else:
+                logger.warning(f"bed-extract failed: {result.stderr}")
+                logger.warning("Falling back to Python implementation")
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            logger.warning(f"bed-extract error: {e}, falling back to Python")
+
+    # Python fallback
+    logger.info("Using Python implementation for sequence extraction")
 
     # Step 1: Read and parse BED file, group by chromosome
     logger.info("Reading BED file...")

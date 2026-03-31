@@ -1,0 +1,16 @@
+[package]
+name = "bed-extract"
+version = "0.1.0"
+edition = "2021"
+description = "Fast BED-based sequence extraction from FASTA with TRF-format output"
+
+[[bin]]
+name = "bed-extract"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
