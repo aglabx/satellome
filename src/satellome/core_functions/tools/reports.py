@@ -163,9 +163,10 @@ def _build_summary_html(assembly_name, genome_size, repeats):
         ("tSSR", "True SSR", "Simple sequence repeats"),
         ("fSSR", "Fuzzy SSR", "Imperfect simple repeats"),
         ("compex", "Complex Repeats", "Period > 9 bp"),
-        ("1kb", "Arrays > 1 kb", "Large tandem arrays"),
-        ("3kb", "Arrays > 3 kb", "Very large arrays"),
-        ("10kb", "Arrays > 10 kb", "Megabase-scale arrays"),
+        ("1kb", "Arrays > 1 kb", ""),
+        ("10kb", "Arrays > 10 kb", ""),
+        ("100kb", "Arrays > 100 kb", ""),
+        ("1000kb", "Arrays > 1 Mb", ""),
     ]
 
     genome_size_display = f"{genome_size:,} bp" if genome_size else "N/A"

@@ -97,7 +97,7 @@ def parse_arguments():
     ### add minimal_scaffold_length
     parser.add_argument("-l", "--minimal_scaffold_length", help=f"Minimal scaffold length [{MIN_SCAFFOLD_LENGTH_DEFAULT}]", required=False, default=MIN_SCAFFOLD_LENGTH_DEFAULT)
     parser.add_argument("-e", "--drawing_enhancing", help=f"Drawing enhancing [{DRAWING_ENHANCING_DEFAULT}]", required=False, default=DRAWING_ENHANCING_DEFAULT)
-    parser.add_argument("--large_file", help="Suffix for TR file for analysis, it can be '', 1kb, 3kb, 10kb [1kb]", required=False, default="1kb")
+    parser.add_argument("--large_file", help="Suffix for TR file for analysis, it can be '', 1kb, 10kb, 100kb, 1000kb [1kb]", required=False, default="1kb")
     parser.add_argument("--taxon", help="Taxon name [Unknown]", required=False, default=None)
     parser.add_argument("--force", help="Force rerun all steps even if output files exist", action='store_true', default=False)
     parser.add_argument("--recompute-failed", help="Recompute only chromosomes/contigs that failed TRF analysis (missing from TRF results)", action='store_true', default=False)
@@ -342,7 +342,7 @@ def run_trf_search(settings, args, force_rerun):
 
             if success:
                 logger.info("✅ Recompute completed successfully!")
-                logger.info("✅ TRF file updated. Will proceed to regenerate downstream files (1kb, 3kb, 10kb, images, report)...")
+                logger.info("✅ TRF file updated. Will proceed to regenerate downstream files (1kb, 10kb, 100kb, 1000kb, images, report)...")
                 return "recomputed"
             else:
                 logger.error("❌ Recompute failed")
@@ -618,7 +618,7 @@ def run_fastan(settings, force_rerun):
             logger.info(f"  Output directory: {output_dir}")
             logger.info(f"  Found files: {', '.join(existing_files)}")
             # Check for size-filtered files (at output_dir level)
-            for suffix in ["1kb", "3kb", "10kb"]:
+            for suffix in ["1kb", "10kb", "100kb", "1000kb"]:
                 filtered_trf = os.path.join(output_dir, f"{genome_basename}.{suffix}.sat")
                 if os.path.exists(filtered_trf):
                     logger.info(f"  Found filtered: {genome_basename}.{suffix}.sat")
@@ -739,13 +739,14 @@ def run_fastan(settings, force_rerun):
                 logger.info(f"✓ FASTA output created: {fasta_output}")
                 logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
 
-                # Create size-filtered TRF files (1kb, 3kb, 10kb)
+                # Create size-filtered TRF files (1kb, 10kb, 100kb, 1000kb)
                 from satellome.core_functions.tools.bed_tools import filter_trf_by_size
 
                 size_cutoffs = [
                     (1000, "1kb"),
-                    (3000, "3kb"),
                     (10000, "10kb"),
+                    (100000, "100kb"),
+                    (1000000, "1000kb"),
                 ]
 
                 logger.info("Creating size-filtered TRF files...")

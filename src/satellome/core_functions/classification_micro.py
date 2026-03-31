@@ -18,8 +18,11 @@ Core functions related to classification of microsatellites tandem repeats.
 - scf_basic_trs_classification(settings, project)
 
 """
+import logging
 import os
 from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 from satellome.core_functions.exceptions import SequenceError
 from satellome.core_functions.io.gff_file import sc_gff3_reader
@@ -160,9 +163,10 @@ def scf_basic_trs_classification(settings, project):
     cf_separate_true_ssr(settings, project)
     cf_separate_fuzzy_ssr(settings, project)
     cf_separate_complex_trs(settings, project)
-    cf_separate_1kb(settings, project)
-    cf_separate_3kb(settings, project)
-    cf_separate_10kb(settings, project)
+    cf_separate_by_size(settings, project, "1kb", 1000)
+    cf_separate_by_size(settings, project, "10kb", 10000)
+    cf_separate_by_size(settings, project, "100kb", 100000)
+    cf_separate_by_size(settings, project, "1000kb", 1000000)
     cf_get_micro_summary_table(settings, project)
 
     return settings, project
@@ -618,20 +622,33 @@ def cf_separate_complex_trs(settings, project):
     return r
 
 
-def cf_separate_1kb(settings, project):
-    """Split all TRs by length greater 1kb."""
+def cf_separate_by_size(settings, project, size_label, min_length):
+    """Split all TRs by array length greater than min_length.
 
-    trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
+    Args:
+        settings: Pipeline settings dict
+        project: Project dict
+        size_label: Label for this size tier (e.g., "1kb", "10kb", "100kb", "1000kb")
+        min_length: Minimum array length in bp
+    """
     if "ref_trf_file" in project["work_files"]:
         trf_all_file = project["work_files"]["ref_trf_file"]
     else:
         trf_all_file = settings["files"]["trf_all_file"]
 
-    trf_file = settings["files"]["trf_1k_file"]
-    gff_file = settings["files"]["gff_1k_file"]
-    fasta_file = settings["files"]["trf_1k_fasta_file"]
+    trf_file_key = f"trf_{size_label}_file"
+    gff_file_key = f"gff_{size_label}_file"
+    fasta_file_key = f"trf_{size_label}_fasta_file"
 
-    filter_func = lambda x: x.trf_array_length > 1000
+    trf_file = settings["files"].get(trf_file_key)
+    gff_file = settings["files"].get(gff_file_key)
+    fasta_file = settings["files"].get(fasta_file_key)
+
+    if not trf_file or not gff_file:
+        logger.warning(f"Missing settings for {size_label} classification, skipping")
+        return None
+
+    filter_func = lambda x: x.trf_array_length > min_length
 
     def name_func(trf_obj):
         gff = trf_obj.get_gff3_string(
@@ -655,7 +672,8 @@ def cf_separate_1kb(settings, project):
         trf_all_file, trf_file, gff_file, filter_func, name_func
     )
 
-    save_trs_as_fasta(trf_file, fasta_file, project)
+    if fasta_file:
+        save_trs_as_fasta(trf_file, fasta_file, project)
 
     dataset = project["work_files"]["ref_assembly_name_for_trf"]
     n = r["filtered"]
@@ -667,136 +685,16 @@ def cf_separate_1kb(settings, project):
     )
 
     project["work_files"]["repeats"][dataset].setdefault("trevis", {})
-    project["work_files"]["repeats"][dataset]["trevis"].setdefault("1kb", {})
-    project["work_files"]["repeats"][dataset]["trevis"]["1kb"] = {
+    project["work_files"]["repeats"][dataset]["trevis"][size_label] = {
         "trf_file": trf_file,
         "gff_file": gff_file,
-        "fasta_file": fasta_file,
         "n": n,
         "pgenome": pgenome,
     }
+    if fasta_file:
+        project["work_files"]["repeats"][dataset]["trevis"][size_label]["fasta_file"] = fasta_file
 
     return r
-
-
-def cf_separate_3kb(settings, project):
-    """Split all TRs by length greater 3kb."""
-
-    trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
-    if "ref_trf_file" in project["work_files"]:
-        trf_all_file = project["work_files"]["ref_trf_file"]
-    else:
-        trf_all_file = settings["files"]["trf_all_file"]
-
-    trf_file = settings["files"]["trf_3k_file"]
-    gff_file = settings["files"]["gff_3k_file"]
-    fasta_file = settings["files"]["trf_3k_fasta_file"]
-
-    filter_func = lambda x: x.trf_array_length > 3000
-
-    def name_func(trf_obj):
-        gff = trf_obj.get_gff3_string(
-            chromosome=False,
-            trs_type="complex TRs",
-            probability=1000,
-            tool="Satellome",
-            prefix=None,
-            properties={
-                "id": "trf_id",
-                "name": "trf_family",
-                "pmatch": "trf_pmatch",
-                "gc": "trf_array_gc",
-                "length": "trf_array_length",
-                "period": "trf_period",
-            },
-        )
-        return trf_obj.trf_family, gff, None
-
-    r = _trs_separate_something(
-        trf_all_file, trf_file, gff_file, filter_func, name_func
-    )
-
-    save_trs_as_fasta(trf_file, fasta_file, project)
-
-    dataset = project["work_files"]["ref_assembly_name_for_trf"]
-    n = r["filtered"]
-    pgenome = round(
-        100.0
-        * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
-        3,
-    )
-
-    project["work_files"]["repeats"][dataset].setdefault("trevis", {})
-    project["work_files"]["repeats"][dataset]["trevis"].setdefault("3kb", {})
-    project["work_files"]["repeats"][dataset]["trevis"]["3kb"] = {
-        "trf_file": trf_file,
-        "gff_file": gff_file,
-        "fasta_file": fasta_file,
-        "n": n,
-        "pgenome": pgenome,
-    }
-
-    return r
-
-
-def cf_separate_10kb(settings, project):
-    """Split all TRs by length greater 10kb."""
-
-    trf_parsed_folder = settings["folders"]["trf_parsed_folder"]
-    if "ref_trf_file" in project["work_files"]:
-        trf_all_file = project["work_files"]["ref_trf_file"]
-    else:
-        trf_all_file = settings["files"]["trf_all_file"]
-
-    trf_file = settings["files"]["trf_10k_file"]
-    gff_file = settings["files"]["gff_10k_file"]
-    fasta_file = settings["files"]["trf_10k_fasta_file"]
-
-    filter_func = lambda x: x.trf_array_length > 10000
-
-    def name_func(trf_obj):
-        gff = trf_obj.get_gff3_string(
-            chromosome=False,
-            trs_type="complex TRs",
-            probability=1000,
-            tool="Satellome",
-            prefix=None,
-            properties={
-                "id": "trf_id",
-                "name": "trf_family",
-                "pmatch": "trf_pmatch",
-                "gc": "trf_array_gc",
-                "length": "trf_array_length",
-                "period": "trf_period",
-            },
-        )
-        return trf_obj.trf_family, gff, None
-
-    r = _trs_separate_something(
-        trf_all_file, trf_file, gff_file, filter_func, name_func
-    )
-
-    save_trs_as_fasta(trf_file, fasta_file, project)
-
-    dataset = project["work_files"]["ref_assembly_name_for_trf"]
-    n = r["filtered"]
-    pgenome = round(
-        100.0
-        * float(r["total_length"])
-        / project["work_files"]["assembly_stats"][dataset]["genome_size"],
-        3,
-    )
-
-    project["work_files"]["repeats"][dataset].setdefault("trevis", {})
-    project["work_files"]["repeats"][dataset]["trevis"].setdefault("10kb", {})
-    project["work_files"]["repeats"][dataset]["trevis"]["10kb"] = {
-        "trf_file": trf_file,
-        "gff_file": gff_file,
-        "fasta_file": fasta_file,
-        "n": n,
-        "pgenome": pgenome,
-    }
 
     return r
 
