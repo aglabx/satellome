@@ -252,18 +252,57 @@ def check_patterns(data):
 
 
 def get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=100000):
-    """Function that finding all gaps."""
-    gaps = []
+    """Find all N-gaps in FASTA. Uses Rust find-gaps binary if available."""
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
 
+    # Try Rust binary
+    find_gaps_bin = None
+    bin_dir = Path(__file__).parent.parent / "bin"
+    candidate = bin_dir / "find-gaps"
+    if candidate.exists():
+        find_gaps_bin = str(candidate)
+    else:
+        find_gaps_bin = shutil.which("find-gaps")
+
+    if find_gaps_bin:
+        try:
+            with tempfile.NamedTemporaryFile(mode='r', suffix='.bed', delete=False) as tmp:
+                tmp_path = tmp.name
+            result = subprocess.run(
+                [find_gaps_bin, fasta_file, tmp_path, str(lenght_cutoff)],
+                capture_output=True, text=True, timeout=7200
+            )
+            if result.returncode == 0:
+                gaps = []
+                with open(tmp_path, 'r') as f:
+                    for line in f:
+                        parts = line.strip().split('\t')
+                        if len(parts) >= 4:
+                            gaps.append([parts[0], int(parts[1]), int(parts[2]), int(parts[3])])
+                os.unlink(tmp_path)
+                logger.info(f"Found {len(gaps)} gaps (Rust)")
+                return gaps
+            else:
+                logger.warning(f"find-gaps failed: {result.stderr}")
+                os.unlink(tmp_path)
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            logger.warning(f"find-gaps error: {e}")
+
+    # Python fallback
+    logger.info("Using Python gap finder (slow for large genomes)")
+    gaps = []
     with tqdm(total=genome_size, desc="Find gaps") as pbar:
         for header, seq in sc_iter_fasta_brute(fasta_file):
             name = header[1:].split()[0]
             if len(seq) < lenght_cutoff:
+                pbar.update(len(seq))
                 continue
             in_gap = False
             gap_start = None
             for i in range(len(seq)):
-                
                 if seq[i] == "N":
                     if not in_gap:
                         in_gap = True
@@ -273,7 +312,6 @@ def get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=100000):
                     in_gap = False
                     gaps.append([name, gap_start, i, abs(gap_start - i)])
             if in_gap:
-                in_gap = False
                 gaps.append([name, gap_start, i, abs(gap_start - i)])
             pbar.update(len(seq))
     return gaps

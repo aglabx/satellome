@@ -1,0 +1,16 @@
+[package]
+name = "find-gaps"
+version = "0.1.0"
+edition = "2021"
+description = "Fast N-gap finder in FASTA/FASTA.gz files"
+
+[[bin]]
+name = "find-gaps"
+path = "src/main.rs"
+
+[dependencies]
+flate2 = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
