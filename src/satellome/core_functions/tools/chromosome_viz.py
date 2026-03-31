@@ -391,12 +391,12 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
   .chr-detail-sub{{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-left:8px;}}
 
   .chr-grid{{
-    display:flex;flex-direction:column;gap:1px;
+    display:flex;flex-direction:column;gap:0px;
     background:var(--card);border:1px solid var(--border);border-radius:8px;
-    padding:8px;overflow:hidden;
+    padding:6px;overflow:hidden;
   }}
   .chr-grid-row{{
-    display:flex;height:6px;position:relative;border-radius:1px;overflow:hidden;
+    display:flex;position:relative;border-radius:1px;overflow:hidden;
     background:var(--chr-bg);cursor:crosshair;
   }}
   .chr-grid-cell{{position:absolute;top:0;height:100%;}}
@@ -607,7 +607,6 @@ function render(){{
 }}
 
 var CURRENT_CHR=null;
-var COLS_PER_ROW=200; // bins per row in chromosome detail view
 
 function showChromosome(idx){{
   CURRENT_CHR=idx;
@@ -616,11 +615,19 @@ function showChromosome(idx){{
   var detail=document.getElementById('chrDetail');
   detail.classList.add('active');
 
-  // Calculate grid: each row = COLS_PER_ROW bins
   var bc=c.density.length;
-  var numRows=Math.ceil(bc/COLS_PER_ROW);
   var bpPerBin=BIN_KB*1000;
-  var bpPerRow=COLS_PER_ROW*bpPerBin;
+
+  // Calculate cols to make a roughly square grid that fills the viewport
+  // Target: sqrt(bc) cols so rows ≈ cols
+  var cols=Math.ceil(Math.sqrt(bc));
+  if(cols<10)cols=10;
+  var numRows=Math.ceil(bc/cols);
+  var bpPerRow=cols*bpPerBin;
+
+  // Row height: fill available space (aim for ~80vh)
+  var rowH=Math.max(Math.floor(600/numRows),3);
+  if(rowH>12)rowH=12;
 
   var html='<div class="chr-detail-header">'+
     '<div class="back-btn" onclick="showGenome()">&#8592; Genome</div>'+
@@ -632,18 +639,18 @@ function showChromosome(idx){{
 
   html+='<div class="chr-grid">';
   for(var row=0;row<numRows;row++){{
-    var startBin=row*COLS_PER_ROW;
-    var endBin=Math.min(startBin+COLS_PER_ROW,bc);
+    var startBin=row*cols;
+    var endBin=Math.min(startBin+cols,bc);
     var rowBins=endBin-startBin;
 
-    html+='<div class="chr-grid-row" data-row="'+row+'">';
+    html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px">';
     for(var i=startBin;i<endBin;i++){{
       var d=c.density[i];
       var total=d[0]+d[1]+d[2]+d[3];
       if(total<0.005)continue;
 
-      var lp=((i-startBin)/COLS_PER_ROW*100);
-      var wp=(1/COLS_PER_ROW*100);
+      var lp=((i-startBin)/cols*100);
+      var wp=(1/cols*100);
 
       // Find dominant category
       var maxVal=0,maxCat=0;
@@ -666,8 +673,8 @@ function showChromosome(idx){{
         var sBin=Math.floor(s.start/bpPerBin);
         var eBin=Math.ceil(s.end/bpPerBin);
         if(sBin>=startBin && sBin<endBin){{
-          var lp=((sBin-startBin)/COLS_PER_ROW*100);
-          var wp=Math.max(((eBin-sBin)/COLS_PER_ROW*100),0.3);
+          var lp=((sBin-startBin)/cols*100);
+          var wp=Math.max(((eBin-sBin)/cols*100),0.3);
           html+='<div class="chr-grid-cell" style="left:'+lp+'%;width:'+wp+'%;background:var(--c-its);opacity:0.8;z-index:1"></div>';
         }}
       }});
@@ -692,7 +699,7 @@ function showChromosome(idx){{
       var rect=rowEl.getBoundingClientRect();
       var x=(e.clientX-rect.left)/rect.width;
       var rowIdx=parseInt(rowEl.getAttribute('data-row'));
-      var binIdx=rowIdx*COLS_PER_ROW+Math.floor(x*COLS_PER_ROW);
+      var binIdx=rowIdx*cols+Math.floor(x*cols);
       if(binIdx>=bc)binIdx=bc-1;
       var pos=binIdx*bpPerBin;
       var d=c.density[binIdx]||[0,0,0,0];
