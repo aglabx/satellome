@@ -90,15 +90,20 @@ fn process_fasta<R: Read>(reader: R, fai_path: &str) -> io::Result<()> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 2 {
-        eprintln!("Usage: genome-size <file.fasta[.gz]>");
-        eprintln!("Outputs: per-scaffold sizes (TSV), creates .fai index for uncompressed FASTA");
+        eprintln!("Usage: genome-size <file.(fa|fasta|fna)[.gz]>");
+        eprintln!("Outputs: per-scaffold sizes (TSV) to stdout, creates .fai index");
         process::exit(1);
     }
 
     let path = &args[1];
 
-    // Check if .fai already exists
-    let fai_path = format!("{}.fai", path);
+    // Strip .gz to get the base FASTA path, then append .fai
+    let base_path = if path.ends_with(".gz") {
+        &path[..path.len() - 3]
+    } else {
+        path.as_str()
+    };
+    let fai_path = format!("{}.fai", base_path);
     if Path::new(&fai_path).exists() {
         eprintln!("{} already exists, reading from index", fai_path);
         // Parse existing .fai to print sizes
