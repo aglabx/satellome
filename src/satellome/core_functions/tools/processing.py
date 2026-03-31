@@ -186,49 +186,57 @@ def get_genome_size(fasta_file):
 
 def get_genome_size_with_progress(fasta_file):
     """
-    Calculate total genome size from FASTA with tqdm progress bar.
+    Calculate total genome size from FASTA file.
 
-    Similar to get_genome_size() but displays progress bar showing number
-    of scaffolds/contigs processed. Useful for large genome assemblies
-    with many sequences.
+    Uses the Rust genome-size binary for fast computation (supports .gz).
+    Falls back to Python if the binary is not available.
 
     Args:
         fasta_file (str): Path to input FASTA file (genome assembly)
 
     Returns:
         int: Total genome size in base pairs (sum of all sequence lengths)
-
-    Example:
-        >>> size = get_genome_size_with_progress("genome.fasta")
-        INFO:...Calculating genome size for: genome.fasta
-        Genome size (scaffolds): 100%|██████████| 24/24 [00:05<00:00,  4.5it/s]
-        INFO:...Total genome size: 3,000,000,000 bp in 24 scaffolds/contigs
-        >>> print(f"{size:,} bp")
-        3,000,000,000 bp
-
-    Processing Steps:
-        1. First pass: Count number of sequences (for progress bar total)
-        2. Second pass: Iterate sequences, sum lengths, update progress
-        3. Log final statistics (size + sequence count)
-
-    Note:
-        - **Reads FASTA twice** (once for counting, once for processing)
-        - Less efficient than get_genome_size() for small files
-        - Recommended for genomes with many chromosomes/scaffolds
-        - Progress bar shows scaffold/contig count, not base pairs
-        - Logs detailed completion message with comma-separated size
-        - Uses tqdm for progress visualization
     """
+    import shutil
+    import subprocess
+    import os
+    from pathlib import Path
+
     logger.info(f"Calculating genome size for: {fasta_file}")
+
+    # Try Rust binary first
+    genome_size_bin = None
+    # Check in satellome bin directory
+    bin_dir = Path(__file__).parent.parent.parent / "bin"
+    candidate = bin_dir / "genome-size"
+    if candidate.exists():
+        genome_size_bin = str(candidate)
+    else:
+        genome_size_bin = shutil.which("genome-size")
+
+    if genome_size_bin:
+        try:
+            result = subprocess.run(
+                [genome_size_bin, fasta_file],
+                capture_output=True, text=True, timeout=3600
+            )
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    parts = line.split('\t')
+                    if parts[0] == 'TOTAL' and len(parts) >= 3:
+                        genome_size = int(parts[1])
+                        n_seqs = int(parts[2])
+                        logger.info(f"Total genome size: {genome_size:,} bp in {n_seqs} scaffolds/contigs")
+                        return genome_size
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            logger.warning(f"Rust genome-size failed: {e}, falling back to Python")
+
+    # Fallback: Python implementation
     genome_size = 0
     n_seqs = 0
-    # First, count number of sequences for tqdm
-    seq_headers = [h for h, _ in sc_iter_fasta_brute(fasta_file)]
-    with tqdm(total=len(seq_headers), desc="Genome size (scaffolds)") as pbar:
-        for _, seq in sc_iter_fasta_brute(fasta_file):
-            genome_size += len(seq)
-            n_seqs += 1
-            pbar.update(1)
+    for _, seq in sc_iter_fasta_brute(fasta_file):
+        genome_size += len(seq)
+        n_seqs += 1
     logger.info(f"Total genome size: {genome_size:,} bp in {n_seqs} scaffolds/contigs")
     return genome_size
 
