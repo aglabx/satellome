@@ -212,9 +212,6 @@ def validate_fasta_file(fasta_path, check_sequences=True):
     if num_sequences == 0:
         raise FastaValidationError("No sequences found in FASTA file")
 
-    if total_length == 0:
-        raise FastaValidationError("Total sequence length is zero")
-
     return {
         'num_sequences': num_sequences,
         'total_length': total_length,
