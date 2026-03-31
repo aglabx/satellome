@@ -180,69 +180,28 @@ def validate_fasta_file(fasta_path, check_sequences=True):
     num_sequences = 0
     total_length = 0
     warnings = []
-    current_seq_name = None
-    current_seq_length = 0
-    line_num = 0
     has_valid_header = False
-
-    # Valid nucleotide characters (including IUPAC ambiguity codes)
-    valid_chars = set('ACGTURYSWKMBDHVNacgturyswkmbdhvn-.')
 
     try:
         with opener(fasta_path, mode) as fh:
-            for line in fh:
-                line_num += 1
-                line = line.rstrip('\n\r')
-
-                if not line:  # Skip empty lines
+            # Quick validation: read only first few lines to confirm FASTA format
+            # Full genome size is computed later by get_genome_size_with_progress
+            for i, line in enumerate(fh):
+                line = line.strip()
+                if not line:
                     continue
-
                 if line.startswith('>'):
                     has_valid_header = True
-
-                    # Save previous sequence stats
-                    if current_seq_name:
-                        if current_seq_length == 0:
-                            warnings.append(f"Sequence '{current_seq_name}' has zero length")
-                        total_length += current_seq_length
-
-                    # Start new sequence
                     num_sequences += 1
-                    current_seq_name = line[1:].split()[0] if len(line) > 1 else f"seq_{num_sequences}"
-                    current_seq_length = 0
+                if i >= 10 and has_valid_header:
+                    break
 
-                    if len(line) == 1:  # Just ">" with no name
-                        warnings.append(f"Line {line_num}: Header has no sequence name")
-
-                elif check_sequences:
-                    # Validate sequence line
-                    if not current_seq_name:
-                        raise FastaValidationError(
-                            f"Line {line_num}: Sequence data before first header"
-                        )
-
-                    # Check for invalid characters
-                    invalid_chars = set(line) - valid_chars
-                    if invalid_chars:
-                        warnings.append(
-                            f"Line {line_num}: Invalid characters in sequence '{current_seq_name}': "
-                            f"{', '.join(sorted(invalid_chars))}"
-                        )
-
-                    current_seq_length += len(line)
-
-        # Process last sequence
-        if current_seq_name:
-            if current_seq_length == 0:
-                warnings.append(f"Sequence '{current_seq_name}' has zero length")
-            total_length += current_seq_length
-
-    except (IOError, OSError) as e:
-        raise FastaValidationError(f"Error reading FASTA file: {e}")
     except gzip.BadGzipFile:
         raise FastaValidationError(f"File appears to be corrupted (bad gzip format): {fasta_path}")
+    except (IOError, OSError) as e:
+        raise FastaValidationError(f"Error reading FASTA file: {e}")
     except UnicodeDecodeError as e:
-        raise FastaValidationError(f"File contains invalid text encoding at line ~{line_num}: {e}")
+        raise FastaValidationError(f"File contains invalid text encoding: {e}")
 
     # Final validation checks
     if not has_valid_header:

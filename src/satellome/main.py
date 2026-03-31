@@ -151,17 +151,8 @@ def validate_and_prepare_environment(args):
 
     # Validate FASTA file first (required)
     try:
-        fasta_stats = validate_fasta_file(fasta_file, check_sequences=True)
-        logger.info(
-            f"✓ FASTA: {fasta_stats['num_sequences']} sequences, "
-            f"{fasta_stats['total_length']:,} bp total"
-        )
-        if fasta_stats['warnings']:
-            logger.warning(f"FASTA has {len(fasta_stats['warnings'])} warnings (see details below)")
-            for warning in fasta_stats['warnings'][:3]:
-                logger.warning(f"  - {warning}")
-            if len(fasta_stats['warnings']) > 3:
-                logger.warning(f"  ... and {len(fasta_stats['warnings']) - 3} more warnings")
+        fasta_stats = validate_fasta_file(fasta_file)
+        logger.info(f"✓ FASTA: valid format ({os.path.basename(fasta_file)}, {os.path.getsize(fasta_file) / 1e9:.1f} GB)")
     except FastaValidationError as e:
         logger.error(f"✗ FASTA validation failed: {e}")
         sys.exit(1)
