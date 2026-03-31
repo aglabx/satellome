@@ -710,9 +710,7 @@ function showChromosome(idx){{
       html+='<div class="chr-grid-cell" style="left:0;width:2px;background:'+teloColor(c.telo_left)+';z-index:2;border-radius:1px 0 0 1px"></div>';
     }}
     if(isLast && LAYERS.telomere){{
-      // Place at the end of the last bin
-      var lastBinPct=((endBin-startBin-1)/cols*100);
-      html+='<div class="chr-grid-cell" style="left:calc('+lastBinPct+'% + 100%/'+cols+' - 2px);width:2px;background:'+teloColor(c.telo_right)+';z-index:2;border-radius:0 1px 1px 0"></div>';
+      html+='<div class="chr-grid-cell" style="right:0;left:auto;width:2px;background:'+teloColor(c.telo_right)+';z-index:2;border-radius:0 1px 1px 0"></div>';
     }}
 
     for(var i=startBin;i<endBin;i++){{
