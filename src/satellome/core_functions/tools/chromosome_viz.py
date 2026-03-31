@@ -66,52 +66,68 @@ def load_its(bed_path):
     return its
 
 
-def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
-    """Bin tandem repeats into density tracks per chromosome.
+def _sat_lines(fh):
+    """Yield lines from SAT file, fixing '#project' header."""
+    for line in fh:
+        if line.startswith('#project') or line.startswith('#Project'):
+            yield line[1:]
+        elif line.startswith('#'):
+            continue
+        else:
+            yield line
 
-    Returns dict: {chr_name: {bin_index: {"micro": bp, "complex": bp, "total": bp}}}
+
+# Categories by array length (matching satellome classification approach)
+CATEGORIES = ["lt1kb", "1-10kb", "10-100kb", "gt100kb"]
+CAT_DISPLAY = ["< 1 kb", "1-10 kb", "10-100 kb", "> 100 kb"]
+
+
+def _classify_by_array_length(array_length):
+    """Classify repeat by array length."""
+    if array_length < 1000:
+        return "lt1kb"
+    elif array_length < 10000:
+        return "1-10kb"
+    elif array_length < 100000:
+        return "10-100kb"
+    else:
+        return "gt100kb"
+
+
+def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
+    """Bin tandem repeats from main SAT file into density tracks by array length.
+
+    Args:
+        sat_path: Path to main .sat file
+        chroms: List of chromosome dicts with 'name' and 'length'
+        bin_size: Bin size in bp
+
+    Returns:
+        dict: {chr_name: [{"lt1kb": bp, "1-10kb": bp, "10-100kb": bp, "gt100kb": bp}, ...]}
     """
-    # Initialize bins
-    # Categories by period length
-    CATS = ["micro", "mini", "satellite", "macro"]
     bins = {}
+    chroms_set = set()
     for c in chroms:
         n_bins = (c["length"] // bin_size) + 1
-        bins[c["name"]] = [{cat: 0 for cat in CATS} for _ in range(n_bins)]
+        bins[c["name"]] = [{cat: 0 for cat in CATEGORIES} for _ in range(n_bins)]
+        chroms_set.add(c["name"])
 
     csv.field_size_limit(sys.maxsize)
-
-    def _sat_lines(fh):
-        """Yield lines, stripping '#' from header but skipping comment lines."""
-        for line in fh:
-            if line.startswith('#project') or line.startswith('#Project'):
-                yield line[1:]  # strip '#' from header row
-            elif line.startswith('#'):
-                continue  # skip comments
-            else:
-                yield line
 
     with open(sat_path, 'r') as f:
         reader = csv.DictReader(_sat_lines(f), delimiter='\t')
         for row in reader:
             chrom = row.get("trf_head", "")
-            if chrom not in bins:
+            if chrom not in chroms_set:
                 continue
             try:
                 start = int(row.get("trf_l_ind", 0))
                 end = int(row.get("trf_r_ind", 0))
-                period = int(row.get("trf_period", 0))
             except (ValueError, TypeError):
                 continue
 
-            if period < 6:
-                category = "micro"
-            elif period < 10:
-                category = "mini"
-            elif period <= 100:
-                category = "satellite"
-            else:
-                category = "macro"
+            array_length = end - start
+            category = _classify_by_array_length(array_length)
 
             start_bin = start // bin_size
             end_bin = end // bin_size
@@ -352,17 +368,17 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
 
     <div class="panel-section">
       <div class="panel-section-title">Layers</div>
-      <div class="layer-toggle" data-layer="micro" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-micro)"></div><span class="lbl">Micro (&lt;6 bp)</span>
+      <div class="layer-toggle" data-layer="lt1kb" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-micro)"></div><span class="lbl">&lt; 1 kb</span>
       </div>
-      <div class="layer-toggle" data-layer="mini" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-mini)"></div><span class="lbl">Mini (6-9 bp)</span>
+      <div class="layer-toggle" data-layer="1-10kb" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-mini)"></div><span class="lbl">1 &ndash; 10 kb</span>
       </div>
-      <div class="layer-toggle" data-layer="satellite" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-sat)"></div><span class="lbl">Satellite (10-100 bp)</span>
+      <div class="layer-toggle" data-layer="10-100kb" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-sat)"></div><span class="lbl">10 &ndash; 100 kb</span>
       </div>
-      <div class="layer-toggle" data-layer="macro" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-macro)"></div><span class="lbl">Macro (&gt;100 bp)</span>
+      <div class="layer-toggle" data-layer="gt100kb" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-macro)"></div><span class="lbl">&gt; 100 kb</span>
       </div>
       <div class="layer-toggle" data-layer="its" onclick="toggleLayer(this)">
         <div class="dot" style="background:var(--c-its)"></div><span class="lbl">ITS</span>
@@ -389,9 +405,10 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
 <script>
 var DATA={data_json};
 var BIN_KB={bin_size_kb};
-var LAYERS={{micro:true,mini:true,satellite:true,macro:true,its:true,telomere:true}};
+var LAYERS={{'lt1kb':true,'1-10kb':true,'10-100kb':true,'gt100kb':true,its:true,telomere:true}};
 var COLORS=['--c-micro','--c-mini','--c-sat','--c-macro'];
-var CAT_NAMES=['Micro','Mini','Satellite','Macro'];
+var CAT_KEYS=['lt1kb','1-10kb','10-100kb','gt100kb'];
+var CAT_NAMES=['< 1 kb','1-10 kb','10-100 kb','> 100 kb'];
 
 function toggleLayer(el){{
   var layer=el.getAttribute('data-layer');
@@ -431,7 +448,7 @@ function render(){{
 
       // Stack categories: each gets a vertical slice
       for(var cat=0;cat<4;cat++){{
-        var key=['micro','mini','satellite','macro'][cat];
+        var key=CAT_KEYS[cat];
         if(!LAYERS[key])continue;
         var val=c.density[i][cat];
         if(val<0.005)continue;
@@ -471,10 +488,10 @@ function render(){{
       var tt=document.getElementById('tooltip');
       tt.innerHTML=
         '<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>'+
-        '<div class="tt-row"><span>Micro (&lt;6 bp)</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>Mini (6-9 bp)</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>Satellite (10-100)</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>Macro (&gt;100 bp)</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>'+
         '<div class="tt-row"><span>Telomere L / R</span><span class="tt-val">'+c.telo_left+' / '+c.telo_right+'</span></div>';
       tt.style.left=(e.clientX+14)+'px';
       tt.style.top=(e.clientY-10)+'px';
