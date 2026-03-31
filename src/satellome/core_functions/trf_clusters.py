@@ -11,12 +11,9 @@ from collections import Counter
 
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from intervaltree import IntervalTree
 from tqdm import tqdm
-import matplotlib
-matplotlib.use('Agg')  # Non-interactive backend for server environments
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -39,62 +36,170 @@ import sys
 sys.setrecursionlimit(RECURSION_LIMIT_DEFAULT)
 
 
+# Satellome color palette for Plotly charts
+SATELLOME_COLORS = [
+    "#0891b2", "#059669", "#7c3aed", "#be123c", "#b45309",
+    "#2563eb", "#db2777", "#0d9488", "#7c2d12", "#4338ca",
+    "#65a30d", "#c026d3", "#0369a1", "#dc2626", "#ca8a04",
+    "#6d28d9", "#0f766e", "#9333ea", "#1d4ed8", "#ea580c",
+]
+
+SATELLOME_TEMPLATE = go.layout.Template(
+    layout=go.Layout(
+        font=dict(family="Source Sans 3, sans-serif", color="#1a1a1a"),
+        paper_bgcolor="#f8f6f1",
+        plot_bgcolor="#ffffff",
+        colorway=SATELLOME_COLORS,
+        title=dict(font=dict(family="Playfair Display, serif", size=20, color="#1a1a1a")),
+        xaxis=dict(
+            showgrid=False, showline=True, linecolor="#e2ddd5", linewidth=1,
+            ticks="outside", tickfont=dict(family="JetBrains Mono, monospace", size=11, color="#555555"),
+            title=dict(font=dict(family="Source Sans 3, sans-serif", size=13, color="#555555")),
+        ),
+        yaxis=dict(
+            showgrid=False, zeroline=False, showline=False,
+            tickfont=dict(family="JetBrains Mono, monospace", size=11, color="#555555"),
+            title=dict(font=dict(family="Source Sans 3, sans-serif", size=13, color="#555555")),
+        ),
+        legend=dict(
+            font=dict(family="Source Sans 3, sans-serif", size=12, color="#555555"),
+            bgcolor="rgba(0,0,0,0)", borderwidth=0,
+        ),
+        margin=dict(t=60, b=40),
+    )
+)
+
+
+def _themed_html_wrapper(plotly_html_div, title=""):
+    """Wrap a Plotly chart div in our themed HTML shell."""
+    return f'''<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root, [data-theme="light"] {{
+    --bg: #f8f6f1; --card-bg: #ffffff; --border: #e2ddd5;
+    --text: #1a1a1a; --text2: #555; --muted: #888;
+    --accent: #0891b2; --shadow: rgba(0,0,0,0.08);
+  }}
+  [data-theme="dark"] {{
+    --bg: #0a0e17; --card-bg: #111827; --border: #1e293b;
+    --text: #e2e8f0; --text2: #94a3b8; --muted: #64748b;
+    --accent: #22d3ee; --shadow: rgba(0,0,0,0.3);
+  }}
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ background:var(--bg); font-family:'Source Sans 3',sans-serif; color:var(--text);
+         min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:24px; }}
+  .chart-wrap {{
+    background:var(--card-bg); border:1px solid var(--border); border-radius:12px;
+    overflow:hidden; width:100%; max-width:1440px;
+    box-shadow:0 2px 16px var(--shadow);
+    opacity:0; transform:translateY(20px);
+    animation:fadeUp .5s ease-out .1s forwards;
+  }}
+  .chart-header {{
+    padding:20px 24px 4px; display:flex; justify-content:space-between; align-items:center;
+  }}
+  .chart-title {{
+    font-family:'Playfair Display',serif; font-size:18px; font-weight:700; color:var(--text);
+  }}
+  .toggle {{
+    display:flex; align-items:center; gap:8px; padding:4px 12px; border-radius:20px;
+    background:var(--bg); border:1px solid var(--border); cursor:pointer; user-select:none;
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
+    transition:all .2s;
+  }}
+  .toggle:hover {{ transform:translateY(-1px); box-shadow:0 2px 8px var(--shadow); }}
+  .toggle-icon {{ font-size:14px; }}
+  .plotly-container {{ padding:8px 12px 12px; }}
+  .footer-bar {{
+    padding:8px 24px; border-top:1px solid var(--border);
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
+    letter-spacing:.5px;
+  }}
+  @keyframes fadeUp {{
+    from {{ opacity:0; transform:translateY(20px); }}
+    to {{ opacity:1; transform:translateY(0); }}
+  }}
+</style>
+</head>
+<body>
+<div class="chart-wrap">
+  <div class="chart-header">
+    <span class="chart-title">{title}</span>
+    <div class="toggle" onclick="toggleTheme()" title="Switch theme">
+      <span class="toggle-icon" id="tIcon">&#9790;</span>
+      <span id="tLabel">dark</span>
+    </div>
+  </div>
+  <div class="plotly-container">
+    {plotly_html_div}
+  </div>
+  <div class="footer-bar">satellome</div>
+</div>
+<script>
+function toggleTheme(){{
+  var h=document.documentElement,ic=document.getElementById("tIcon"),lb=document.getElementById("tLabel");
+  if(h.getAttribute("data-theme")==="dark"){{
+    h.setAttribute("data-theme","light");ic.innerHTML="\\u263E";lb.textContent="dark";
+    updatePlotlyTheme("light");
+  }}else{{
+    h.setAttribute("data-theme","dark");ic.innerHTML="\\u263C";lb.textContent="light";
+    updatePlotlyTheme("dark");
+  }}
+}}
+function updatePlotlyTheme(theme){{
+  var plots=document.querySelectorAll(".js-plotly-plot");
+  plots.forEach(function(p){{
+    var bg=theme==="dark"?"#111827":"#ffffff";
+    var paper=theme==="dark"?"#0a0e17":"#f8f6f1";
+    var fc=theme==="dark"?"#e2e8f0":"#1a1a1a";
+    var gc=theme==="dark"?"#1e293b":"#e2ddd5";
+    Plotly.relayout(p,{{
+      "paper_bgcolor":paper,"plot_bgcolor":bg,
+      "font.color":fc,
+      "xaxis.linecolor":gc,"xaxis.tickfont.color":fc,
+      "yaxis.tickfont.color":fc,
+      "legend.font.color":fc,
+    }});
+  }});
+}}
+</script>
+</body>
+</html>'''
+
+
 def safe_write_figure(fig, output_file, width=None, height=None, engine="kaleido"):
     """
-    Write plotly figure to HTML file.
-
-    Static PNG export is handled separately by matplotlib (via _create_matplotlib_karyotype).
-    This function only creates interactive HTML visualizations.
+    Write Plotly figure to themed standalone HTML file.
 
     Args:
         fig: Plotly figure object
         output_file: Output file path (extension will be changed to .html)
-        width: Figure width (optional, ignored - kept for compatibility)
-        height: Figure height (optional, ignored - kept for compatibility)
-        engine: Image export engine (ignored - kept for compatibility)
+        width: Figure width (optional, ignored)
+        height: Figure height (optional, ignored)
+        engine: Ignored, kept for compatibility
 
     Returns:
         str: Path to the created HTML file
     """
-    # Change extension to .html
+    fig.update_layout(template=SATELLOME_TEMPLATE)
+
     html_file = os.path.splitext(output_file)[0] + ".html"
-    fig.write_html(html_file)
-    logger.debug(f"Exported interactive plot to {html_file}")
+    title = fig.layout.title.text if fig.layout.title and fig.layout.title.text else os.path.basename(html_file)
+
+    # Get the plotly div (not full HTML page)
+    plotly_div = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
+    themed_html = _themed_html_wrapper(plotly_div, title=title)
+
+    with open(html_file, 'w', encoding='utf-8') as f:
+        f.write(themed_html)
+
+    logger.debug(f"Exported themed interactive plot to {html_file}")
     return html_file
-
-
-def save_matplotlib_figure(fig, output_file, dpi=150):
-    """
-    Save matplotlib figure to file (PNG or SVG).
-
-    Args:
-        fig: Matplotlib figure object
-        output_file: Output file path
-        dpi: DPI for raster formats (default: 150)
-
-    Returns:
-        str: Path to the created file
-    """
-    try:
-        ext = os.path.splitext(output_file)[1].lower()
-        if ext in ['.png', '.jpg', '.jpeg']:
-            fig.savefig(output_file, dpi=dpi, bbox_inches='tight', facecolor='white')
-        elif ext == '.svg':
-            fig.savefig(output_file, format='svg', bbox_inches='tight')
-        elif ext == '.pdf':
-            fig.savefig(output_file, format='pdf', bbox_inches='tight')
-        else:
-            # Default to PNG
-            output_file = os.path.splitext(output_file)[0] + '.png'
-            fig.savefig(output_file, dpi=dpi, bbox_inches='tight', facecolor='white')
-
-        plt.close(fig)
-        logger.info(f"Exported matplotlib plot to {output_file}")
-        return output_file
-    except Exception as e:
-        logger.error(f"Failed to save matplotlib figure: {e}")
-        plt.close(fig)
-        return None
 
 
 class Graph:
@@ -478,7 +583,7 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
             y=scaffold_items,
             orientation="h",
             name="Scaffold",
-            marker_color="#f3f4f7",
+            marker_color="#e8e5df",
         )
     )
     fig.update_layout(barmode="overlay")
@@ -500,17 +605,11 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
             showline=True,
             showgrid=False,
             showticklabels=True,
-            linecolor="rgb(204, 204, 204)",
             linewidth=1,
             ticks="outside",
             rangemode="nonnegative",
-            tickfont=dict(
-                family="Arial",
-                size=font_size,
-                color="rgb(82, 82, 82)",
-            ),
+            tickfont=dict(size=font_size),
         ),
-        # Turn off everything on y axis
         yaxis=dict(
             showgrid=False,
             zeroline=False,
@@ -518,137 +617,30 @@ def _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=False):
             showticklabels=True,
             ticklabelstep=1,
             tickwidth=15,
-            tickfont=dict(
-                family="Arial",
-                size=font_size,
-                color="rgb(82, 82, 82)",
-            ),
+            tickfont=dict(size=font_size),
         ),
         width=canvas_width,
         height=dynamic_height,
         margin=dict(
             autoexpand=True,
             l=left_margin,
-            r=MARGIN_RIGHT // 2,  # Use half of standard right margin
-            t=MARGIN_TOP + 10,    # Slightly more than standard
+            r=MARGIN_RIGHT // 2,
+            t=MARGIN_TOP + 10,
             b=MARGIN_BOTTOM,
         ),
         showlegend=True,
-        plot_bgcolor="white",
     )
 
-    fig.update_layout(legend=dict(font=dict(family="Arial", size=font_size, color="black")))
+    fig.update_layout(legend=dict(font=dict(size=font_size)))
 
     fig.update_xaxes(range=[0, max(scaffold_end_values) + 1000])
 
     return fig, canvas_width, dynamic_height
 
 
-def _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm=False, traces=None):
-    """
-    Create karyotype visualization using matplotlib for PNG/SVG export without external dependencies.
-
-    Args:
-        scaffold_for_plot: Scaffold data for plotting
-        title_text: Plot title
-        output_file: Output file path (will change extension to .png)
-        use_chrm: Whether to use chromosome names
-        traces: List of trace configurations (dict with plotly trace parameters)
-
-    Returns:
-        None
-    """
-    # Extract data
-    if use_chrm:
-        scaffold_items = scaffold_for_plot["chrm"]
-        yaxis_title = "Chromosome name"
-    else:
-        scaffold_items = scaffold_for_plot["scaffold"]
-        yaxis_title = "Scaffold name"
-
-    # Apply same sorting as plotly version
-    scaffold_items = _sort_chromosomes_intelligent(scaffold_items)
-
-    # Reorder end values
-    if use_chrm:
-        chrm_to_end = dict(zip(scaffold_for_plot["chrm"], scaffold_for_plot["end"]))
-        scaffold_end_values = [chrm_to_end[chrm] for chrm in scaffold_items]
-    else:
-        scaffold_to_end = dict(zip(scaffold_for_plot["scaffold"], scaffold_for_plot["end"]))
-        scaffold_end_values = [scaffold_to_end[scaffold] for scaffold in scaffold_items]
-
-    # Calculate figure dimensions
-    num_items = len(scaffold_items)
-    fig_height = max(6, min(30, 2 + num_items * 0.3))  # Height in inches
-    fig_width = 14  # Width in inches
-
-    # Create figure
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-
-    # Create y-axis positions
-    y_positions = list(range(len(scaffold_items)))
-
-    # Draw background bars (scaffolds)
-    ax.barh(y_positions, scaffold_end_values, height=0.8,
-            color='#f3f4f7', edgecolor='none', zorder=1)
-
-    # Add traces if provided
-    has_labeled_artists = False
-    if traces:
-        for trace_config in traces:
-            # Extract matplotlib-compatible parameters from plotly trace config
-            x_values = trace_config.get('x', [])
-            base_values = trace_config.get('base', [])
-            y_items = trace_config.get('y', [])
-            color = trace_config.get('marker_color', 'black')
-            label = trace_config.get('name', '')
-
-            # Map y items to positions
-            y_item_to_pos = {item: pos for pos, item in enumerate(scaffold_items)}
-            trace_y_positions = [y_item_to_pos.get(item, -1) for item in y_items]
-
-            # Filter out invalid positions
-            valid_indices = [i for i, pos in enumerate(trace_y_positions) if pos >= 0]
-            if valid_indices:
-                valid_x = [x_values[i] for i in valid_indices]
-                valid_base = [base_values[i] for i in valid_indices]
-                valid_y_pos = [trace_y_positions[i] for i in valid_indices]
-
-                ax.barh(valid_y_pos, valid_x, left=valid_base, height=0.8,
-                       color=color, label=label, zorder=2)
-                if label:  # Track if we added a labeled artist
-                    has_labeled_artists = True
-
-    # Formatting
-    ax.set_yticks(y_positions)
-    ax.set_yticklabels(scaffold_items)
-    ax.set_xlabel('bp', fontsize=12)
-    ax.set_ylabel(yaxis_title, fontsize=12)
-    ax.set_title(title_text, fontsize=14, pad=20)
-
-    # Style axes
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_visible(False)
-    ax.grid(False)
-    ax.set_axisbelow(True)
-
-    # Set x-axis to start at 0
-    ax.set_xlim(left=0)
-
-    # Add legend only if we actually added labeled artists
-    if has_labeled_artists:
-        ax.legend(loc='best', frameon=False)
-
-    # Save as PNG
-    png_output = os.path.splitext(output_file)[0] + '.png'
-    save_matplotlib_figure(fig, png_output, dpi=150)
-
-
 def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use_chrm=False, traces=None):
     """
-    Helper function to create a bar chart with given traces and save it.
-    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
+    Helper function to create a bar chart with given traces and save it as interactive HTML.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -656,11 +648,7 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
         output_file: Output file path
         use_chrm: Whether to use chromosome names
         traces: List of trace configurations (dict with trace parameters)
-
-    Returns:
-        None
     """
-    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_suffix, use_chrm=use_chrm)
 
     if traces:
@@ -668,52 +656,6 @@ def _create_and_save_bar_chart(scaffold_for_plot, title_suffix, output_file, use
             fig.add_trace(go.Bar(**trace_config))
 
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
-
-    # Create matplotlib version for static PNG/SVG export
-    try:
-        _create_matplotlib_karyotype(scaffold_for_plot, title_suffix, output_file, use_chrm, traces)
-    except Exception as e:
-        logger.warning(f"Failed to create matplotlib version: {e}")
-        logger.warning("Continuing with plotly HTML only")
-
-
-def _prepare_tr_traces(df_trs, names_filter=None, enhance=None):
-    """
-    Helper function to prepare TR traces for matplotlib rendering.
-
-    Args:
-        df_trs: List of dicts with tandem repeat data
-        names_filter: Optional function to filter family names (e.g., lambda x: x != "SING")
-        enhance: Optional minimum size to enhance small repeats
-
-    Returns:
-        List of trace configurations (dicts) for matplotlib
-    """
-    # Get unique family names from list of dicts
-    names = set(record.get("family_name") for record in df_trs if record.get("family_name"))
-
-    traces = []
-    for name in names:
-        if names_filter and not names_filter(name):
-            continue
-
-        # Filter items by family_name
-        items = [record for record in df_trs if record.get("family_name") == name]
-
-        # Extract data
-        starts = [item.get("start") for item in items]
-        lengths = [max(item.get("length", 0), enhance) for item in items] if enhance else [item.get("length", 0) for item in items]
-        chrms = [item.get("chrm") for item in items]
-
-        traces.append({
-            'base': starts,
-            'x': lengths,
-            'y': chrms,
-            'name': name,
-            'marker_color': None,  # Let matplotlib choose colors
-        })
-
-    return traces
 
 
 def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
@@ -763,8 +705,7 @@ def _add_tr_families_by_name(fig, df_trs, names_filter=None, enhance=None):
 def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffix,
                             use_chrm=False, names_filter=None, enhance=None):
     """
-    Helper function to create and save a TR visualization with specified parameters.
-    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
+    Create and save a TR visualization as interactive HTML.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -778,27 +719,16 @@ def _create_tr_visualization(scaffold_for_plot, title_text, df_trs, output_suffi
     Returns:
         Output file path
     """
-    # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
     _add_tr_families_by_name(fig, df_trs, names_filter=names_filter, enhance=enhance)
     safe_write_figure(fig, output_suffix, width=canvas_width, height=canvas_height)
-
-    # Create matplotlib version for static PNG export
-    try:
-        # Prepare traces for matplotlib
-        traces = _prepare_tr_traces(df_trs, names_filter, enhance)
-        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_suffix, use_chrm, traces)
-    except Exception as e:
-        logger.warning(f"Failed to create matplotlib version: {e}")
-        logger.warning("Continuing with plotly HTML only")
-
     return output_suffix
 
 
 def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_with_gap, size, use_chrm):
     """
     Helper function to draw repeats with gaps visualization.
-    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
+    Saves interactive HTML (plotly) visualization.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -829,25 +759,18 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
     Na_records = [r for r in repeats_with_gap_records if r["gap_type"] == "Na" and r["length"] < size]
     aNa_records = [r for r in repeats_with_gap_records if r["gap_type"] == "aNa" and r["length"] < size]
 
-    # Prepare traces for both plotly and matplotlib
-    traces = []
-
     # Add aN traces
     if len(aN_records) > 0:
         aN_starts = [r["start"] for r in aN_records]
         aN_chrms = [r["chrm"] for r in aN_records]
         fig.add_trace(go.Bar(
             base=aN_starts, x=[size] * len(aN_records), y=aN_chrms,
-            orientation="h", name="Tandem Repeat_with gap aN", marker_color="#FF00FF"
+            orientation="h", name="TR with gap aN", marker_color="#db2777"
         ))
         fig.add_trace(go.Bar(
             base=[s + size for s in aN_starts], x=[size] * len(aN_records), y=aN_chrms,
-            orientation="h", name="gaps aN", marker_color="#663399"
+            orientation="h", name="gaps aN", marker_color="#7c3aed"
         ))
-        traces.extend([
-            {'base': aN_starts, 'x': [size] * len(aN_records), 'y': aN_chrms, 'name': "TR gap aN", 'marker_color': "#FF00FF"},
-            {'base': [s + size for s in aN_starts], 'x': [size] * len(aN_records), 'y': aN_chrms, 'name': "gaps aN", 'marker_color': "#663399"}
-        ])
 
     # Add Na traces
     if len(Na_records) > 0:
@@ -855,16 +778,12 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
         Na_chrms = [r["chrm"] for r in Na_records]
         fig.add_trace(go.Bar(
             base=Na_starts, x=[size] * len(Na_records), y=Na_chrms,
-            orientation="h", name="Tandem Repeat_with gap Na", marker_color="#00CED1"
+            orientation="h", name="TR with gap Na", marker_color="#0891b2"
         ))
         fig.add_trace(go.Bar(
             base=[s + size for s in Na_starts], x=[size] * len(Na_records), y=Na_chrms,
-            orientation="h", name="gaps Na", marker_color="#00BFFF"
+            orientation="h", name="gaps Na", marker_color="#2563eb"
         ))
-        traces.extend([
-            {'base': Na_starts, 'x': [size] * len(Na_records), 'y': Na_chrms, 'name': "TR gap Na", 'marker_color': "#00CED1"},
-            {'base': [s + size for s in Na_starts], 'x': [size] * len(Na_records), 'y': Na_chrms, 'name': "gaps Na", 'marker_color': "#00BFFF"}
-        ])
 
     # Add aNa traces
     if len(aNa_records) > 0:
@@ -873,36 +792,24 @@ def _draw_repeats_with_gaps(scaffold_for_plot, title_text, output_file, repeats_
         aNa_chrms = [r["chrm"] for r in aNa_records]
         fig.add_trace(go.Bar(
             base=aNa_starts, x=[third_size] * len(aNa_records), y=aNa_chrms,
-            orientation="h", name="Tandem Repeat_with gap aNa", marker_color="#00FF7F"
+            orientation="h", name="TR with gap aNa", marker_color="#059669"
         ))
         fig.add_trace(go.Bar(
             base=[s + third_size for s in aNa_starts], x=[third_size] * len(aNa_records), y=aNa_chrms,
-            orientation="h", name="gaps aNa", marker_color="#228B22"
+            orientation="h", name="gaps aNa", marker_color="#065f46"
         ))
         fig.add_trace(go.Bar(
             base=[s + third_size * 2 for s in aNa_starts], x=[third_size] * len(aNa_records), y=aNa_chrms,
-            orientation="h", marker_color="#00FF7F"
+            orientation="h", name="TR aNa (cont.)", marker_color="#059669", showlegend=False
         ))
-        traces.extend([
-            {'base': aNa_starts, 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "TR gap aNa", 'marker_color': "#00FF7F"},
-            {'base': [s + third_size for s in aNa_starts], 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "gaps aNa", 'marker_color': "#228B22"},
-            {'base': [s + third_size * 2 for s in aNa_starts], 'x': [third_size] * len(aNa_records), 'y': aNa_chrms, 'name': "", 'marker_color': "#00FF7F"}
-        ])
 
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
-
-    # Create matplotlib version for static PNG export
-    try:
-        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm, traces)
-    except Exception as e:
-        logger.warning(f"Failed to create matplotlib version: {e}")
-        logger.warning("Continuing with plotly HTML only")
 
 
 def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repeats_without_gaps, size, use_chrm):
     """
     Helper function to draw repeats without gaps visualization.
-    Saves both interactive HTML (plotly) and static PNG (matplotlib) versions.
+    Saves interactive HTML (plotly) visualization.
 
     Args:
         scaffold_for_plot: Scaffold data for plotting
@@ -915,8 +822,6 @@ def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repea
     # Create plotly version for interactive HTML
     fig, canvas_width, canvas_height = _draw_chromosomes(scaffold_for_plot, title_text, use_chrm=use_chrm)
 
-    # Prepare traces for both plotly and matplotlib
-    traces = []
     names = set([x["family_name"] for x in repeats_without_gaps])
     for name in names:
         items = [x for x in repeats_without_gaps if x["family_name"] == name]
@@ -934,22 +839,7 @@ def _draw_repeats_without_gaps(scaffold_for_plot, title_text, output_file, repea
             )
         )
 
-        traces.append({
-            'base': starts,
-            'x': lengths,
-            'y': chrms,
-            'name': name,
-            'marker_color': None,  # Let matplotlib choose colors
-        })
-
     safe_write_figure(fig, output_file, width=canvas_width, height=canvas_height)
-
-    # Create matplotlib version for static PNG export
-    try:
-        _create_matplotlib_karyotype(scaffold_for_plot, title_text, output_file, use_chrm, traces)
-    except Exception as e:
-        logger.warning(f"Failed to create matplotlib version: {e}")
-        logger.warning("Continuing with plotly HTML only")
 
 
 def draw_karyotypes(

@@ -37,122 +37,138 @@ def svg_to_data_uri(svg_path):
         return f"data:image/svg+xml;base64,{encoded_string}"
 
 
+# All visualizations are now interactive Plotly HTML charts.
 # Section definitions: (section_id, title, description, file_patterns)
 # Patterns are matched against filenames (without directory)
-REPORT_SECTIONS = [
+REPORT_SECTIONS = []
+
+
+# Chart sections: (section_id, title, description, filename_keywords)
+# Charts are grouped by matching keywords in their filenames
+CHART_SECTIONS = [
     (
         "karyotypes",
         "Chromosome Karyotypes",
         "Genome-wide distribution of tandem repeat families across chromosomes. "
         "Enhanced views amplify small arrays for visibility.",
-        [
-            ("karyo.raw.png", "All TR families"),
-            ("karyo.raw.enhanced.png", "All TR families (enhanced)"),
-            ("karyo.nosing.png", "Without singletons"),
-            ("karyo.nosing.enchanced.png", "Without singletons (enhanced)"),
-            ("karyo.sing.png", "Singletons only"),
-            ("karyo.sing.enchanced.png", "Singletons only (enhanced)"),
-        ]
+        [".raw.", ".nosing.", ".sing."],
+        [".gaps.", ".repeats."],
     ),
     (
         "gaps",
         "Gap Analysis",
         "Assembly gaps and their proximity to tandem repeat arrays. "
         "Gap-adjacent repeats may indicate unresolved satellite regions.",
-        [
-            ("karyo.gaps.png", "Assembly gaps"),
-            ("karyo.gaps.1000bp.enhanced.png", "Gaps enhanced (1 kb window)"),
-            ("karyo.repeats.with.gaps.enhanced.png", "Repeats overlapping gaps"),
-            ("karyo.repeats.nogaps.enhanced.png", "Repeats without gaps"),
-        ]
+        [".gaps.", ".repeats.with.gaps.", ".repeats.nogaps."],
+        [],
     ),
     (
         "scatter",
         "Repeat Characteristics",
         "Scatter plots showing relationships between GC content, period length, "
         "and percent match across all detected tandem repeat arrays.",
-        [
-            ("spheres.3D.png", "3D scatter: GC vs Period vs Pmatch"),
-            ("spheres.3D.nosingl.png", "3D scatter (no singletons)"),
-            ("spheres.2D.gc_period.png", "GC content vs Period"),
-            ("spheres.2D.gc_pmatch.png", "GC content vs Percent match"),
-            ("spheres.2D.period_period.png", "Period vs Percent match"),
-        ]
+        [".3D.", ".2D."],
+        [],
     ),
     (
         "flow",
         "Classification Flow",
         "Sankey diagram showing how tandem repeats are classified into families "
         "and the relative abundance of each category.",
-        [
-            ("trs_flow.png", "TR classification flow"),
-        ]
+        ["trs_flow", "sankey"],
+        [],
     ),
 ]
 
 
-def _find_files_for_section(image_folder, patterns):
-    """Find files matching section patterns. Returns list of (path, label) tuples."""
-    results = []
-    all_files = set(os.listdir(image_folder))
+def _classify_charts(image_folder):
+    """Classify HTML chart files into sections based on filename patterns.
 
-    for pattern_suffix, label in patterns:
-        for fname in sorted(all_files):
-            if fname.endswith(pattern_suffix):
-                results.append((os.path.join(image_folder, fname), label, fname))
-                break
-    return results
-
-
-def _find_interactive_charts(image_folder):
-    """Find Plotly interactive HTML chart files."""
-    charts = []
+    Returns:
+        list of (section_id, title, desc, chart_files) and list of uncategorized charts
+    """
     if not os.path.isdir(image_folder):
-        return charts
-    for fname in sorted(os.listdir(image_folder)):
-        if fname.endswith('.html') and not fname.startswith('satellome_report'):
-            charts.append((os.path.join(image_folder, fname), fname))
-    return charts
+        return [], []
 
+    html_files = sorted([
+        f for f in os.listdir(image_folder)
+        if f.endswith('.html')
+    ])
 
-def _find_uncategorized_images(image_folder, categorized_files):
-    """Find image files not covered by any section."""
-    categorized = set(categorized_files)
+    classified = {}  # section_id -> list of (fpath, display_name)
+    used = set()
+
+    for section_id, title, desc, include_keywords, exclude_keywords in CHART_SECTIONS:
+        section_files = []
+        for fname in html_files:
+            if fname in used:
+                continue
+            fname_lower = fname.lower()
+            matches = any(kw in fname_lower for kw in include_keywords)
+            excluded = any(kw in fname_lower for kw in exclude_keywords) if exclude_keywords else False
+            if matches and not excluded:
+                fpath = os.path.join(image_folder, fname)
+                display_name = os.path.splitext(fname)[0].replace('.', ' ').replace('_', ' ')
+                section_files.append((fpath, display_name, fname))
+                used.add(fname)
+        if section_files:
+            classified[section_id] = (section_id, title, desc, section_files)
+
+    # Uncategorized
     uncategorized = []
-    for fname in sorted(os.listdir(image_folder)):
-        fpath = os.path.join(image_folder, fname)
-        if fname.endswith(('.png', '.svg')) and fpath not in categorized:
-            uncategorized.append((fpath, fname))
-    return uncategorized
+    for fname in html_files:
+        if fname not in used:
+            fpath = os.path.join(image_folder, fname)
+            display_name = os.path.splitext(fname)[0].replace('.', ' ').replace('_', ' ')
+            uncategorized.append((fpath, display_name, fname))
+
+    sections = [classified[sid] for sid, _, _, _, _ in CHART_SECTIONS if sid in classified]
+    return sections, uncategorized
 
 
-def _generate_report_html(sections_data, interactive_charts, uncategorized, taxon_name=None):
+def _build_chart_html(fpath, display_name, anim_delay):
+    """Build HTML for a single chart card with lazy-loaded iframe."""
+    with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
+        chart_content = f.read()
+    encoded = base64.b64encode(chart_content.encode('utf-8')).decode('utf-8')
+    return f'''
+            <div class="chart-card" style="animation-delay: {anim_delay:.2f}s;">
+              <div class="chart-label">{display_name}</div>
+              <iframe srcdoc="" data-src="{encoded}" class="chart-iframe lazy-iframe" loading="lazy"></iframe>
+            </div>
+'''
+
+
+def _generate_report_html(sections, uncategorized, taxon_name=None):
     """Generate the full HTML report string."""
 
     title = f"Satellome Report — {taxon_name}" if taxon_name else "Satellome Report"
 
-    # Build sections HTML
     sections_html = ""
     section_nav = ""
     anim_delay = 0.1
 
-    for section_id, section_title, section_desc, items in sections_data:
-        if not items:
-            continue
-
+    for section_id, section_title, section_desc, items in sections:
         section_nav += f'<a href="#{section_id}" class="nav-link">{section_title}</a>\n'
 
-        images_html = ""
-        for fpath, label, fname in items:
-            if fname.endswith('.svg'):
+        charts_html = ""
+        for fpath, display_name, fname in items:
+            if fname.endswith('.html'):
+                charts_html += _build_chart_html(fpath, display_name, anim_delay)
+            elif fname.endswith('.svg'):
                 data_uri = svg_to_data_uri(fpath)
-            else:
-                data_uri = image_to_data_uri(fpath)
-
-            images_html += f'''
+                charts_html += f'''
             <div class="image-card" style="animation-delay: {anim_delay:.2f}s;">
-              <div class="image-label">{label}</div>
-              <img src="{data_uri}" alt="{label}" loading="lazy">
+              <div class="image-label">{display_name}</div>
+              <img src="{data_uri}" alt="{display_name}" loading="lazy">
+            </div>
+'''
+            elif fname.endswith('.png'):
+                data_uri = image_to_data_uri(fpath)
+                charts_html += f'''
+            <div class="image-card" style="animation-delay: {anim_delay:.2f}s;">
+              <div class="image-label">{display_name}</div>
+              <img src="{data_uri}" alt="{display_name}" loading="lazy">
             </div>
 '''
             anim_delay += 0.05
@@ -161,36 +177,6 @@ def _generate_report_html(sections_data, interactive_charts, uncategorized, taxo
     <section id="{section_id}" class="section" style="animation-delay: {anim_delay:.2f}s;">
       <h2 class="section-title">{section_title}</h2>
       <p class="section-desc">{section_desc}</p>
-      <div class="image-grid">
-        {images_html}
-      </div>
-    </section>
-'''
-        anim_delay += 0.1
-
-    # Interactive charts section
-    if interactive_charts:
-        section_nav += '<a href="#interactive" class="nav-link">Interactive Charts</a>\n'
-        charts_html = ""
-        for fpath, fname in interactive_charts:
-            chart_name = os.path.splitext(fname)[0]
-            # Clean up the name for display
-            display_name = chart_name.replace('.', ' ').replace('_', ' ').title()
-            with open(fpath, 'r', encoding='utf-8', errors='replace') as f:
-                chart_content = f.read()
-            encoded = base64.b64encode(chart_content.encode('utf-8')).decode('utf-8')
-            charts_html += f'''
-            <div class="chart-card" style="animation-delay: {anim_delay:.2f}s;">
-              <div class="chart-label">{display_name}</div>
-              <iframe srcdoc="" data-src="{encoded}" class="chart-iframe lazy-iframe" loading="lazy"></iframe>
-            </div>
-'''
-            anim_delay += 0.05
-
-        sections_html += f'''
-    <section id="interactive" class="section" style="animation-delay: {anim_delay:.2f}s;">
-      <h2 class="section-title">Interactive Charts</h2>
-      <p class="section-desc">Plotly interactive visualizations. Hover for details, drag to rotate 3D views, scroll to zoom.</p>
       <div class="charts-grid">
         {charts_html}
       </div>
@@ -198,17 +184,16 @@ def _generate_report_html(sections_data, interactive_charts, uncategorized, taxo
 '''
         anim_delay += 0.1
 
-    # Uncategorized images
+    # Uncategorized charts
     if uncategorized:
         section_nav += '<a href="#other" class="nav-link">Other</a>\n'
         other_html = ""
-        for fpath, fname in uncategorized:
-            if fname.endswith('.svg'):
-                data_uri = svg_to_data_uri(fpath)
-            else:
-                data_uri = image_to_data_uri(fpath)
-            display_name = os.path.splitext(fname)[0].replace('.', ' ').replace('_', ' ')
-            other_html += f'''
+        for fpath, display_name, fname in uncategorized:
+            if fname.endswith('.html'):
+                other_html += _build_chart_html(fpath, display_name, anim_delay)
+            elif fname.endswith(('.png', '.svg')):
+                data_uri = svg_to_data_uri(fpath) if fname.endswith('.svg') else image_to_data_uri(fpath)
+                other_html += f'''
             <div class="image-card" style="animation-delay: {anim_delay:.2f}s;">
               <div class="image-label">{display_name}</div>
               <img src="{data_uri}" alt="{display_name}" loading="lazy">
@@ -219,7 +204,7 @@ def _generate_report_html(sections_data, interactive_charts, uncategorized, taxo
         sections_html += f'''
     <section id="other" class="section" style="animation-delay: {anim_delay:.2f}s;">
       <h2 class="section-title">Additional Visualizations</h2>
-      <div class="image-grid">
+      <div class="charts-grid">
         {other_html}
       </div>
     </section>
@@ -738,33 +723,17 @@ def create_html_report(image_folder, report_file, taxon_name=None):
         report_file (str): Path to output HTML file to create
         taxon_name (str, optional): Species/taxon name for report title
     """
-    # Collect files for each section
-    sections_data = []
-    categorized_files = set()
+    # Classify charts into sections
+    sections, uncategorized = _classify_charts(image_folder)
 
-    for section_id, section_title, section_desc, patterns in REPORT_SECTIONS:
-        items = _find_files_for_section(image_folder, patterns)
-        for fpath, label, fname in items:
-            categorized_files.add(fpath)
-        sections_data.append((section_id, section_title, section_desc, items))
-
-    # Find interactive Plotly charts
-    interactive_charts = _find_interactive_charts(image_folder)
-    for fpath, fname in interactive_charts:
-        categorized_files.add(fpath)
-
-    # Find uncategorized images
-    uncategorized = _find_uncategorized_images(image_folder, categorized_files)
-
-    total_items = sum(len(items) for _, _, _, items in sections_data)
-    total_items += len(interactive_charts) + len(uncategorized)
+    total_items = sum(len(items) for _, _, _, items in sections) + len(uncategorized)
 
     if total_items == 0:
         logger.warning(f"No visualization files found in {image_folder}")
         return
 
     # Generate and write report
-    html = _generate_report_html(sections_data, interactive_charts, uncategorized, taxon_name)
+    html = _generate_report_html(sections, uncategorized, taxon_name)
 
     os.makedirs(os.path.dirname(report_file), exist_ok=True)
     with open(report_file, 'w', encoding='utf-8') as f:
