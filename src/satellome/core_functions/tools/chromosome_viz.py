@@ -370,6 +370,25 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
   .tooltip .tt-row{{display:flex;justify-content:space-between;gap:12px;line-height:1.6;}}
   .tooltip .tt-val{{font-family:'JetBrains Mono',monospace;font-size:11px;}}
 
+  /* === CHROMOSOME PICKER === */
+  .chr-picker{{
+    display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px;
+    justify-content:center;
+  }}
+  .chr-pick{{
+    display:flex;align-items:center;gap:3px;
+    padding:4px 8px;border-radius:5px;cursor:pointer;
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text2);
+    border:1px solid transparent;transition:all .15s;user-select:none;
+  }}
+  .chr-pick:hover{{background:var(--border);}}
+  .chr-pick.active{{
+    background:var(--card);border-color:var(--c-accent);color:var(--text);
+    font-weight:500;box-shadow:0 1px 4px var(--shadow);
+  }}
+  .chr-pick-dot{{width:5px;height:5px;border-radius:50%;flex-shrink:0;}}
+  .chr-pick-name{{}}
+
   /* === CHROMOSOME DETAIL VIEW === */
   .chr-detail{{display:none;}}
   .chr-detail.active{{display:block;}}
@@ -517,7 +536,11 @@ function toggleLayer(el){{
   var layer=el.getAttribute('data-layer');
   LAYERS[layer]=!LAYERS[layer];
   el.classList.toggle('off',!LAYERS[layer]);
-  render();
+  if(CURRENT_CHR!==null){{
+    showChromosome(CURRENT_CHR);
+  }}else{{
+    render();
+  }}
 }}
 
 function render(){{
@@ -612,62 +635,105 @@ function showChromosome(idx){{
   CURRENT_CHR=idx;
   var c=DATA[idx];
   document.getElementById('chrList').style.display='none';
+  document.querySelector('.header').style.display='none';
+  document.querySelector('.footer').style.display='none';
   var detail=document.getElementById('chrDetail');
   detail.classList.add('active');
 
   var bc=c.density.length;
   var bpPerBin=BIN_KB*1000;
 
-  // Calculate cols to make a roughly square grid that fills the viewport
-  // Target: sqrt(bc) cols so rows ≈ cols
-  var cols=Math.ceil(Math.sqrt(bc));
-  if(cols<10)cols=10;
+  // Calculate grid to fill viewport as a square
+  // Available height: viewport minus header/padding (~100px for header bar)
+  var availH=window.innerHeight-140;
+  var availW=detail.offsetWidth||800;
+
+  // We want a roughly square grid: cols/rows ≈ availW/availH
+  // Each cell: cellW = availW/cols, cellH = availH/rows
+  // We want cellW ≈ cellH (square cells)
+  // cols * rows = bc, cols/rows = availW/availH
+  // cols = sqrt(bc * availW/availH)
+  var aspect=availW/availH;
+  var cols=Math.round(Math.sqrt(bc*aspect));
+  if(cols<5)cols=5;
+  if(cols>bc)cols=bc;
   var numRows=Math.ceil(bc/cols);
   var bpPerRow=cols*bpPerBin;
 
-  // Row height: fill available space (aim for ~80vh)
-  var rowH=Math.max(Math.floor(600/numRows),3);
-  if(rowH>12)rowH=12;
+  // Cell height to fill available vertical space
+  var rowH=Math.max(Math.floor(availH/numRows),2);
 
-  var html='<div class="chr-detail-header">'+
+  // Telomere status colors
+  function teloColor(status){{
+    if(status==='PRESENT')return 'var(--c-telo-ok)';
+    if(status==='PARTIAL')return 'var(--c-telo-part)';
+    return 'var(--c-telo-abs)';
+  }}
+
+  // Chromosome picker bar
+  var picker='<div class="chr-picker">';
+  DATA.forEach(function(ch,i){{
+    var cls=(i===idx)?'chr-pick active':'chr-pick';
+    var tc=ch.t2t?'var(--c-telo-ok)':'var(--muted)';
+    picker+='<div class="'+cls+'" onclick="showChromosome('+i+')" title="'+ch.name+' ('+( ch.length/1e6).toFixed(0)+' Mb)">'+
+      '<span class="chr-pick-dot" style="background:'+tc+'"></span>'+
+      '<span class="chr-pick-name">'+ch.name.replace("chr","")+'</span></div>';
+  }});
+  picker+='</div>';
+
+  var html=picker+
+    '<div class="chr-detail-header">'+
     '<div class="back-btn" onclick="showGenome()">&#8592; Genome</div>'+
     '<div class="chr-detail-title">'+c.name+'</div>'+
-    '<div class="chr-detail-sub">'+( c.length/1e6).toFixed(1)+' Mb &middot; '+
-    c.telo_left+' / '+c.telo_right+
-    (c.t2t?' &middot; T2T':'')+
+    '<div class="chr-detail-sub">'+( c.length/1e6).toFixed(1)+' Mb'+
+    ' &middot; <span style="color:'+teloColor(c.telo_left)+'">&#9646;</span> '+c.telo_left+
+    ' / '+c.telo_right+' <span style="color:'+teloColor(c.telo_right)+'">&#9646;</span>'+
+    (c.t2t?' &middot; <span style="color:var(--c-telo-ok)">T2T</span>':'')+
+    ' &middot; '+c.its.length+' ITS'+
     '</div></div>';
 
   html+='<div class="chr-grid">';
+
+  // First row: telomere indicator at start
   for(var row=0;row<numRows;row++){{
     var startBin=row*cols;
     var endBin=Math.min(startBin+cols,bc);
-    var rowBins=endBin-startBin;
+    var isFirst=(row===0);
+    var isLast=(row===numRows-1);
 
     html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px">';
+
+    // Telomere caps on first/last row
+    if(isFirst && LAYERS.telomere){{
+      html+='<div class="chr-grid-cell" style="left:0;width:2px;background:'+teloColor(c.telo_left)+';z-index:2;border-radius:1px 0 0 1px"></div>';
+    }}
+    if(isLast && LAYERS.telomere){{
+      // Place at the end of the last bin
+      var lastBinPct=((endBin-startBin-1)/cols*100);
+      html+='<div class="chr-grid-cell" style="left:calc('+lastBinPct+'% + 100%/'+cols+' - 2px);width:2px;background:'+teloColor(c.telo_right)+';z-index:2;border-radius:0 1px 1px 0"></div>';
+    }}
+
     for(var i=startBin;i<endBin;i++){{
       var d=c.density[i];
-      var total=d[0]+d[1]+d[2]+d[3];
-      if(total<0.005)continue;
-
       var lp=((i-startBin)/cols*100);
       var wp=(1/cols*100);
 
-      // Find dominant category
-      var maxVal=0,maxCat=0;
+      // Render all active categories stacked
       for(var cat=0;cat<4;cat++){{
-        if(!LAYERS[CAT_KEYS[cat]])continue;
-        if(d[cat]>maxVal){{maxVal=d[cat];maxCat=cat;}}
+        var key=CAT_KEYS[cat];
+        if(!LAYERS[key])continue;
+        var val=d[cat];
+        if(val<0.005)continue;
+        html+='<div class="chr-grid-cell" style="'+
+          'left:'+lp+'%;width:'+Math.max(wp,0.2)+'%;'+
+          'top:'+(cat*25)+'%;height:25%;'+
+          'background:var('+COLORS[cat]+');'+
+          'opacity:'+Math.min(0.25+val*0.75,1)+
+          '"></div>';
       }}
-      if(maxVal<0.005)continue;
-
-      html+='<div class="chr-grid-cell" style="'+
-        'left:'+lp+'%;width:'+Math.max(wp,0.3)+'%;'+
-        'background:var('+COLORS[maxCat]+');'+
-        'opacity:'+Math.min(0.25+maxVal*0.75,1)+
-        '"></div>';
     }}
 
-    // ITS marks on this row
+    // ITS marks
     if(LAYERS.its){{
       c.its.forEach(function(s){{
         var sBin=Math.floor(s.start/bpPerBin);
@@ -675,7 +741,7 @@ function showChromosome(idx){{
         if(sBin>=startBin && sBin<endBin){{
           var lp=((sBin-startBin)/cols*100);
           var wp=Math.max(((eBin-sBin)/cols*100),0.3);
-          html+='<div class="chr-grid-cell" style="left:'+lp+'%;width:'+wp+'%;background:var(--c-its);opacity:0.8;z-index:1"></div>';
+          html+='<div class="chr-grid-cell" style="left:'+lp+'%;width:'+wp+'%;top:0;height:100%;background:var(--c-its);opacity:0.8;z-index:1"></div>';
         }}
       }});
     }}
@@ -684,10 +750,10 @@ function showChromosome(idx){{
   }}
   html+='</div>';
 
-  // Scale labels
+  // Row labels on left side
   html+='<div class="chr-grid-labels">'+
     '<span>0 Mb</span>'+
-    '<span>'+(bpPerRow/2/1e6).toFixed(1)+' Mb per row</span>'+
+    '<span>'+(bpPerRow/1e6).toFixed(1)+' Mb / row &middot; '+cols+' bins &times; '+numRows+' rows</span>'+
     '<span>'+(c.length/1e6).toFixed(1)+' Mb</span>'+
     '</div>';
 
@@ -726,6 +792,8 @@ function showChromosome(idx){{
 function showGenome(){{
   CURRENT_CHR=null;
   document.getElementById('chrList').style.display='';
+  document.querySelector('.header').style.display='';
+  document.querySelector('.footer').style.display='';
   var detail=document.getElementById('chrDetail');
   detail.classList.remove('active');
   detail.innerHTML='';
