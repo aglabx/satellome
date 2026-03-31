@@ -15,7 +15,7 @@ struct SeqRecord {
 
 /// Parse FASTA, collect per-scaffold stats, write .fai and print summary.
 /// For gzip input, offset/line_bases/line_bytes are approximate (not seekable).
-fn process_fasta<R: Read>(reader: R, fai_path: &str, is_gz: bool) -> io::Result<()> {
+fn process_fasta<R: Read>(reader: R, fai_path: &str) -> io::Result<()> {
     let buf = BufReader::with_capacity(1 << 20, reader); // 1 MB buffer
     let mut records: Vec<SeqRecord> = Vec::new();
     let mut current_name = String::new();
@@ -69,15 +69,12 @@ fn process_fasta<R: Read>(reader: R, fai_path: &str, is_gz: bool) -> io::Result<
         });
     }
 
-    // Write .fai file
-    if !is_gz {
-        // Only write proper .fai for uncompressed files (offsets are valid)
-        let mut fai = File::create(fai_path)?;
-        for r in &records {
-            writeln!(fai, "{}\t{}\t{}\t{}\t{}", r.name, r.length, r.offset, r.line_bases, r.line_bytes)?;
-        }
-        eprintln!("Wrote {}", fai_path);
+    // Write .fai file (for .gz, offsets refer to uncompressed stream)
+    let mut fai = File::create(fai_path)?;
+    for r in &records {
+        writeln!(fai, "{}\t{}\t{}\t{}\t{}", r.name, r.length, r.offset, r.line_bases, r.line_bytes)?;
     }
+    eprintln!("Wrote {}", fai_path);
 
     // Print per-scaffold sizes to stdout
     let mut total: u64 = 0;
@@ -133,12 +130,11 @@ fn main() {
         process::exit(1);
     });
 
-    let is_gz = path.ends_with(".gz");
-    let result = if is_gz {
+    let result = if path.ends_with(".gz") {
         let decoder = MultiGzDecoder::new(file);
-        process_fasta(decoder, &fai_path, true)
+        process_fasta(decoder, &fai_path)
     } else {
-        process_fasta(file, &fai_path, false)
+        process_fasta(file, &fai_path)
     };
 
     if let Err(e) = result {
