@@ -519,6 +519,50 @@ def run_trf_drawing(settings, force_rerun):
         sys.exit(1)
 
 
+def run_telomere_check(settings, force_rerun):
+    """Run telomere check on the genome assembly."""
+    import shutil
+    from pathlib import Path
+
+    fasta_file = settings["fasta_file"]
+    reports_dir = os.path.join(settings["output_dir"], "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    telomere_output = os.path.join(reports_dir, "telomeres.tsv")
+
+    if os.path.exists(telomere_output) and not force_rerun:
+        logger.info(f"Telomere check already done: {telomere_output}")
+        return True
+
+    # Find binary
+    telomere_bin = None
+    bin_dir = Path(__file__).parent / "bin"
+    candidate = bin_dir / "telomere-check"
+    if candidate.exists():
+        telomere_bin = str(candidate)
+    else:
+        telomere_bin = shutil.which("telomere-check")
+
+    if not telomere_bin:
+        logger.warning("telomere-check binary not found, skipping")
+        return False
+
+    logger.info("Running telomere check...")
+    result = subprocess.run(
+        [telomere_bin, fasta_file, telomere_output],
+        capture_output=True, text=True, timeout=7200
+    )
+
+    if result.returncode == 0:
+        logger.info("Telomere check completed!")
+        for line in result.stderr.strip().split('\n'):
+            if line.startswith(('Summary', '  ')):
+                logger.info(f"  {line.strip()}")
+        return True
+    else:
+        logger.warning(f"Telomere check failed: {result.stderr}")
+        return False
+
+
 def run_fastan(settings, force_rerun):
     """Run FasTAN analysis step."""
     import shutil
@@ -1079,6 +1123,11 @@ def main():
         logger.info("STEP 1: TRF SEARCH - SKIPPED (use --trf to enable)")
         logger.info(SEPARATOR_LINE)
 
+    # Launch telomere check in background (runs in parallel with FasTAN)
+    from concurrent.futures import ThreadPoolExecutor
+    telomere_executor = ThreadPoolExecutor(max_workers=1)
+    telomere_future = telomere_executor.submit(run_telomere_check, settings, force_downstream)
+
     # Step 1b: FasTAN Analysis (unless --nofastan)
     fastan_success = False
     if not skip_fastan:
@@ -1119,6 +1168,14 @@ def main():
         genome_size = genome_size_future.result()
         settings["genome_size"] = genome_size
         logger.info(f"Genome size: {genome_size:,} bp")
+
+    # Collect telomere check result
+    try:
+        telomere_ok = telomere_future.result(timeout=10)
+        if telomere_ok:
+            logger.info("Telomere check: done")
+    except Exception:
+        logger.debug("Telomere check still running or failed, continuing")
 
     # Remaining steps run if TRF was executed OR FasTAN was successful OR using existing FasTAN output
     if run_trf or fastan_success or use_existing_fastan:
