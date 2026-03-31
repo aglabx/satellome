@@ -1314,8 +1314,8 @@ def draw_all(
     repeats_without_gaps = []
     for d in df_trs:
         chrm = d.get("chrm")
-        start = d.get("start")
-        end = d.get("end")
+        start = int(d.get("start"))
+        end = int(d.get("end"))
         family_name = d.get("family_name")
 
         if chrm not in chrm2gapIT:
