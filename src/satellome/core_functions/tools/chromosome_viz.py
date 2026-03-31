@@ -13,7 +13,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-BIN_SIZE = 100_000  # 100 kb bins for density
+BIN_SIZE = 500_000  # 500 kb bins for density
 
 
 def load_fai(fai_path):
@@ -438,9 +438,9 @@ function render(){{
         var bin=document.createElement('div');
         bin.className='density-bin layer-'+key;
         bin.style.left=lp+'%';
-        bin.style.width=Math.max(wp,0.2)+'%';
+        bin.style.width=Math.max(wp,0.5)+'%';
         bin.style.background='var('+COLORS[cat]+')';
-        bin.style.opacity=Math.min(0.15+val*0.85,1);
+        bin.style.opacity=Math.min(0.3+val*0.7,1);
         // Stack vertically: each category gets a quarter
         bin.style.top=(cat*25)+'%';
         bin.style.height='25%';
