@@ -72,18 +72,27 @@ def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
     Returns dict: {chr_name: {bin_index: {"micro": bp, "complex": bp, "total": bp}}}
     """
     # Initialize bins
+    # Categories by period length
+    CATS = ["micro", "mini", "satellite", "macro"]
     bins = {}
     for c in chroms:
         n_bins = (c["length"] // bin_size) + 1
-        bins[c["name"]] = [{"micro": 0, "complex": 0, "total": 0} for _ in range(n_bins)]
+        bins[c["name"]] = [{cat: 0 for cat in CATS} for _ in range(n_bins)]
 
     csv.field_size_limit(sys.maxsize)
 
+    def _sat_lines(fh):
+        """Yield lines, stripping '#' from header but skipping comment lines."""
+        for line in fh:
+            if line.startswith('#project') or line.startswith('#Project'):
+                yield line[1:]  # strip '#' from header row
+            elif line.startswith('#'):
+                continue  # skip comments
+            else:
+                yield line
+
     with open(sat_path, 'r') as f:
-        reader = csv.DictReader(
-            (line for line in f if not line.startswith('#')),
-            delimiter='\t'
-        )
+        reader = csv.DictReader(_sat_lines(f), delimiter='\t')
         for row in reader:
             chrom = row.get("trf_head", "")
             if chrom not in bins:
@@ -95,8 +104,14 @@ def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
             except (ValueError, TypeError):
                 continue
 
-            arr_len = end - start
-            category = "micro" if period < 10 else "complex"
+            if period < 6:
+                category = "micro"
+            elif period < 10:
+                category = "mini"
+            elif period <= 100:
+                category = "satellite"
+            else:
+                category = "macro"
 
             start_bin = start // bin_size
             end_bin = end // bin_size
@@ -107,7 +122,6 @@ def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
                 overlap = min(end, b_end) - max(start, b_start)
                 if overlap > 0:
                     bins[chrom][b][category] += overlap
-                    bins[chrom][b]["total"] += overlap
 
     return bins
 
@@ -132,14 +146,16 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
         telo = telomeres.get(name, {})
         chrom_its = its.get(name, [])
 
-        # Compress bins to density values (0-1)
+        # Compress bins to density values (0-1) per category
         chr_bins = bins.get(name, [])
         density = []
         for b in chr_bins:
-            d = min(b["total"] / BIN_SIZE, 1.0) if BIN_SIZE > 0 else 0
-            micro_d = min(b["micro"] / BIN_SIZE, 1.0) if BIN_SIZE > 0 else 0
-            complex_d = min(b["complex"] / BIN_SIZE, 1.0) if BIN_SIZE > 0 else 0
-            density.append([round(micro_d, 3), round(complex_d, 3)])
+            density.append([
+                round(min(b.get("micro", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("mini", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("satellite", 0) / BIN_SIZE, 1.0), 3),
+                round(min(b.get("macro", 0) / BIN_SIZE, 1.0), 3),
+            ])
 
         chrom_data.append({
             "name": name,
@@ -155,7 +171,13 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
     data_json = json.dumps(chrom_data)
     bin_size_kb = BIN_SIZE // 1000
 
-    html = _build_html(data_json, bin_size_kb, assembly_name, max_len)
+    # Count totals for summary
+    total_bp = sum(c["length"] for c in chroms_sorted)
+    t2t_count = sum(1 for c in chrom_data if c["t2t"])
+    its_count = sum(len(c["its"]) for c in chrom_data)
+
+    html = _build_html(data_json, bin_size_kb, assembly_name, max_len,
+                       len(chroms_sorted), total_bp, t2t_count, its_count)
 
     if output_path:
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -166,7 +188,10 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
     return html
 
 
-def _build_html(data_json, bin_size_kb, assembly_name, max_len):
+def _build_html(data_json, bin_size_kb, assembly_name, max_len,
+                n_chroms, total_bp, t2t_count, its_count):
+    total_mb = round(total_bp / 1e6, 1)
+
     return f'''<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -176,298 +201,297 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len):
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
 <style>
   :root, [data-theme="light"] {{
-    --bg: #f8f6f1; --card: #fff; --border: #e2ddd5;
-    --text: #1a1a1a; --text2: #555; --muted: #888;
-    --cyan: #0891b2; --emerald: #059669; --rose: #be123c;
-    --violet: #7c3aed; --amber: #b45309;
-    --shadow: rgba(0,0,0,.08);
-    --chr-bg: #e8e5df; --chr-border: #d4d0c8;
-    --micro-color: #0891b2; --complex-color: #7c3aed;
-    --telo-ok: #059669; --telo-partial: #b45309; --telo-absent: #be123c;
-    --its-color: #db2777;
+    --bg:#f8f6f1; --card:#fff; --border:#e2ddd5;
+    --text:#1a1a1a; --text2:#555; --muted:#888;
+    --shadow:rgba(0,0,0,.08);
+    --chr-bg:#e8e5df; --chr-border:#d4d0c8;
+    --c-micro:#0891b2; --c-mini:#0d9488; --c-sat:#7c3aed; --c-macro:#be123c;
+    --c-telo-ok:#059669; --c-telo-part:#b45309; --c-telo-abs:#dc2626;
+    --c-its:#db2777; --c-accent:#0891b2;
+    --panel-bg:rgba(255,255,255,.92);
   }}
   [data-theme="dark"] {{
-    --bg: #0a0e17; --card: #111827; --border: #1e293b;
-    --text: #e2e8f0; --text2: #94a3b8; --muted: #64748b;
-    --cyan: #22d3ee; --emerald: #34d399; --rose: #fb7185;
-    --violet: #a78bfa; --amber: #fbbf24;
-    --shadow: rgba(0,0,0,.3);
-    --chr-bg: #1e293b; --chr-border: #334155;
-    --micro-color: #22d3ee; --complex-color: #a78bfa;
-    --telo-ok: #34d399; --telo-partial: #fbbf24; --telo-absent: #fb7185;
-    --its-color: #f472b6;
+    --bg:#0a0e17; --card:#111827; --border:#1e293b;
+    --text:#e2e8f0; --text2:#94a3b8; --muted:#64748b;
+    --shadow:rgba(0,0,0,.3);
+    --chr-bg:#1e293b; --chr-border:#334155;
+    --c-micro:#22d3ee; --c-mini:#2dd4bf; --c-sat:#a78bfa; --c-macro:#fb7185;
+    --c-telo-ok:#34d399; --c-telo-part:#fbbf24; --c-telo-abs:#f87171;
+    --c-its:#f472b6; --c-accent:#22d3ee;
+    --panel-bg:rgba(17,24,39,.92);
   }}
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:var(--bg); font-family:'Source Sans 3',sans-serif; color:var(--text); padding:40px 24px; }}
+  *{{margin:0;padding:0;box-sizing:border-box;}}
+  body{{background:var(--bg);font-family:'Source Sans 3',sans-serif;color:var(--text);}}
+  .layout{{display:flex;min-height:100vh;}}
 
-  .container {{ max-width:1200px; margin:0 auto; }}
+  /* === SIDE PANEL === */
+  .panel{{
+    width:220px; flex-shrink:0; position:sticky; top:0; height:100vh;
+    background:var(--panel-bg); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    border-right:1px solid var(--border); padding:24px 16px;
+    display:flex; flex-direction:column; gap:20px; overflow-y:auto;
+    z-index:10;
+  }}
+  .panel-title{{
+    font-family:'Playfair Display',serif; font-size:18px; font-weight:700;
+    color:var(--text); line-height:1.2;
+  }}
+  .panel-sub{{font-size:11px;color:var(--muted);margin-top:2px;font-family:'JetBrains Mono',monospace;}}
+  .panel-section{{display:flex;flex-direction:column;gap:4px;}}
+  .panel-section-title{{
+    font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:500;
+    letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:4px;
+  }}
+  .panel-stat{{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);}}
+  .panel-stat .val{{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text);}}
 
-  .header {{
-    text-align:center; margin-bottom:48px;
-    opacity:0; animation:fadeUp .6s ease-out forwards;
+  /* Layer toggles */
+  .layer-toggle{{
+    display:flex;align-items:center;gap:8px;cursor:pointer;
+    padding:5px 8px;border-radius:6px;transition:background .15s;
+    font-size:12px;color:var(--text2);user-select:none;
   }}
-  .header-label {{
-    font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500;
-    letter-spacing:3px; text-transform:uppercase; color:var(--cyan); margin-bottom:12px;
-  }}
-  .header h1 {{
-    font-family:'Playfair Display',serif; font-size:clamp(28px,4vw,42px); font-weight:900;
-    background:linear-gradient(135deg,var(--text) 0%,var(--cyan) 50%,var(--emerald) 100%);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-  }}
+  .layer-toggle:hover{{background:var(--border);}}
+  .layer-toggle .dot{{width:10px;height:10px;border-radius:2px;flex-shrink:0;transition:opacity .2s;}}
+  .layer-toggle.off .dot{{opacity:.2;}}
+  .layer-toggle.off{{opacity:.5;}}
+  .layer-toggle .lbl{{flex:1;}}
 
-  .toggle {{
-    position:fixed; top:20px; right:20px; z-index:100;
-    padding:5px 12px; border-radius:20px;
+  .theme-btn{{
+    margin-top:auto; padding:6px 10px; border-radius:6px;
     background:var(--card); border:1px solid var(--border); cursor:pointer;
     font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
-    box-shadow:0 2px 8px var(--shadow); user-select:none;
-    display:flex; align-items:center; gap:6px;
+    text-align:center; transition:all .2s;
   }}
-  .toggle:hover {{ transform:translateY(-1px); }}
-  .toggle-icon {{ font-size:14px; }}
+  .theme-btn:hover{{color:var(--c-accent);border-color:var(--c-accent);}}
 
-  .legend {{
-    display:flex; gap:20px; justify-content:center; flex-wrap:wrap;
-    margin-bottom:32px; opacity:0; animation:fadeUp .5s ease-out .1s forwards;
-  }}
-  .legend-item {{
-    display:flex; align-items:center; gap:6px;
-    font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text2);
-  }}
-  .legend-dot {{ width:10px; height:10px; border-radius:2px; }}
+  /* === MAIN CONTENT === */
+  .main{{flex:1;padding:40px 32px;max-width:1100px;}}
 
-  .chr-list {{
-    display:flex; flex-direction:column; gap:6px;
+  .header{{text-align:center;margin-bottom:40px;opacity:0;animation:fadeUp .6s ease-out forwards;}}
+  .header-label{{
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:500;
+    letter-spacing:3px;text-transform:uppercase;color:var(--c-accent);margin-bottom:10px;
+  }}
+  .header h1{{
+    font-family:'Playfair Display',serif;font-size:clamp(24px,3.5vw,36px);font-weight:900;
+    background:linear-gradient(135deg,var(--text) 0%,var(--c-accent) 100%);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   }}
 
-  .chr-row {{
-    display:grid; grid-template-columns:80px 1fr 60px; align-items:center; gap:12px;
-    opacity:0; transform:translateY(12px);
-    animation:fadeUp .4s ease-out forwards;
-    padding:4px 0;
+  .chr-list{{display:flex;flex-direction:column;gap:5px;}}
+  .chr-row{{
+    display:grid;grid-template-columns:70px 1fr 55px;align-items:center;gap:10px;
+    opacity:0;transform:translateY(10px);animation:fadeUp .35s ease-out forwards;padding:3px 0;
   }}
+  .chr-label{{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--text);text-align:right;white-space:nowrap;}}
+  .chr-bar-wrap{{position:relative;height:20px;cursor:crosshair;}}
+  .chr-bar{{
+    position:absolute;top:0;left:0;height:100%;
+    background:var(--chr-bg);border:1px solid var(--chr-border);
+    border-radius:10px;overflow:hidden;transition:box-shadow .2s;
+  }}
+  .chr-bar:hover{{box-shadow:0 2px 12px var(--shadow);}}
+  .chr-density{{position:absolute;top:0;left:0;height:100%;}}
+  .density-bin{{position:absolute;height:100%;}}
 
-  .chr-label {{
-    font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500;
-    color:var(--text); text-align:right; white-space:nowrap;
+  .telo-cap{{
+    position:absolute;top:-1px;width:7px;height:22px;border-radius:3px;z-index:2;
+    transition:transform .15s;
   }}
+  .telo-cap:hover{{transform:scaleY(1.25);}}
+  .telo-cap.left{{left:-1px;border-top-right-radius:0;border-bottom-right-radius:0;}}
+  .telo-cap.right{{right:-1px;border-top-left-radius:0;border-bottom-left-radius:0;}}
+  .telo-cap.PRESENT{{background:var(--c-telo-ok);}}
+  .telo-cap.PARTIAL{{background:var(--c-telo-part);}}
+  .telo-cap.ABSENT{{background:var(--c-telo-abs);}}
+  .telo-cap.UNKNOWN{{background:var(--muted);}}
 
-  .chr-bar-wrap {{
-    position:relative; height:22px; cursor:pointer;
-  }}
+  .its-mark{{position:absolute;top:0;height:100%;background:var(--c-its);opacity:.7;min-width:2px;z-index:1;}}
 
-  .chr-bar {{
-    position:absolute; top:0; left:0; height:100%;
-    background:var(--chr-bg); border:1px solid var(--chr-border);
-    border-radius:11px; overflow:hidden;
-    transition:box-shadow .2s;
-  }}
-  .chr-bar:hover {{
-    box-shadow:0 2px 12px var(--shadow);
-  }}
+  .chr-size{{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);white-space:nowrap;}}
 
-  .chr-density {{
-    position:absolute; top:0; left:0; height:100%;
+  /* Tooltip */
+  .tooltip{{
+    position:fixed;z-index:1000;pointer-events:none;
+    background:var(--card);border:1px solid var(--border);
+    border-radius:8px;padding:10px 14px;box-shadow:0 4px 16px var(--shadow);
+    font-size:12px;color:var(--text2);max-width:280px;
+    opacity:0;transition:opacity .12s;
   }}
+  .tooltip.visible{{opacity:1;}}
+  .tooltip .tt-title{{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--text);margin-bottom:6px;}}
+  .tooltip .tt-row{{display:flex;justify-content:space-between;gap:12px;line-height:1.6;}}
+  .tooltip .tt-val{{font-family:'JetBrains Mono',monospace;font-size:11px;}}
 
-  .density-bin {{
-    position:absolute; top:0; height:100%;
-  }}
+  .footer{{text-align:center;margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);opacity:0;animation:fadeUp .5s ease-out 1s forwards;}}
 
-  .telo-cap {{
-    position:absolute; top:-1px; width:8px; height:24px;
-    border-radius:4px; z-index:2;
-    transition:transform .2s;
-  }}
-  .telo-cap:hover {{ transform:scaleY(1.3); }}
-  .telo-cap.left {{ left:-1px; border-top-right-radius:0; border-bottom-right-radius:0; }}
-  .telo-cap.right {{ right:-1px; border-top-left-radius:0; border-bottom-left-radius:0; }}
-  .telo-cap.PRESENT {{ background:var(--telo-ok); }}
-  .telo-cap.PARTIAL {{ background:var(--telo-partial); }}
-  .telo-cap.ABSENT {{ background:var(--telo-absent); }}
-  .telo-cap.UNKNOWN {{ background:var(--muted); }}
-
-  .its-mark {{
-    position:absolute; top:0; height:100%;
-    background:var(--its-color); opacity:0.7;
-    min-width:2px; z-index:1;
-  }}
-
-  .chr-size {{
-    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
-    white-space:nowrap;
-  }}
-
-  .tooltip {{
-    position:fixed; z-index:1000; pointer-events:none;
-    background:var(--card); border:1px solid var(--border);
-    border-radius:8px; padding:10px 14px; box-shadow:0 4px 16px var(--shadow);
-    font-size:12px; color:var(--text2); max-width:260px;
-    opacity:0; transition:opacity .15s;
-    font-family:'Source Sans 3',sans-serif;
-  }}
-  .tooltip.visible {{ opacity:1; }}
-  .tooltip .tt-title {{
-    font-family:'JetBrains Mono',monospace; font-size:11px;
-    font-weight:500; color:var(--text); margin-bottom:4px;
-  }}
-  .tooltip .tt-row {{ display:flex; justify-content:space-between; gap:12px; }}
-  .tooltip .tt-val {{ font-family:'JetBrains Mono',monospace; font-size:11px; }}
-
-  .footer {{
-    text-align:center; margin-top:40px; padding-top:24px;
-    border-top:1px solid var(--border);
-    font-size:11px; color:var(--muted);
-    opacity:0; animation:fadeUp .5s ease-out 1s forwards;
-  }}
-
-  @keyframes fadeUp {{
-    from {{ opacity:0; transform:translateY(12px); }}
-    to {{ opacity:1; transform:translateY(0); }}
-  }}
+  @keyframes fadeUp{{from{{opacity:0;transform:translateY(10px);}}to{{opacity:1;transform:translateY(0);}}}}
+  @media(max-width:768px){{.panel{{display:none;}}.main{{padding:20px 12px;}}}}
 </style>
 </head>
 <body>
 
-<div class="toggle" onclick="toggleTheme()">
-  <span class="toggle-icon" id="tIcon">&#9790;</span>
-  <span id="tLabel">dark</span>
-</div>
-
 <div class="tooltip" id="tooltip"></div>
 
-<div class="container">
-  <div class="header">
-    <div class="header-label">Chromosome Map</div>
-    <h1>{assembly_name}</h1>
+<div class="layout">
+  <!-- SIDE PANEL -->
+  <div class="panel">
+    <div>
+      <div class="panel-title">{assembly_name}</div>
+      <div class="panel-sub">Chromosome Map</div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Assembly</div>
+      <div class="panel-stat"><span>Chromosomes</span><span class="val">{n_chroms}</span></div>
+      <div class="panel-stat"><span>Genome size</span><span class="val">{total_mb} Mb</span></div>
+      <div class="panel-stat"><span>T2T chromosomes</span><span class="val">{t2t_count}/{n_chroms}</span></div>
+      <div class="panel-stat"><span>ITS sites</span><span class="val">{its_count}</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-section-title">Layers</div>
+      <div class="layer-toggle" data-layer="micro" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-micro)"></div><span class="lbl">Micro (&lt;6 bp)</span>
+      </div>
+      <div class="layer-toggle" data-layer="mini" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-mini)"></div><span class="lbl">Mini (6-9 bp)</span>
+      </div>
+      <div class="layer-toggle" data-layer="satellite" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-sat)"></div><span class="lbl">Satellite (10-100 bp)</span>
+      </div>
+      <div class="layer-toggle" data-layer="macro" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-macro)"></div><span class="lbl">Macro (&gt;100 bp)</span>
+      </div>
+      <div class="layer-toggle" data-layer="its" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-its)"></div><span class="lbl">ITS</span>
+      </div>
+      <div class="layer-toggle" data-layer="telomere" onclick="toggleLayer(this)">
+        <div class="dot" style="background:var(--c-telo-ok)"></div><span class="lbl">Telomeres</span>
+      </div>
+    </div>
+
+    <div class="theme-btn" onclick="toggleTheme()" id="themeBtn">&#9790; Dark mode</div>
   </div>
 
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background:var(--micro-color)"></div>Microsatellites (&lt;10 bp)</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--complex-color)"></div>Complex repeats (&ge;10 bp)</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--telo-ok)"></div>Telomere present</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--telo-partial)"></div>Telomere partial</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--telo-absent)"></div>Telomere absent</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--its-color)"></div>ITS</div>
+  <!-- MAIN -->
+  <div class="main">
+    <div class="header">
+      <div class="header-label">Tandem Repeat Landscape</div>
+      <h1>{assembly_name}</h1>
+    </div>
+    <div class="chr-list" id="chrList"></div>
+    <div class="footer">Bin size: {bin_size_kb} kb &middot; satellome</div>
   </div>
-
-  <div class="chr-list" id="chrList"></div>
-
-  <div class="footer">Bin size: {bin_size_kb} kb &middot; satellome</div>
 </div>
 
 <script>
-var DATA = {data_json};
-var BIN_KB = {bin_size_kb};
-var MAX_LEN = {max_len};
+var DATA={data_json};
+var BIN_KB={bin_size_kb};
+var LAYERS={{micro:true,mini:true,satellite:true,macro:true,its:true,telomere:true}};
+var COLORS=['--c-micro','--c-mini','--c-sat','--c-macro'];
+var CAT_NAMES=['Micro','Mini','Satellite','Macro'];
 
-function render() {{
-  var list = document.getElementById('chrList');
-  list.innerHTML = '';
-  DATA.forEach(function(c, idx) {{
-    var row = document.createElement('div');
-    row.className = 'chr-row';
-    row.style.animationDelay = (0.15 + idx * 0.03) + 's';
+function toggleLayer(el){{
+  var layer=el.getAttribute('data-layer');
+  LAYERS[layer]=!LAYERS[layer];
+  el.classList.toggle('off',!LAYERS[layer]);
+  render();
+}}
 
-    var sizeMb = (c.length / 1e6).toFixed(1);
+function render(){{
+  var list=document.getElementById('chrList');
+  list.innerHTML='';
+  DATA.forEach(function(c,idx){{
+    var row=document.createElement('div');
+    row.className='chr-row';
+    row.style.animationDelay=(0.08+idx*0.025)+'s';
+    var sizeMb=(c.length/1e6).toFixed(1);
 
-    row.innerHTML =
-      '<div class="chr-label">' + c.name + '</div>' +
-      '<div class="chr-bar-wrap">' +
-        '<div class="chr-bar" style="width:' + c.pct + '%">' +
-          '<div class="chr-density" id="density-' + idx + '"></div>' +
-          '<div class="telo-cap left ' + c.telo_left + '" title="Left: ' + c.telo_left + '"></div>' +
-          '<div class="telo-cap right ' + c.telo_right + '" title="Right: ' + c.telo_right + '"></div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="chr-size">' + sizeMb + ' Mb</div>';
+    row.innerHTML=
+      '<div class="chr-label">'+c.name+'</div>'+
+      '<div class="chr-bar-wrap">'+
+        '<div class="chr-bar" style="width:'+c.pct+'%">'+
+          '<div class="chr-density" id="d-'+idx+'"></div>'+
+          (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'"></div><div class="telo-cap right '+c.telo_right+'"></div>':'')+
+        '</div>'+
+      '</div>'+
+      '<div class="chr-size">'+sizeMb+' Mb</div>';
 
     list.appendChild(row);
 
-    // Render density bins
-    var densityEl = document.getElementById('density-' + idx);
-    var binCount = c.density.length;
-    if (binCount === 0) return;
+    var de=document.getElementById('d-'+idx);
+    var bc=c.density.length;
+    if(bc===0)return;
 
-    for (var i = 0; i < binCount; i++) {{
-      var micro = c.density[i][0];
-      var complex = c.density[i][1];
-      if (micro + complex < 0.01) continue;
+    for(var i=0;i<bc;i++){{
+      var lp=i/bc*100;
+      var wp=1/bc*100;
 
-      var leftPct = (i / binCount * 100);
-      var widthPct = (1 / binCount * 100);
-
-      if (complex > 0.01) {{
-        var bin = document.createElement('div');
-        bin.className = 'density-bin';
-        bin.style.left = leftPct + '%';
-        bin.style.width = Math.max(widthPct, 0.3) + '%';
-        bin.style.background = 'var(--complex-color)';
-        bin.style.opacity = Math.min(0.2 + complex * 0.8, 1);
-        densityEl.appendChild(bin);
-      }}
-      if (micro > 0.01) {{
-        var bin2 = document.createElement('div');
-        bin2.className = 'density-bin';
-        bin2.style.left = leftPct + '%';
-        bin2.style.width = Math.max(widthPct, 0.3) + '%';
-        bin2.style.background = 'var(--micro-color)';
-        bin2.style.opacity = Math.min(0.2 + micro * 0.8, 1);
-        bin2.style.height = '50%';
-        bin2.style.top = '50%';
-        densityEl.appendChild(bin2);
+      // Stack categories: each gets a vertical slice
+      for(var cat=0;cat<4;cat++){{
+        var key=['micro','mini','satellite','macro'][cat];
+        if(!LAYERS[key])continue;
+        var val=c.density[i][cat];
+        if(val<0.005)continue;
+        var bin=document.createElement('div');
+        bin.className='density-bin layer-'+key;
+        bin.style.left=lp+'%';
+        bin.style.width=Math.max(wp,0.2)+'%';
+        bin.style.background='var('+COLORS[cat]+')';
+        bin.style.opacity=Math.min(0.15+val*0.85,1);
+        // Stack vertically: each category gets a quarter
+        bin.style.top=(cat*25)+'%';
+        bin.style.height='25%';
+        de.appendChild(bin);
       }}
     }}
 
-    // Render ITS marks
-    var bar = row.querySelector('.chr-bar');
-    c.its.forEach(function(site) {{
-      var mark = document.createElement('div');
-      mark.className = 'its-mark';
-      var pos = site.start / c.length * 100;
-      var w = Math.max((site.end - site.start) / c.length * 100, 0.15);
-      mark.style.left = pos + '%';
-      mark.style.width = w + '%';
-      mark.title = 'ITS: ' + site.count + ' repeats';
-      bar.appendChild(mark);
-    }});
+    // ITS
+    if(LAYERS.its){{
+      var bar=row.querySelector('.chr-bar');
+      c.its.forEach(function(s){{
+        var m=document.createElement('div');
+        m.className='its-mark';
+        m.style.left=(s.start/c.length*100)+'%';
+        m.style.width=Math.max((s.end-s.start)/c.length*100,0.15)+'%';
+        bar.appendChild(m);
+      }});
+    }}
 
-    // Tooltip on hover
-    bar.addEventListener('mousemove', function(e) {{
-      var rect = bar.getBoundingClientRect();
-      var x = (e.clientX - rect.left) / rect.width;
-      var pos = Math.floor(x * c.length);
-      var binIdx = Math.floor(x * binCount);
-      if (binIdx >= binCount) binIdx = binCount - 1;
-      var d = c.density[binIdx] || [0,0];
-
-      var tt = document.getElementById('tooltip');
-      tt.innerHTML =
-        '<div class="tt-title">' + c.name + '</div>' +
-        '<div class="tt-row"><span>Position</span><span class="tt-val">' + (pos/1e6).toFixed(2) + ' Mb</span></div>' +
-        '<div class="tt-row"><span>Microsatellites</span><span class="tt-val">' + (d[0]*100).toFixed(1) + '%</span></div>' +
-        '<div class="tt-row"><span>Complex</span><span class="tt-val">' + (d[1]*100).toFixed(1) + '%</span></div>' +
-        '<div class="tt-row"><span>Left telomere</span><span class="tt-val">' + c.telo_left + '</span></div>' +
-        '<div class="tt-row"><span>Right telomere</span><span class="tt-val">' + c.telo_right + '</span></div>';
-      tt.style.left = (e.clientX + 14) + 'px';
-      tt.style.top = (e.clientY - 10) + 'px';
+    // Tooltip
+    var bar=row.querySelector('.chr-bar');
+    bar.addEventListener('mousemove',function(e){{
+      var rect=bar.getBoundingClientRect();
+      var x=(e.clientX-rect.left)/rect.width;
+      var pos=Math.floor(x*c.length);
+      var bi=Math.min(Math.floor(x*bc),bc-1);
+      var d=c.density[bi]||[0,0,0,0];
+      var tt=document.getElementById('tooltip');
+      tt.innerHTML=
+        '<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>'+
+        '<div class="tt-row"><span>Micro (&lt;6 bp)</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>Mini (6-9 bp)</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>Satellite (10-100)</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>Macro (&gt;100 bp)</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>Telomere L / R</span><span class="tt-val">'+c.telo_left+' / '+c.telo_right+'</span></div>';
+      tt.style.left=(e.clientX+14)+'px';
+      tt.style.top=(e.clientY-10)+'px';
       tt.classList.add('visible');
     }});
-    bar.addEventListener('mouseleave', function() {{
+    bar.addEventListener('mouseleave',function(){{
       document.getElementById('tooltip').classList.remove('visible');
     }});
   }});
 }}
 
-function toggleTheme() {{
-  var h = document.documentElement;
-  var ic = document.getElementById('tIcon');
-  var lb = document.getElementById('tLabel');
-  if (h.getAttribute('data-theme') === 'dark') {{
-    h.setAttribute('data-theme', 'light'); ic.innerHTML='\\u263E'; lb.textContent='dark';
-  }} else {{
-    h.setAttribute('data-theme', 'dark'); ic.innerHTML='\\u263C'; lb.textContent='light';
+function toggleTheme(){{
+  var h=document.documentElement,b=document.getElementById('themeBtn');
+  if(h.getAttribute('data-theme')==='dark'){{
+    h.setAttribute('data-theme','light');b.innerHTML='\\u263E Dark mode';
+  }}else{{
+    h.setAttribute('data-theme','dark');b.innerHTML='\\u263C Light mode';
   }}
 }}
 
@@ -475,12 +499,6 @@ render();
 </script>
 </body>
 </html>'''
-'''
-
-Minimal usage:
-    from satellome.core_functions.tools.chromosome_viz import create_chromosome_visualization
-    create_chromosome_visualization(fai_path, sat_path, telomere_path, output_path)
-'''
 
 
 def create_chromosome_visualization(fai_path, sat_path, output_path,
