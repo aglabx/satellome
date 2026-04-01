@@ -144,6 +144,49 @@ def bin_repeats(sat_path, chroms):
     return coarse, fine
 
 
+def generate_monomers_json(monomers_tsv, output_path, min_array_length=10000):
+    """Generate JSON with monomer data for large arrays.
+
+    Output: {array_id: {chr, start, end, period, monomers: [{len, ed}...]}}
+    """
+    if not os.path.exists(monomers_tsv):
+        logger.warning(f"Monomers file not found: {monomers_tsv}")
+        return
+
+    csv.field_size_limit(sys.maxsize)
+    arrays = {}  # array_id -> {chr, start, end, period, monomers: []}
+
+    logger.info(f"Loading monomers from {monomers_tsv}...")
+    with open(monomers_tsv, 'r') as f:
+        reader = csv.DictReader(f, delimiter='\t')
+        for row in reader:
+            aid = row['array_id']
+            parts = aid.split('_')
+            if len(parts) < 5:
+                continue
+            arr_len = int(parts[3])
+            if arr_len < min_array_length:
+                continue
+
+            if aid not in arrays:
+                arrays[aid] = {
+                    "c": parts[0],  # chr
+                    "s": int(parts[1]),  # start
+                    "e": int(parts[2]),  # end
+                    "p": int(parts[4]),  # period
+                    "m": [],  # monomers
+                }
+
+            if row['type'] == 'monomer':
+                arrays[aid]["m"].append(int(row.get('length', 0)))
+
+    logger.info(f"Writing {len(arrays)} arrays to {output_path}...")
+    with open(output_path, 'w') as f:
+        json.dump(arrays, f, separators=(',', ':'))
+    size_mb = os.path.getsize(output_path) / 1e6
+    logger.info(f"Monomers JSON: {size_mb:.1f} MB")
+
+
 def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="", output_path=None):
     """Generate the full chromosome visualization HTML."""
 
@@ -441,6 +484,30 @@ def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
     margin-top:6px;padding:0 8px;
   }}
 
+  /* === REPEAT VIEW === */
+  .repeat-card{{
+    background:var(--card);border:1px solid var(--border);border-radius:8px;
+    margin-bottom:10px;overflow:hidden;
+  }}
+  .repeat-header{{
+    padding:10px 14px;display:flex;justify-content:space-between;align-items:center;
+    border-bottom:1px solid var(--border);
+  }}
+  .repeat-title{{
+    font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--text);
+  }}
+  .repeat-info{{
+    font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);
+  }}
+  .repeat-monomers{{
+    display:flex;height:24px;padding:4px;gap:1px;align-items:stretch;
+  }}
+  .mono-block{{
+    height:100%;border-radius:1px;min-width:1px;
+    transition:opacity .1s;cursor:default;
+  }}
+  .mono-block:hover{{opacity:0.7;}}
+
   .footer{{text-align:center;margin-top:36px;padding-top:20px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);opacity:0;animation:fadeUp .5s ease-out 1s forwards;}}
 
   @keyframes fadeUp{{from{{opacity:0;transform:translateY(10px);}}to{{opacity:1;transform:translateY(0);}}}}
@@ -500,7 +567,7 @@ def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
       <div class="nav-level" data-level="region" onclick="setLevel(this)">
         <span class="nav-icon">&#9656;</span><span class="lbl">Region</span>
       </div>
-      <div class="nav-level disabled" data-level="repeat">
+      <div class="nav-level" data-level="repeat" onclick="setLevel(this)">
         <span class="nav-icon">&#9656;</span><span class="lbl">Repeat</span>
       </div>
       <div class="nav-level disabled" data-level="monomer">
@@ -932,9 +999,96 @@ function showRegion(chrIdx, coarseBinIdx){{
     rowEl.addEventListener('mouseleave',function(){{
       document.getElementById('tooltip').classList.remove('visible');
     }});
+    // Click to show repeats in this fine bin
+    rowEl.addEventListener('click',function(ev){{
+      var rect=rowEl.getBoundingClientRect();
+      var x=(ev.clientX-rect.left)/rect.width;
+      var rowIdx=parseInt(rowEl.getAttribute('data-row'));
+      var rActual=Math.min(rowIdx*cols+cols,fb)-rowIdx*cols;
+      var bi=rowIdx*cols+Math.floor(x*rActual);
+      if(bi>=fb)bi=fb-1;
+      var bStart=(fineStart+bi)*bpPerFine;
+      var bEnd=bStart+bpPerFine;
+      showRepeat(chrIdx,bStart,bEnd);
+    }});
   }});
 
   setNavLevel('region');
+}}
+
+var MONOMERS=null;
+var CURRENT_REPEAT=null;
+
+function loadMonomers(cb){{
+  if(MONOMERS){{cb();return;}}
+  var jsonUrl=location.href.replace('.html','_monomers.json');
+  fetch(jsonUrl).then(function(r){{return r.json();}}).then(function(data){{
+    MONOMERS=data;
+    cb();
+  }}).catch(function(){{
+    MONOMERS={{}};
+    cb();
+  }});
+}}
+
+function showRepeat(chrIdx, binStart, binEnd){{
+  loadMonomers(function(){{
+    CURRENT_REPEAT={{chr:chrIdx,s:binStart,e:binEnd}};
+    var c=DATA[chrIdx];
+    document.getElementById('chrList').style.display='none';
+    document.querySelector('.header').style.display='none';
+    document.querySelector('.footer').style.display='none';
+    var detail=document.getElementById('chrDetail');
+    detail.classList.add('active');
+
+    // Find arrays in this region from monomers data
+    var regionArrays=[];
+    for(var aid in MONOMERS){{
+      var a=MONOMERS[aid];
+      if(a.c===c.name && a.s<binEnd && a.e>binStart){{
+        regionArrays.push({{id:aid,chr:a.c,start:a.s,end:a.e,period:a.p,monomers:a.m}});
+      }}
+    }}
+    regionArrays.sort(function(a,b){{return a.start-b.start;}});
+
+    var html='<div class="chr-detail-header">'+
+      '<div class="back-btn" onclick="showRegion('+chrIdx+','+Math.floor(binStart/(BIN_KB*1000))+')">&#8592; Region</div>'+
+      '<div class="chr-detail-title">Repeats</div>'+
+      '<div class="chr-detail-sub">'+c.name+' : '+(binStart/1e6).toFixed(3)+' &ndash; '+(binEnd/1e6).toFixed(3)+' Mb &middot; '+regionArrays.length+' arrays</div>'+
+      '</div>';
+
+    if(regionArrays.length===0){{
+      html+='<div style="color:var(--muted);font-size:13px;padding:20px">No arrays &ge; 10 kb in this region</div>';
+    }}
+
+    regionArrays.forEach(function(arr){{
+      var arrLen=arr.end-arr.start;
+      var nMono=arr.monomers.length;
+      html+='<div class="repeat-card">'+
+        '<div class="repeat-header">'+
+          '<span class="repeat-title">'+arr.chr+':'+arr.start.toLocaleString()+'&ndash;'+arr.end.toLocaleString()+'</span>'+
+          '<span class="repeat-info">'+(arrLen/1000).toFixed(1)+' kb &middot; period '+arr.period+' bp &middot; '+nMono+' monomers</span>'+
+        '</div>'+
+        '<div class="repeat-monomers">';
+
+      // Render monomers as blocks
+      if(nMono>0){{
+        var maxMono=Math.max.apply(null,arr.monomers);
+        arr.monomers.forEach(function(mlen,mi){{
+          var w=Math.max(mlen/arrLen*100*nMono,0.3);
+          // Color by deviation from period
+          var dev=Math.abs(mlen-arr.period)/arr.period;
+          var color=dev<0.1?'var(--c-telo-ok)':dev<0.3?'var(--c-mini)':'var(--c-macro)';
+          html+='<div class="mono-block" style="width:'+w+'%;background:'+color+'" title="M'+mi+': '+mlen+' bp"></div>';
+        }});
+      }}
+
+      html+='</div></div>';
+    }});
+
+    detail.innerHTML=html;
+    setNavLevel('repeat');
+  }});
 }}
 
 function showGenome(){{
@@ -965,6 +1119,9 @@ function setLevel(el){{
     var midBin=Math.floor(DATA[ci].density.length/2);
     showRegion(ci,CURRENT_REGION!==null?CURRENT_REGION:midBin);
   }}
+  else if(level==='repeat'&&CURRENT_REPEAT){{
+    showRepeat(CURRENT_REPEAT.chr,CURRENT_REPEAT.s,CURRENT_REPEAT.e);
+  }}
 }}
 
 function setView(el){{
@@ -993,16 +1150,18 @@ render();
 
 def create_chromosome_visualization(fai_path, sat_path, output_path,
                                      telomere_path=None, its_path=None,
+                                     monomers_path=None,
                                      assembly_name=""):
     """
     Create interactive chromosome visualization HTML.
 
     Args:
         fai_path: Path to .fai index file
-        sat_path: Path to .sat file (1kb recommended)
+        sat_path: Path to .sat file
         output_path: Path to output HTML file
         telomere_path: Path to telomeres.tsv (optional)
         its_path: Path to telomeres.its.bed (optional)
+        monomers_path: Path to monomers.tsv (optional, for repeat detail view)
         assembly_name: Assembly name for title
     """
     logger.info("Loading chromosome data...")
@@ -1025,6 +1184,11 @@ def create_chromosome_visualization(fai_path, sat_path, output_path,
 
     logger.info("Binning repeat density (coarse + fine)...")
     bins, fine_bins = bin_repeats(sat_path, chroms)
+
+    # Generate monomers JSON for repeat detail view
+    if monomers_path and os.path.exists(monomers_path) and output_path:
+        monomers_json_path = os.path.splitext(output_path)[0] + '_monomers.json'
+        generate_monomers_json(monomers_path, monomers_json_path)
 
     logger.info("Generating visualization...")
     generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name, output_path)
