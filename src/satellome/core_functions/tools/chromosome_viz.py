@@ -572,7 +572,7 @@ function render(){{
       '<div class="chr-bar-wrap">'+
         '<div class="chr-bar" style="width:'+c.pct+'%">'+
           '<div class="chr-density" id="d-'+idx+'"></div>'+
-          (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'"></div><div class="telo-cap right '+c.telo_right+'"></div>':'')+
+          (LAYERS.telomere&&c.pct>1?'<div class="telo-cap left '+c.telo_left+'"></div><div class="telo-cap right '+c.telo_right+'"></div>':'')+
         '</div>'+
       '</div>'+
       '<div class="chr-size">'+sizeMb+' Mb</div>';
