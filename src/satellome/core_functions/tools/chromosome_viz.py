@@ -13,7 +13,8 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-BIN_SIZE = 500_000  # 500 kb bins for density
+BIN_SIZE = 500_000       # 500 kb bins for genome/chromosome view
+FINE_BIN_SIZE = 50_000   # 50 kb bins for region view (x10 zoom)
 
 
 def load_fai(fai_path):
@@ -94,22 +95,32 @@ def _classify_by_array_length(array_length):
         return "gt100kb"
 
 
-def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
-    """Bin tandem repeats from main SAT file into density tracks by array length.
+def _add_to_bins(bins_list, start, end, category, bin_size):
+    """Add overlap to bins."""
+    start_bin = start // bin_size
+    end_bin = end // bin_size
+    for b in range(start_bin, min(end_bin + 1, len(bins_list))):
+        b_start = b * bin_size
+        b_end = (b + 1) * bin_size
+        overlap = min(end, b_end) - max(start, b_start)
+        if overlap > 0:
+            bins_list[b][category] += overlap
 
-    Args:
-        sat_path: Path to main .sat file
-        chroms: List of chromosome dicts with 'name' and 'length'
-        bin_size: Bin size in bp
+
+def bin_repeats(sat_path, chroms):
+    """Bin tandem repeats at two resolutions: coarse (500kb) and fine (50kb).
 
     Returns:
-        dict: {chr_name: [{"lt1kb": bp, "1-10kb": bp, "10-100kb": bp, "gt100kb": bp}, ...]}
+        (coarse_bins, fine_bins) — both dicts {chr_name: [{cat: bp}, ...]}
     """
-    bins = {}
+    coarse = {}
+    fine = {}
     chroms_set = set()
     for c in chroms:
-        n_bins = (c["length"] // bin_size) + 1
-        bins[c["name"]] = [{cat: 0 for cat in CATEGORIES} for _ in range(n_bins)]
+        n_coarse = (c["length"] // BIN_SIZE) + 1
+        n_fine = (c["length"] // FINE_BIN_SIZE) + 1
+        coarse[c["name"]] = [{cat: 0 for cat in CATEGORIES} for _ in range(n_coarse)]
+        fine[c["name"]] = [{cat: 0 for cat in CATEGORIES} for _ in range(n_fine)]
         chroms_set.add(c["name"])
 
     csv.field_size_limit(sys.maxsize)
@@ -126,23 +137,14 @@ def bin_repeats(sat_path, chroms, bin_size=BIN_SIZE):
             except (ValueError, TypeError):
                 continue
 
-            array_length = end - start
-            category = _classify_by_array_length(array_length)
+            category = _classify_by_array_length(end - start)
+            _add_to_bins(coarse[chrom], start, end, category, BIN_SIZE)
+            _add_to_bins(fine[chrom], start, end, category, FINE_BIN_SIZE)
 
-            start_bin = start // bin_size
-            end_bin = end // bin_size
-
-            for b in range(start_bin, min(end_bin + 1, len(bins[chrom]))):
-                b_start = b * bin_size
-                b_end = (b + 1) * bin_size
-                overlap = min(end, b_end) - max(start, b_start)
-                if overlap > 0:
-                    bins[chrom][b][category] += overlap
-
-    return bins
+    return coarse, fine
 
 
-def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", output_path=None):
+def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="", output_path=None):
     """Generate the full chromosome visualization HTML."""
 
     # Sort chromosomes intelligently
@@ -173,6 +175,17 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
                 round(min(b.get("gt100kb", 0) / BIN_SIZE, 1.0), 3),
             ])
 
+        # Fine density for region zoom
+        fine_chr_bins = fine_bins.get(name, [])
+        fine_density = []
+        for b in fine_chr_bins:
+            fine_density.append([
+                round(min(b.get("lt1kb", 0) / FINE_BIN_SIZE, 1.0), 3),
+                round(min(b.get("1-10kb", 0) / FINE_BIN_SIZE, 1.0), 3),
+                round(min(b.get("10-100kb", 0) / FINE_BIN_SIZE, 1.0), 3),
+                round(min(b.get("gt100kb", 0) / FINE_BIN_SIZE, 1.0), 3),
+            ])
+
         chrom_data.append({
             "name": name,
             "length": c["length"],
@@ -182,6 +195,7 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
             "t2t": telo.get("t2t", False),
             "its": chrom_its,
             "density": density,
+            "fine": fine_density,
         })
 
     data_json = json.dumps(chrom_data)
@@ -192,7 +206,8 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
     t2t_count = sum(1 for c in chrom_data if c["t2t"])
     its_count = sum(len(c["its"]) for c in chrom_data)
 
-    html = _build_html(data_json, bin_size_kb, assembly_name, max_len,
+    fine_bin_kb = FINE_BIN_SIZE // 1000
+    html = _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
                        len(chroms_sorted), total_bp, t2t_count, its_count)
 
     if output_path:
@@ -204,7 +219,7 @@ def generate_chromosome_html(chroms, bins, telomeres, its, assembly_name="", out
     return html
 
 
-def _build_html(data_json, bin_size_kb, assembly_name, max_len,
+def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
                 n_chroms, total_bp, t2t_count, its_count):
     total_mb = round(total_bp / 1e6, 1)
 
@@ -482,7 +497,7 @@ def _build_html(data_json, bin_size_kb, assembly_name, max_len,
       <div class="nav-level" data-level="chromosome" onclick="setLevel(this)">
         <span class="nav-icon">&#9656;</span><span class="lbl">Chromosome</span>
       </div>
-      <div class="nav-level disabled" data-level="region">
+      <div class="nav-level" data-level="region" onclick="setLevel(this)">
         <span class="nav-icon">&#9656;</span><span class="lbl">Region</span>
       </div>
       <div class="nav-level disabled" data-level="repeat">
@@ -783,10 +798,135 @@ function showChromosome(idx){{
     rowEl.addEventListener('mouseleave',function(){{
       document.getElementById('tooltip').classList.remove('visible');
     }});
+    // Click to zoom into region
+    rowEl.addEventListener('click',function(e){{
+      var rect=rowEl.getBoundingClientRect();
+      var x=(e.clientX-rect.left)/rect.width;
+      var rowIdx=parseInt(rowEl.getAttribute('data-row'));
+      var binIdx=rowIdx*cols+Math.floor(x*cols);
+      if(binIdx>=bc)binIdx=bc-1;
+      showRegion(idx,binIdx);
+    }});
   }});
 
   // Update nav
   setNavLevel('chromosome');
+}}
+
+var CURRENT_REGION=null;
+var FINE_BIN_KB={fine_bin_kb};
+
+function showRegion(chrIdx, coarseBinIdx){{
+  CURRENT_REGION=coarseBinIdx;
+  var c=DATA[chrIdx];
+  var bpPerCoarse=BIN_KB*1000;
+  var bpPerFine=FINE_BIN_KB*1000;
+  var regionStart=coarseBinIdx*bpPerCoarse;
+  var regionEnd=Math.min(regionStart+bpPerCoarse,c.length);
+
+  // Fine bins for this region
+  var fineStart=Math.floor(regionStart/bpPerFine);
+  var fineEnd=Math.ceil(regionEnd/bpPerFine);
+  var fineBins=c.fine.slice(fineStart,fineEnd);
+  var fb=fineBins.length;
+  if(fb===0)return;
+
+  document.getElementById('chrList').style.display='none';
+  document.querySelector('.header').style.display='none';
+  document.querySelector('.footer').style.display='none';
+  var detail=document.getElementById('chrDetail');
+  detail.classList.add('active');
+
+  var availH=window.innerHeight-140;
+  var availW=detail.offsetWidth||800;
+  var aspect=availW/availH;
+  var cols=Math.round(Math.sqrt(fb*aspect));
+  if(cols<3)cols=3;
+  if(cols>fb)cols=fb;
+  var numRows=Math.ceil(fb/cols);
+  var rowH=Math.max(Math.floor(availH/numRows),3);
+
+  // Chromosome picker
+  var picker='<div class="chr-picker">';
+  DATA.forEach(function(ch,i){{
+    var cls=(i===chrIdx)?'chr-pick active':'chr-pick';
+    var tc=ch.t2t?'var(--c-telo-ok)':'var(--muted)';
+    picker+='<div class="'+cls+'" onclick="showChromosome('+i+')" title="'+ch.name+'">'+
+      '<span class="chr-pick-dot" style="background:'+tc+'"></span>'+
+      '<span class="chr-pick-name">'+ch.name.replace("chr","")+'</span></div>';
+  }});
+  picker+='</div>';
+
+  var html=picker+
+    '<div class="chr-detail-header">'+
+    '<div class="back-btn" onclick="showChromosome('+chrIdx+')">&#8592; '+c.name+'</div>'+
+    '<div class="chr-detail-title">'+(regionStart/1e6).toFixed(1)+' &ndash; '+(regionEnd/1e6).toFixed(1)+' Mb</div>'+
+    '<div class="chr-detail-sub">'+c.name+' &middot; '+(( regionEnd-regionStart)/1e3).toFixed(0)+' kb region &middot; '+FINE_BIN_KB+' kb bins</div>'+
+    '</div>';
+
+  html+='<div class="chr-grid">';
+  for(var row=0;row<numRows;row++){{
+    var s=row*cols;
+    var e=Math.min(s+cols,fb);
+    var rowWidthPct=(e-s)/cols*100;
+    html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px;width:'+rowWidthPct+'%">';
+    for(var i=s;i<e;i++){{
+      var d=fineBins[i];
+      var lp=((i-s)/cols*100);
+      var wp=(1/cols*100);
+      for(var cat=0;cat<4;cat++){{
+        var key=CAT_KEYS[cat];
+        if(!LAYERS[key])continue;
+        var val=d[cat];
+        if(val<0.005)continue;
+        html+='<div class="chr-grid-cell" style="'+
+          'left:'+lp+'%;width:'+Math.max(wp,0.2)+'%;'+
+          'top:'+(cat*25)+'%;height:25%;'+
+          'background:var('+COLORS[cat]+');'+
+          'opacity:'+Math.min(0.25+val*0.75,1)+
+          '"></div>';
+      }}
+    }}
+    html+='</div>';
+  }}
+  html+='</div>';
+
+  html+='<div class="chr-grid-labels">'+
+    '<span>'+(regionStart/1e6).toFixed(2)+' Mb</span>'+
+    '<span>'+FINE_BIN_KB+' kb / bin</span>'+
+    '<span>'+(regionEnd/1e6).toFixed(2)+' Mb</span>'+
+    '</div>';
+
+  detail.innerHTML=html;
+
+  // Tooltip
+  detail.querySelectorAll('.chr-grid-row').forEach(function(rowEl){{
+    rowEl.addEventListener('mousemove',function(ev){{
+      var rect=rowEl.getBoundingClientRect();
+      var x=(ev.clientX-rect.left)/rect.width;
+      var rowIdx=parseInt(rowEl.getAttribute('data-row'));
+      var binIdx=rowIdx*cols+Math.floor(x*cols);
+      if(binIdx>=fb)binIdx=fb-1;
+      var pos=regionStart+(fineStart+binIdx)*bpPerFine-regionStart;
+      var absPos=fineStart*bpPerFine+binIdx*bpPerFine;
+      var d=fineBins[binIdx]||[0,0,0,0];
+      var tt=document.getElementById('tooltip');
+      tt.innerHTML=
+        '<div class="tt-title">'+c.name+' : '+(absPos/1e6).toFixed(3)+' Mb</div>'+
+        '<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
+        '<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>';
+      tt.style.left=(ev.clientX+14)+'px';
+      tt.style.top=(ev.clientY-10)+'px';
+      tt.classList.add('visible');
+    }});
+    rowEl.addEventListener('mouseleave',function(){{
+      document.getElementById('tooltip').classList.remove('visible');
+    }});
+  }});
+
+  setNavLevel('region');
 }}
 
 function showGenome(){{
@@ -812,6 +952,7 @@ function setLevel(el){{
   var level=el.getAttribute('data-level');
   if(level==='genome')showGenome();
   else if(level==='chromosome')showChromosome(CURRENT_CHR!==null?CURRENT_CHR:0);
+  else if(level==='region'&&CURRENT_CHR!==null&&CURRENT_REGION!==null)showRegion(CURRENT_CHR,CURRENT_REGION);
 }}
 
 function setView(el){{
@@ -870,8 +1011,8 @@ def create_chromosome_visualization(fai_path, sat_path, output_path,
         its = load_its(its_path)
         logger.info(f"Loaded {sum(len(v) for v in its.values())} ITS sites")
 
-    logger.info("Binning repeat density...")
-    bins = bin_repeats(sat_path, chroms)
+    logger.info("Binning repeat density (coarse + fine)...")
+    bins, fine_bins = bin_repeats(sat_path, chroms)
 
     logger.info("Generating visualization...")
-    generate_chromosome_html(chroms, bins, telomeres, its, assembly_name, output_path)
+    generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name, output_path)
