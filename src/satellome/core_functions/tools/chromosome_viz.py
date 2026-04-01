@@ -572,8 +572,8 @@ function render(){{
       '<div class="chr-bar-wrap">'+
         '<div class="chr-bar" style="width:'+c.pct+'%">'+
           '<div class="chr-density" id="d-'+idx+'"></div>'+
-          (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'"></div><div class="telo-cap right '+c.telo_right+'"></div>':'')+
         '</div>'+
+        (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'" style="left:0"></div><div class="telo-cap right '+c.telo_right+'" style="left:'+c.pct+'%"></div>':'')+
       '</div>'+
       '<div class="chr-size">'+sizeMb+' Mb</div>';
 
@@ -728,10 +728,11 @@ function showChromosome(idx){{
       html+='<div class="chr-grid-cell" style="right:0;left:auto;width:2px;background:'+teloColor(c.telo_right)+';z-index:2;border-radius:0 1px 1px 0"></div>';
     }}
 
+    var actualCols=endBin-startBin;
     for(var i=startBin;i<endBin;i++){{
       var d=c.density[i];
-      var lp=((i-startBin)/cols*100);
-      var wp=(1/cols*100);
+      var lp=((i-startBin)/actualCols*100);
+      var wp=(1/actualCols*100);
 
       // Render all active categories stacked
       for(var cat=0;cat<4;cat++){{
@@ -754,8 +755,8 @@ function showChromosome(idx){{
         var sBin=Math.floor(s.start/bpPerBin);
         var eBin=Math.ceil(s.end/bpPerBin);
         if(sBin>=startBin && sBin<endBin){{
-          var lp=((sBin-startBin)/cols*100);
-          var wp=Math.max(((eBin-sBin)/cols*100),0.3);
+          var lp=((sBin-startBin)/actualCols*100);
+          var wp=Math.max(((eBin-sBin)/actualCols*100),0.3);
           html+='<div class="chr-grid-cell" style="left:'+lp+'%;width:'+wp+'%;top:0;height:100%;background:var(--c-its);opacity:0.8;z-index:1"></div>';
         }}
       }});
@@ -780,7 +781,10 @@ function showChromosome(idx){{
       var rect=rowEl.getBoundingClientRect();
       var x=(e.clientX-rect.left)/rect.width;
       var rowIdx=parseInt(rowEl.getAttribute('data-row'));
-      var binIdx=rowIdx*cols+Math.floor(x*cols);
+      var rStart=rowIdx*cols;
+      var rEnd=Math.min(rStart+cols,bc);
+      var rActual=rEnd-rStart;
+      var binIdx=rStart+Math.floor(x*rActual);
       if(binIdx>=bc)binIdx=bc-1;
       var pos=binIdx*bpPerBin;
       var d=c.density[binIdx]||[0,0,0,0];
@@ -803,7 +807,10 @@ function showChromosome(idx){{
       var rect=rowEl.getBoundingClientRect();
       var x=(e.clientX-rect.left)/rect.width;
       var rowIdx=parseInt(rowEl.getAttribute('data-row'));
-      var binIdx=rowIdx*cols+Math.floor(x*cols);
+      var rowStart=rowIdx*cols;
+      var rowEnd=Math.min(rowStart+cols,bc);
+      var rowActual=rowEnd-rowStart;
+      var binIdx=rowStart+Math.floor(x*rowActual);
       if(binIdx>=bc)binIdx=bc-1;
       showRegion(idx,binIdx);
     }});
