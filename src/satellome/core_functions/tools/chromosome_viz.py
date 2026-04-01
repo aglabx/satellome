@@ -144,17 +144,13 @@ def bin_repeats(sat_path, chroms):
     return coarse, fine
 
 
-def generate_monomers_json(monomers_tsv, output_path, min_array_length=10000):
-    """Generate JSON with monomer data for large arrays.
+def _load_monomers_compact(monomers_tsv, min_array_length=10000):
+    """Load monomer lengths for large arrays. Returns dict for JSON embedding.
 
-    Output: {array_id: {chr, start, end, period, monomers: [{len, ed}...]}}
+    Returns: {array_id: {c: chr, s: start, e: end, p: period, m: [lengths]}}
     """
-    if not os.path.exists(monomers_tsv):
-        logger.warning(f"Monomers file not found: {monomers_tsv}")
-        return
-
     csv.field_size_limit(sys.maxsize)
-    arrays = {}  # array_id -> {chr, start, end, period, monomers: []}
+    arrays = {}
 
     logger.info(f"Loading monomers from {monomers_tsv}...")
     with open(monomers_tsv, 'r') as f:
@@ -170,24 +166,21 @@ def generate_monomers_json(monomers_tsv, output_path, min_array_length=10000):
 
             if aid not in arrays:
                 arrays[aid] = {
-                    "c": parts[0],  # chr
-                    "s": int(parts[1]),  # start
-                    "e": int(parts[2]),  # end
-                    "p": int(parts[4]),  # period
-                    "m": [],  # monomers
+                    "c": parts[0],
+                    "s": int(parts[1]),
+                    "e": int(parts[2]),
+                    "p": int(parts[4]),
+                    "m": [],
                 }
 
             if row['type'] == 'monomer':
                 arrays[aid]["m"].append(int(row.get('length', 0)))
 
-    logger.info(f"Writing {len(arrays)} arrays to {output_path}...")
-    with open(output_path, 'w') as f:
-        json.dump(arrays, f, separators=(',', ':'))
-    size_mb = os.path.getsize(output_path) / 1e6
-    logger.info(f"Monomers JSON: {size_mb:.1f} MB")
+    logger.info(f"Loaded {len(arrays)} arrays with monomers")
+    return arrays
 
 
-def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="", output_path=None):
+def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="", output_path=None, monomers_data=None):
     """Generate the full chromosome visualization HTML."""
 
     # Sort chromosomes intelligently
@@ -241,7 +234,7 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
             "fine": fine_density,
         })
 
-    data_json = json.dumps(chrom_data)
+    data_json = json.dumps(chrom_data, separators=(',', ':'))
     bin_size_kb = BIN_SIZE // 1000
 
     # Count totals for summary
@@ -250,7 +243,8 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
     its_count = sum(len(c["its"]) for c in chrom_data)
 
     fine_bin_kb = FINE_BIN_SIZE // 1000
-    html = _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
+    monomers_json = json.dumps(monomers_data or {}, separators=(',', ':'))
+    html = _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
                        len(chroms_sorted), total_bp, t2t_count, its_count)
 
     if output_path:
@@ -262,7 +256,7 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
     return html
 
 
-def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
+def _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
                 n_chroms, total_bp, t2t_count, its_count):
     total_mb = round(total_bp / 1e6, 1)
 
@@ -1016,23 +1010,11 @@ function showRegion(chrIdx, coarseBinIdx){{
   setNavLevel('region');
 }}
 
-var MONOMERS=null;
+var MONOMERS={monomers_json};
 var CURRENT_REPEAT=null;
 
-function loadMonomers(cb){{
-  if(MONOMERS){{cb();return;}}
-  var jsonUrl=location.href.replace('.html','_monomers.json');
-  fetch(jsonUrl).then(function(r){{return r.json();}}).then(function(data){{
-    MONOMERS=data;
-    cb();
-  }}).catch(function(){{
-    MONOMERS={{}};
-    cb();
-  }});
-}}
-
 function showRepeat(chrIdx, binStart, binEnd){{
-  loadMonomers(function(){{
+  (function(){{
     CURRENT_REPEAT={{chr:chrIdx,s:binStart,e:binEnd}};
     var c=DATA[chrIdx];
     document.getElementById('chrList').style.display='none';
@@ -1185,10 +1167,10 @@ def create_chromosome_visualization(fai_path, sat_path, output_path,
     logger.info("Binning repeat density (coarse + fine)...")
     bins, fine_bins = bin_repeats(sat_path, chroms)
 
-    # Generate monomers JSON for repeat detail view
-    if monomers_path and os.path.exists(monomers_path) and output_path:
-        monomers_json_path = os.path.splitext(output_path)[0] + '_monomers.json'
-        generate_monomers_json(monomers_path, monomers_json_path)
+    # Load monomers for repeat detail view (inline in HTML)
+    monomers_data = {}
+    if monomers_path and os.path.exists(monomers_path):
+        monomers_data = _load_monomers_compact(monomers_path)
 
     logger.info("Generating visualization...")
-    generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name, output_path)
+    generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name, output_path, monomers_data)
