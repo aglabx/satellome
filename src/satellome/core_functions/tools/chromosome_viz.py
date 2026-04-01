@@ -350,10 +350,10 @@ def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
   .chr-bar{{
     position:absolute;top:0;left:0;height:100%;
     background:var(--chr-bg);border:1px solid var(--chr-border);
-    border-radius:10px;overflow:hidden;transition:box-shadow .2s;
+    border-radius:10px;transition:box-shadow .2s;
   }}
   .chr-bar:hover{{box-shadow:0 2px 12px var(--shadow);}}
-  .chr-density{{position:absolute;top:0;left:0;width:100%;height:100%;}}
+  .chr-density{{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden;border-radius:10px;}}
   .density-bin{{position:absolute;height:100%;}}
 
   .telo-cap{{
@@ -572,8 +572,8 @@ function render(){{
       '<div class="chr-bar-wrap">'+
         '<div class="chr-bar" style="width:'+c.pct+'%">'+
           '<div class="chr-density" id="d-'+idx+'"></div>'+
+          (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'"></div><div class="telo-cap right '+c.telo_right+'"></div>':'')+
         '</div>'+
-        (LAYERS.telomere?'<div class="telo-cap left '+c.telo_left+'" style="left:0"></div><div class="telo-cap right '+c.telo_right+'" style="left:'+c.pct+'%"></div>':'')+
       '</div>'+
       '<div class="chr-size">'+sizeMb+' Mb</div>';
 
@@ -877,10 +877,11 @@ function showRegion(chrIdx, coarseBinIdx){{
     var e=Math.min(s+cols,fb);
     var rowWidthPct=(e-s)/cols*100;
     html+='<div class="chr-grid-row" data-row="'+row+'" style="height:'+rowH+'px;width:'+rowWidthPct+'%">';
+    var actualCols=e-s;
     for(var i=s;i<e;i++){{
       var d=fineBins[i];
-      var lp=((i-s)/cols*100);
-      var wp=(1/cols*100);
+      var lp=((i-s)/actualCols*100);
+      var wp=(1/actualCols*100);
       for(var cat=0;cat<4;cat++){{
         var key=CAT_KEYS[cat];
         if(!LAYERS[key])continue;
