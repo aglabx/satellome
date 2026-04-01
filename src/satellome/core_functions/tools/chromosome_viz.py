@@ -960,7 +960,11 @@ function setLevel(el){{
   var level=el.getAttribute('data-level');
   if(level==='genome')showGenome();
   else if(level==='chromosome')showChromosome(CURRENT_CHR!==null?CURRENT_CHR:0);
-  else if(level==='region'&&CURRENT_CHR!==null&&CURRENT_REGION!==null)showRegion(CURRENT_CHR,CURRENT_REGION);
+  else if(level==='region'){{
+    var ci=CURRENT_CHR!==null?CURRENT_CHR:0;
+    var midBin=Math.floor(DATA[ci].density.length/2);
+    showRegion(ci,CURRENT_REGION!==null?CURRENT_REGION:midBin);
+  }}
 }}
 
 function setView(el){{
