@@ -811,7 +811,7 @@ function setLevel(el){{
   if(el.classList.contains('disabled'))return;
   var level=el.getAttribute('data-level');
   if(level==='genome')showGenome();
-  else if(level==='chromosome'&&CURRENT_CHR!==null)showChromosome(CURRENT_CHR);
+  else if(level==='chromosome')showChromosome(CURRENT_CHR!==null?CURRENT_CHR:0);
 }}
 
 function setView(el){{
