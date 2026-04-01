@@ -1014,7 +1014,6 @@ var MONOMERS={monomers_json};
 var CURRENT_REPEAT=null;
 
 function showRepeat(chrIdx, binStart, binEnd){{
-  (function(){{
     CURRENT_REPEAT={{chr:chrIdx,s:binStart,e:binEnd}};
     var c=DATA[chrIdx];
     document.getElementById('chrList').style.display='none';
@@ -1070,7 +1069,6 @@ function showRepeat(chrIdx, binStart, binEnd){{
 
     detail.innerHTML=html;
     setNavLevel('repeat');
-  }});
 }}
 
 function showGenome(){{
