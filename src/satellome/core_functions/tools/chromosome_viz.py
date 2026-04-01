@@ -357,7 +357,7 @@ def _build_html(data_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
   .density-bin{{position:absolute;height:100%;}}
 
   .telo-cap{{
-    position:absolute;top:-1px;width:7px;height:22px;border-radius:3px;z-index:2;
+    position:absolute;top:0;width:7px;height:100%;border-radius:3px;z-index:2;
     transition:transform .15s;
   }}
   .telo-cap:hover{{transform:scaleY(1.25);}}
