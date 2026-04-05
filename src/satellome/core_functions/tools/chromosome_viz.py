@@ -70,8 +70,7 @@ def load_its(bed_path):
 def load_families(families_path):
     """Load sat_families.tsv and return family records, top names, and info dict."""
     families = []
-    family_counts = {}
-    family_info = {}  # {fam_id: {consensus, base_period, count}}
+    family_info = {}  # {fam_id: {consensus, base, n, total_bp, core_bp}}
     if not os.path.exists(families_path):
         return families, [], {}
 
@@ -83,24 +82,28 @@ def load_families(families_path):
             if len(parts) < 7:
                 continue
             fam = parts[5]
+            arr_len = int(parts[3])
             consensus = parts[6] if len(parts) > 6 else ""
             base_period = parts[7] if len(parts) > 7 else consensus
+            source = parts[8] if len(parts) > 8 else "core"
             families.append({
                 "chr": parts[0],
                 "start": int(parts[1]),
                 "end": int(parts[2]),
-                "length": int(parts[3]),
+                "length": arr_len,
                 "family": fam,
                 "consensus": consensus,
             })
-            family_counts[fam] = family_counts.get(fam, 0) + 1
             if fam not in family_info:
-                family_info[fam] = {"consensus": consensus, "base": base_period}
+                family_info[fam] = {"consensus": consensus, "base": base_period,
+                                    "bp_len": len(base_period), "n": 0, "total_bp": 0, "core_bp": 0}
+            family_info[fam]["n"] += 1
+            family_info[fam]["total_bp"] += arr_len
+            if source == "core":
+                family_info[fam]["core_bp"] += arr_len
 
-    top = sorted(family_counts.keys(), key=lambda k: -family_counts[k])
-    # Add count to info
-    for fam in family_info:
-        family_info[fam]["n"] = family_counts.get(fam, 0)
+    # Sort by total bp of CORE arrays (>= 10kb), not by count of all fragments
+    top = sorted(family_info.keys(), key=lambda k: -family_info[k]["core_bp"])
     return families, top, family_info
 
 
@@ -706,10 +709,11 @@ function renderLayers(){{
       var color=FAM_COLORS[fi%FAM_COLORS.length];
       var off=LAYERS[fam]===false?' off':'';
       var info=FAM_INFO[fam]||{{}};
-      var base=info.base||info.consensus||'';
-      var label=base?(fam+' ('+base+')'):fam;
-      var count=info.n||0;
-      html+='<div class="layer-toggle'+off+'" data-layer="'+fam+'" onclick="toggleLayer(this)" title="'+count+' arrays">'+
+      var bpLen=info.bp_len||0;
+      var coreBp=info.core_bp||0;
+      var coreMb=(coreBp/1e6).toFixed(1);
+      var label=fam+' ('+bpLen+' bp, '+coreMb+' Mb)';
+      html+='<div class="layer-toggle'+off+'" data-layer="'+fam+'" onclick="toggleLayer(this)" title="'+(info.n||0)+' arrays, consensus: '+(info.base||'')+'">'+
         '<div class="dot" style="background:'+color+'"></div><span class="lbl" style="font-size:10px">'+label+'</span></div>';
     }});
   }}
@@ -768,7 +772,7 @@ function render(){{
       if(CURRENT_VIEW==='family' && c.fam && c.fam[i]){{
         // Family view: color by family
         var famBin=c.fam[i];
-        var famKeys=Object.keys(famBin);
+        var famKeys=Object.keys(famBin).filter(function(fk){{return LAYERS[fk]!==false;}});
         var sliceH=famKeys.length>0?100/famKeys.length:100;
         famKeys.forEach(function(fk,fi){{
           var val=famBin[fk];
