@@ -284,9 +284,13 @@ fn enrich_from_small(
         let upper: Vec<u8> = cut_seq.iter().map(|b| b.to_ascii_uppercase()).collect();
         if upper.is_empty() { continue; }
         let base = find_base_period(&upper);
+        // Skip fragments with short monomers (< 13 bp) — no enrichment for/from microsatellites
+        if base.len() < 13 { seen.insert(aid, true); continue; }
 
         // Try to match against known families
         for (fid, fam_canon) in families {
+            // Skip families with short monomers
+            if fam_canon.len() < 13 { continue; }
             let len_ratio = base.len().max(fam_canon.len()) as f64 / base.len().min(fam_canon.len()).max(1) as f64;
             if len_ratio > 2.0 { continue; }
 

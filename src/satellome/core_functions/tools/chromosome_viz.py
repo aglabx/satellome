@@ -94,9 +94,10 @@ def load_families(families_path):
                 "family": fam,
                 "consensus": consensus,
             })
+            period = int(parts[4]) if len(parts) > 4 else len(base_period)
             if fam not in family_info:
                 family_info[fam] = {"consensus": consensus, "base": base_period,
-                                    "bp_len": len(base_period), "n": 0, "total_bp": 0, "core_bp": 0}
+                                    "bp_len": period, "n": 0, "total_bp": 0, "core_bp": 0}
             family_info[fam]["n"] += 1
             family_info[fam]["total_bp"] += arr_len
             if source == "core":
@@ -729,6 +730,27 @@ function renderLayers(){{
   panel.innerHTML=html;
 }}
 
+function tooltipContent(c, binIdx, pos){{
+  var html='<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>';
+  if(CURRENT_VIEW==='family' && c.fam && c.fam[binIdx]){{
+    var fb=c.fam[binIdx];
+    var keys=Object.keys(fb).sort(function(a,b){{return fb[b]-fb[a];}});
+    keys.forEach(function(fk){{
+      var info=FAM_INFO[fk]||{{}};
+      var bpLen=info.bp_len||'?';
+      html+='<div class="tt-row"><span>'+fk+' ('+bpLen+' bp)</span><span class="tt-val">'+(fb[fk]*100).toFixed(1)+'%</span></div>';
+    }});
+  }}else{{
+    var d=c.density[binIdx]||[0,0,0,0];
+    html+='<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>';
+    html+='<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>';
+    html+='<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>';
+    html+='<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>';
+  }}
+  html+='<div class="tt-row"><span>Telomere</span><span class="tt-val">'+c.telo_left+' / '+c.telo_right+'</span></div>';
+  return html;
+}}
+
 function toggleLayer(el){{
   var layer=el.getAttribute('data-layer');
   LAYERS[layer]=!LAYERS[layer];
@@ -830,13 +852,7 @@ function render(){{
       var bi=Math.min(Math.floor(x*bc),bc-1);
       var d=c.density[bi]||[0,0,0,0];
       var tt=document.getElementById('tooltip');
-      tt.innerHTML=
-        '<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>'+
-        '<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>Telomere L / R</span><span class="tt-val">'+c.telo_left+' / '+c.telo_right+'</span></div>';
+      tt.innerHTML=tooltipContent(c,bi,pos);
       tt.style.left=(e.clientX+14)+'px';
       tt.style.top=(e.clientY-10)+'px';
       tt.classList.add('visible');
@@ -990,14 +1006,8 @@ function showChromosome(idx){{
       var binIdx=rStart+Math.floor(x*rActual);
       if(binIdx>=bc)binIdx=bc-1;
       var pos=binIdx*bpPerBin;
-      var d=c.density[binIdx]||[0,0,0,0];
       var tt=document.getElementById('tooltip');
-      tt.innerHTML=
-        '<div class="tt-title">'+c.name+' : '+(pos/1e6).toFixed(2)+' Mb</div>'+
-        '<div class="tt-row"><span>&lt; 1 kb</span><span class="tt-val">'+(d[0]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>1-10 kb</span><span class="tt-val">'+(d[1]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>10-100 kb</span><span class="tt-val">'+(d[2]*100).toFixed(1)+'%</span></div>'+
-        '<div class="tt-row"><span>&gt; 100 kb</span><span class="tt-val">'+(d[3]*100).toFixed(1)+'%</span></div>';
+      tt.innerHTML=tooltipContent(c,binIdx,pos);
       tt.style.left=(e.clientX+14)+'px';
       tt.style.top=(e.clientY-10)+'px';
       tt.classList.add('visible');
