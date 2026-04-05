@@ -68,11 +68,12 @@ def load_its(bed_path):
 
 
 def load_families(families_path):
-    """Load sat_families.tsv and return list of family records + top family names."""
-    families = []  # [{chr, start, end, length, family, consensus}, ...]
+    """Load sat_families.tsv and return family records, top names, and info dict."""
+    families = []
     family_counts = {}
+    family_info = {}  # {fam_id: {consensus, base_period, count}}
     if not os.path.exists(families_path):
-        return families, []
+        return families, [], {}
 
     with open(families_path, 'r') as f:
         for line in f:
@@ -82,19 +83,25 @@ def load_families(families_path):
             if len(parts) < 7:
                 continue
             fam = parts[5]
+            consensus = parts[6] if len(parts) > 6 else ""
+            base_period = parts[7] if len(parts) > 7 else consensus
             families.append({
                 "chr": parts[0],
                 "start": int(parts[1]),
                 "end": int(parts[2]),
                 "length": int(parts[3]),
                 "family": fam,
-                "consensus": parts[6] if len(parts) > 6 else "",
+                "consensus": consensus,
             })
             family_counts[fam] = family_counts.get(fam, 0) + 1
+            if fam not in family_info:
+                family_info[fam] = {"consensus": consensus, "base": base_period}
 
-    # Top families by count (for color assignment)
     top = sorted(family_counts.keys(), key=lambda k: -family_counts[k])
-    return families, top
+    # Add count to info
+    for fam in family_info:
+        family_info[fam]["n"] = family_counts.get(fam, 0)
+    return families, top, family_info
 
 
 def bin_families(families, chroms, top_families, bin_size=BIN_SIZE):
@@ -245,7 +252,7 @@ def _load_monomers_compact(monomers_tsv, min_array_length=10000):
 
 def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="",
                              output_path=None, monomers_data=None,
-                             family_bins=None, tracked_families=None):
+                             family_bins=None, tracked_families=None, family_info=None):
     """Generate the full chromosome visualization HTML."""
 
     # Sort chromosomes intelligently
@@ -327,7 +334,8 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
     fine_bin_kb = FINE_BIN_SIZE // 1000
     monomers_json = json.dumps(monomers_data or {}, separators=(',', ':'))
     families_list_json = json.dumps(tracked_families or [], separators=(',', ':'))
-    html = _build_html(data_json, monomers_json, families_list_json,
+    family_info_json = json.dumps(family_info if family_bins else {}, separators=(',', ':'))
+    html = _build_html(data_json, monomers_json, families_list_json, family_info_json,
                        bin_size_kb, fine_bin_kb, assembly_name, max_len,
                        len(chroms_sorted), total_bp, t2t_count, its_count)
 
@@ -340,7 +348,7 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
     return html
 
 
-def _build_html(data_json, monomers_json, families_list_json,
+def _build_html(data_json, monomers_json, families_list_json, family_info_json,
                 bin_size_kb, fine_bin_kb, assembly_name, max_len,
                 n_chroms, total_bp, t2t_count, its_count):
     total_mb = round(total_bp / 1e6, 1)
@@ -613,26 +621,7 @@ def _build_html(data_json, monomers_json, families_list_json,
       <div class="panel-stat"><span>ITS sites</span><span class="val">{its_count}</span></div>
     </div>
 
-    <div class="panel-section">
-      <div class="panel-section-title">Layers</div>
-      <div class="layer-toggle" data-layer="lt1kb" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-micro)"></div><span class="lbl">&lt; 1 kb</span>
-      </div>
-      <div class="layer-toggle" data-layer="1-10kb" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-mini)"></div><span class="lbl">1 &ndash; 10 kb</span>
-      </div>
-      <div class="layer-toggle" data-layer="10-100kb" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-sat)"></div><span class="lbl">10 &ndash; 100 kb</span>
-      </div>
-      <div class="layer-toggle" data-layer="gt100kb" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-macro)"></div><span class="lbl">&gt; 100 kb</span>
-      </div>
-      <div class="layer-toggle" data-layer="its" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-its)"></div><span class="lbl">ITS</span>
-      </div>
-      <div class="layer-toggle" data-layer="telomere" onclick="toggleLayer(this)">
-        <div class="dot" style="background:var(--c-telo-ok)"></div><span class="lbl">Telomeres</span>
-      </div>
+    <div class="panel-section" id="layersPanel">
     </div>
 
     <div class="panel-section">
@@ -689,11 +678,52 @@ def _build_html(data_json, monomers_json, families_list_json,
 var DATA={data_json};
 var BIN_KB={bin_size_kb};
 var FAMILIES={families_list_json};
+var FAM_INFO={family_info_json};
 var CURRENT_VIEW='size';
 var LAYERS={{'lt1kb':true,'1-10kb':true,'10-100kb':true,'gt100kb':true,its:true,telomere:true}};
 var COLORS=['--c-micro','--c-mini','--c-sat','--c-macro'];
 var CAT_KEYS=['lt1kb','1-10kb','10-100kb','gt100kb'];
 var CAT_NAMES=['< 1 kb','1-10 kb','10-100 kb','> 100 kb'];
+
+function renderLayers(){{
+  var panel=document.getElementById('layersPanel');
+  var html='<div class="panel-section-title">Layers</div>';
+
+  if(CURRENT_VIEW==='size'){{
+    var sizeLayers=[
+      ['lt1kb','--c-micro','< 1 kb'],
+      ['1-10kb','--c-mini','1 – 10 kb'],
+      ['10-100kb','--c-sat','10 – 100 kb'],
+      ['gt100kb','--c-macro','> 100 kb'],
+    ];
+    sizeLayers.forEach(function(sl){{
+      var off=LAYERS[sl[0]]===false?' off':'';
+      html+='<div class="layer-toggle'+off+'" data-layer="'+sl[0]+'" onclick="toggleLayer(this)">'+
+        '<div class="dot" style="background:var('+sl[1]+')"></div><span class="lbl">'+sl[2]+'</span></div>';
+    }});
+  }} else if(CURRENT_VIEW==='family'){{
+    FAMILIES.forEach(function(fam,fi){{
+      var color=FAM_COLORS[fi%FAM_COLORS.length];
+      var off=LAYERS[fam]===false?' off':'';
+      var info=FAM_INFO[fam]||{{}};
+      var base=info.base||info.consensus||'';
+      var label=base?(fam+' ('+base+')'):fam;
+      var count=info.n||0;
+      html+='<div class="layer-toggle'+off+'" data-layer="'+fam+'" onclick="toggleLayer(this)" title="'+count+' arrays">'+
+        '<div class="dot" style="background:'+color+'"></div><span class="lbl" style="font-size:10px">'+label+'</span></div>';
+    }});
+  }}
+
+  // Always show ITS and telomere
+  var itsOff=LAYERS.its===false?' off':'';
+  var telOff=LAYERS.telomere===false?' off':'';
+  html+='<div class="layer-toggle'+itsOff+'" data-layer="its" onclick="toggleLayer(this)">'+
+    '<div class="dot" style="background:var(--c-its)"></div><span class="lbl">ITS</span></div>';
+  html+='<div class="layer-toggle'+telOff+'" data-layer="telomere" onclick="toggleLayer(this)">'+
+    '<div class="dot" style="background:var(--c-telo-ok)"></div><span class="lbl">Telomeres</span></div>';
+
+  panel.innerHTML=html;
+}}
 
 function toggleLayer(el){{
   var layer=el.getAttribute('data-layer');
@@ -1221,6 +1251,7 @@ function setView(el){{
   document.querySelectorAll('.view-toggle').forEach(function(v){{v.classList.remove('active');}});
   el.classList.add('active');
   CURRENT_VIEW=el.getAttribute('data-view');
+  renderLayers();
   if(CURRENT_CHR!==null){{
     showChromosome(CURRENT_CHR);
   }}else{{
@@ -1237,6 +1268,7 @@ function toggleTheme(){{
   }}
 }}
 
+renderLayers();
 render();
 </script>
 </body>
@@ -1288,12 +1320,13 @@ def create_chromosome_visualization(fai_path, sat_path, output_path,
     # Load family assignments for "By family" view
     family_bins = {}
     tracked_families = []
+    family_info = {}
     if families_path and os.path.exists(families_path):
         logger.info("Loading family assignments...")
-        families, top_fams = load_families(families_path)
+        families, top_fams, family_info = load_families(families_path)
         family_bins, tracked_families = bin_families(families, chroms, top_fams)
         logger.info(f"Loaded {len(families)} family assignments, {len(tracked_families)} tracked families")
 
     logger.info("Generating visualization...")
     generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name,
-                             output_path, monomers_data, family_bins, tracked_families)
+                             output_path, monomers_data, family_bins, tracked_families, family_info)
