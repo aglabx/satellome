@@ -1,0 +1,15 @@
+[package]
+name = "sat-family"
+version = "0.1.0"
+edition = "2021"
+description = "Satellite DNA family clustering using monomer consensus with rotation/strand/periodicity normalization"
+
+[[bin]]
+name = "sat-family"
+path = "src/main.rs"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
