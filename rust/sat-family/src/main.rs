@@ -156,6 +156,7 @@ fn load_arrays(monomers_path: &str, min_length: usize) -> io::Result<Vec<ArrayRe
         if rtype == "monomer" && !arrays.contains_key(&aid) {
             let cut_seq = get("cut_sequence").as_bytes().to_vec();
             let upper: Vec<u8> = cut_seq.iter().map(|b| b.to_ascii_uppercase()).collect();
+            if upper.is_empty() { continue; }
             let base = find_base_period(&upper);
             let canon = canonical_form(&base);
 

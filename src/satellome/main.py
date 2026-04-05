@@ -519,6 +519,60 @@ def run_trf_drawing(settings, force_rerun):
         sys.exit(1)
 
 
+def run_sat_family(settings, force_rerun):
+    """Run satellite DNA family clustering."""
+    import shutil
+    from pathlib import Path
+
+    output_dir = settings["output_dir"]
+    fastan_dir = os.path.join(output_dir, "fastan")
+    reports_dir = os.path.join(output_dir, "reports")
+    os.makedirs(reports_dir, exist_ok=True)
+
+    # Find monomers file
+    genome_basename = os.path.splitext(os.path.basename(settings["fasta_file"]))[0]
+    if genome_basename.endswith('.gz'):
+        genome_basename = os.path.splitext(genome_basename)[0]
+    monomers_file = os.path.join(fastan_dir, f"{genome_basename}.monomers.tsv")
+    families_output = os.path.join(reports_dir, "sat_families.tsv")
+
+    if not os.path.exists(monomers_file):
+        logger.warning(f"Monomers file not found: {monomers_file}, skipping family clustering")
+        return False
+
+    if os.path.exists(families_output) and not force_rerun:
+        logger.info(f"Family clustering already done: {families_output}")
+        return True
+
+    # Find binary
+    sat_family_bin = None
+    bin_dir = Path(__file__).parent / "bin"
+    candidate = bin_dir / "sat-family"
+    if candidate.exists():
+        sat_family_bin = str(candidate)
+    else:
+        sat_family_bin = shutil.which("sat-family")
+
+    if not sat_family_bin:
+        logger.warning("sat-family binary not found, skipping family clustering")
+        return False
+
+    logger.info("Running satellite DNA family clustering...")
+    result = subprocess.run(
+        [sat_family_bin, monomers_file, families_output, "10", "3"],
+        capture_output=True, text=True, timeout=7200
+    )
+
+    if result.returncode == 0:
+        for line in result.stderr.strip().split('\n'):
+            if line.strip():
+                logger.info(f"  {line.strip()}")
+        return True
+    else:
+        logger.warning(f"sat-family failed: {result.stderr}")
+        return False
+
+
 def run_telomere_check(settings, force_rerun):
     """Run telomere check on the genome assembly."""
     import shutil
@@ -1196,6 +1250,12 @@ def main():
         logger.info("STEP 3: CLASSIFICATION")
         logger.info(SEPARATOR_LINE)
         run_trf_classification(settings, args, force_downstream)
+
+        # Step 3b: Satellite DNA family clustering
+        logger.info(SEPARATOR_LINE)
+        logger.info("STEP 3b: SATELLITE FAMILY CLUSTERING")
+        logger.info(SEPARATOR_LINE)
+        run_sat_family(settings, force_downstream)
 
         # Step 4: Drawing and HTML report
         logger.info(SEPARATOR_LINE)

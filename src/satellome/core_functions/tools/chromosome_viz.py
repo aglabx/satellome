@@ -67,6 +67,69 @@ def load_its(bed_path):
     return its
 
 
+def load_families(families_path):
+    """Load sat_families.tsv and return list of family records + top family names."""
+    families = []  # [{chr, start, end, length, family, consensus}, ...]
+    family_counts = {}
+    if not os.path.exists(families_path):
+        return families, []
+
+    with open(families_path, 'r') as f:
+        for line in f:
+            if line.startswith('#') or line.startswith('chr\t'):
+                continue
+            parts = line.strip().split('\t')
+            if len(parts) < 7:
+                continue
+            fam = parts[5]
+            families.append({
+                "chr": parts[0],
+                "start": int(parts[1]),
+                "end": int(parts[2]),
+                "length": int(parts[3]),
+                "family": fam,
+                "consensus": parts[6] if len(parts) > 6 else "",
+            })
+            family_counts[fam] = family_counts.get(fam, 0) + 1
+
+    # Top families by count (for color assignment)
+    top = sorted(family_counts.keys(), key=lambda k: -family_counts[k])
+    return families, top
+
+
+def bin_families(families, chroms, top_families, bin_size=BIN_SIZE):
+    """Bin family assignments into density tracks per chromosome.
+
+    Returns dict: {chr_name: [{family_name: bp, ...}, ...]}
+    """
+    # Use top N families, rest goes to "other"
+    MAX_FAMILIES = 12
+    tracked = set(top_families[:MAX_FAMILIES])
+
+    bins = {}
+    for c in chroms:
+        n_bins = (c["length"] // bin_size) + 1
+        bins[c["name"]] = [{} for _ in range(n_bins)]
+
+    for f in families:
+        chrom = f["chr"]
+        if chrom not in bins:
+            continue
+        start, end = f["start"], f["end"]
+        fam = f["family"] if f["family"] in tracked else "other"
+
+        start_bin = start // bin_size
+        end_bin = end // bin_size
+        for b in range(start_bin, min(end_bin + 1, len(bins[chrom]))):
+            b_start = b * bin_size
+            b_end = (b + 1) * bin_size
+            overlap = min(end, b_end) - max(start, b_start)
+            if overlap > 0:
+                bins[chrom][b][fam] = bins[chrom][b].get(fam, 0) + overlap
+
+    return bins, list(tracked)
+
+
 def _sat_lines(fh):
     """Yield lines from SAT file, fixing '#project' header."""
     for line in fh:
@@ -180,7 +243,9 @@ def _load_monomers_compact(monomers_tsv, min_array_length=10000):
     return arrays
 
 
-def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="", output_path=None, monomers_data=None):
+def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name="",
+                             output_path=None, monomers_data=None,
+                             family_bins=None, tracked_families=None):
     """Generate the full chromosome visualization HTML."""
 
     # Sort chromosomes intelligently
@@ -222,6 +287,22 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
                 round(min(b.get("gt100kb", 0) / FINE_BIN_SIZE, 1.0), 3),
             ])
 
+        # Family density
+        fam_density = []
+        if family_bins and name in family_bins:
+            fam_chr = family_bins[name]
+            tf = tracked_families or []
+            for b in fam_chr:
+                fam_bin = {}
+                for fam_name in tf:
+                    val = b.get(fam_name, 0)
+                    if val > 0:
+                        fam_bin[fam_name] = round(min(val / BIN_SIZE, 1.0), 3)
+                other = b.get("other", 0)
+                if other > 0:
+                    fam_bin["other"] = round(min(other / BIN_SIZE, 1.0), 3)
+                fam_density.append(fam_bin)
+
         chrom_data.append({
             "name": name,
             "length": c["length"],
@@ -232,6 +313,7 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
             "its": chrom_its,
             "density": density,
             "fine": fine_density,
+            "fam": fam_density,
         })
 
     data_json = json.dumps(chrom_data, separators=(',', ':'))
@@ -244,7 +326,9 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
 
     fine_bin_kb = FINE_BIN_SIZE // 1000
     monomers_json = json.dumps(monomers_data or {}, separators=(',', ':'))
-    html = _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
+    families_list_json = json.dumps(tracked_families or [], separators=(',', ':'))
+    html = _build_html(data_json, monomers_json, families_list_json,
+                       bin_size_kb, fine_bin_kb, assembly_name, max_len,
                        len(chroms_sorted), total_bp, t2t_count, its_count)
 
     if output_path:
@@ -256,7 +340,8 @@ def generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_n
     return html
 
 
-def _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_name, max_len,
+def _build_html(data_json, monomers_json, families_list_json,
+                bin_size_kb, fine_bin_kb, assembly_name, max_len,
                 n_chroms, total_bp, t2t_count, its_count):
     total_mb = round(total_bp / 1e6, 1)
 
@@ -575,7 +660,7 @@ def _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_nam
         <span class="lbl">By array size</span>
       </div>
       <div class="view-toggle" data-view="family" onclick="setView(this)">
-        <span class="lbl">By superfamily</span><span class="soon">soon</span>
+        <span class="lbl">By superfamily</span>
       </div>
       <div class="view-toggle" data-view="class" onclick="setView(this)">
         <span class="lbl">By family</span><span class="soon">soon</span>
@@ -603,6 +688,8 @@ def _build_html(data_json, monomers_json, bin_size_kb, fine_bin_kb, assembly_nam
 <script>
 var DATA={data_json};
 var BIN_KB={bin_size_kb};
+var FAMILIES={families_list_json};
+var CURRENT_VIEW='size';
 var LAYERS={{'lt1kb':true,'1-10kb':true,'10-100kb':true,'gt100kb':true,its:true,telomere:true}};
 var COLORS=['--c-micro','--c-mini','--c-sat','--c-macro'];
 var CAT_KEYS=['lt1kb','1-10kb','10-100kb','gt100kb'];
@@ -648,22 +735,43 @@ function render(){{
       var lp=i/bc*100;
       var wp=1/bc*100;
 
-      // Stack categories: each gets a vertical slice
-      for(var cat=0;cat<4;cat++){{
-        var key=CAT_KEYS[cat];
-        if(!LAYERS[key])continue;
-        var val=c.density[i][cat];
-        if(val<0.005)continue;
-        var bin=document.createElement('div');
-        bin.className='density-bin layer-'+key;
-        bin.style.left=lp+'%';
-        bin.style.width=Math.max(wp,0.5)+'%';
-        bin.style.background='var('+COLORS[cat]+')';
-        bin.style.opacity=Math.min(0.3+val*0.7,1);
-        // Stack vertically: each category gets a quarter
-        bin.style.top=(cat*25)+'%';
-        bin.style.height='25%';
-        de.appendChild(bin);
+      if(CURRENT_VIEW==='family' && c.fam && c.fam[i]){{
+        // Family view: color by family
+        var famBin=c.fam[i];
+        var famKeys=Object.keys(famBin);
+        var sliceH=famKeys.length>0?100/famKeys.length:100;
+        famKeys.forEach(function(fk,fi){{
+          var val=famBin[fk];
+          if(val<0.005)return;
+          var famIdx=FAMILIES.indexOf(fk);
+          var color=famIdx>=0?FAM_COLORS[famIdx%FAM_COLORS.length]:'#888';
+          var bin=document.createElement('div');
+          bin.className='density-bin';
+          bin.style.left=lp+'%';
+          bin.style.width=Math.max(wp,0.5)+'%';
+          bin.style.background=color;
+          bin.style.opacity=Math.min(0.3+val*0.7,1);
+          bin.style.top=(fi*sliceH)+'%';
+          bin.style.height=sliceH+'%';
+          de.appendChild(bin);
+        }});
+      }} else if(CURRENT_VIEW==='size'){{
+        // Size view: color by array length category
+        for(var cat=0;cat<4;cat++){{
+          var key=CAT_KEYS[cat];
+          if(!LAYERS[key])continue;
+          var val=c.density[i][cat];
+          if(val<0.005)continue;
+          var bin=document.createElement('div');
+          bin.className='density-bin layer-'+key;
+          bin.style.left=lp+'%';
+          bin.style.width=Math.max(wp,0.5)+'%';
+          bin.style.background='var('+COLORS[cat]+')';
+          bin.style.opacity=Math.min(0.3+val*0.7,1);
+          bin.style.top=(cat*25)+'%';
+          bin.style.height='25%';
+          de.appendChild(bin);
+        }}
       }}
     }}
 
@@ -1104,13 +1212,20 @@ function setLevel(el){{
   }}
 }}
 
+// 12 distinct colors for families
+var FAM_COLORS=['#0891b2','#7c3aed','#be123c','#059669','#b45309','#2563eb',
+  '#db2777','#0d9488','#dc2626','#4338ca','#65a30d','#c026d3'];
+
 function setView(el){{
   if(el.querySelector('.soon'))return;
   document.querySelectorAll('.view-toggle').forEach(function(v){{v.classList.remove('active');}});
   el.classList.add('active');
-  var view=el.getAttribute('data-view');
-  // TODO: switch between size/superfamily/family/monomer views
-  render();
+  CURRENT_VIEW=el.getAttribute('data-view');
+  if(CURRENT_CHR!==null){{
+    showChromosome(CURRENT_CHR);
+  }}else{{
+    render();
+  }}
 }}
 
 function toggleTheme(){{
@@ -1130,7 +1245,7 @@ render();
 
 def create_chromosome_visualization(fai_path, sat_path, output_path,
                                      telomere_path=None, its_path=None,
-                                     monomers_path=None,
+                                     monomers_path=None, families_path=None,
                                      assembly_name=""):
     """
     Create interactive chromosome visualization HTML.
@@ -1170,5 +1285,15 @@ def create_chromosome_visualization(fai_path, sat_path, output_path,
     if monomers_path and os.path.exists(monomers_path):
         monomers_data = _load_monomers_compact(monomers_path)
 
+    # Load family assignments for "By family" view
+    family_bins = {}
+    tracked_families = []
+    if families_path and os.path.exists(families_path):
+        logger.info("Loading family assignments...")
+        families, top_fams = load_families(families_path)
+        family_bins, tracked_families = bin_families(families, chroms, top_fams)
+        logger.info(f"Loaded {len(families)} family assignments, {len(tracked_families)} tracked families")
+
     logger.info("Generating visualization...")
-    generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name, output_path, monomers_data)
+    generate_chromosome_html(chroms, bins, fine_bins, telomeres, its, assembly_name,
+                             output_path, monomers_data, family_bins, tracked_families)
