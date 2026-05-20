@@ -265,6 +265,35 @@ class TabDelimitedFileIO(AbstractFileIO):
             fh.writelines(self._data)
 
 
+def _parse_fields_header(input_file):
+    """Parse a `# Fields:` header from a SAT/TRF-like file.
+
+    Reads only the leading block of `#`-comment lines and concatenates a
+    multi-line `# Fields:` declaration (where continuation lines start with
+    `#` followed by whitespace). Returns the declared column names as a list,
+    or None if no `# Fields:` line is present.
+    """
+    collected = None
+    try:
+        fh = open(input_file)
+    except OSError:
+        return None
+    with fh:
+        for line in fh:
+            stripped = line.rstrip("\r\n")
+            if not stripped.startswith("#"):
+                break
+            body = stripped[1:].strip()
+            if collected is None:
+                if body.lower().startswith("fields:"):
+                    collected = body[len("Fields:"):].strip()
+            else:
+                collected = collected.rstrip(",") + ", " + body
+    if collected is None:
+        return None
+    return [name.strip() for name in collected.split(",") if name.strip()]
+
+
 def sc_iter_tab_file(
     input_file,
     data_type,
@@ -272,6 +301,7 @@ def sc_iter_tab_file(
     remove_starts_with=None,
     preprocess_function=None,
     check_function=None,
+    verify_columns=True,
 ):
     """
     Iterate over tab-delimited file yielding data model objects.
@@ -331,6 +361,26 @@ def sc_iter_tab_file(
         - All stages are optional (can use just skip_starts_with for simple cases)
     """
 
+    expected_fields = data_type().dumpable_attributes
+
+    if verify_columns:
+        declared = _parse_fields_header(input_file)
+        if declared is not None and declared != expected_fields:
+            raise ValueError(
+                "Column schema mismatch in {path}.\n"
+                "  expected ({n_exp} columns): {exp}\n"
+                "  declared ({n_got} columns): {got}\n"
+                "This file was likely produced by a different Satellome version "
+                "or a different tool. Regenerate it with this version, or pass "
+                "verify_columns=False to bypass the check.".format(
+                    path=input_file,
+                    n_exp=len(expected_fields),
+                    exp=expected_fields,
+                    n_got=len(declared),
+                    got=declared,
+                )
+            )
+
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     temp_file_name = temp_file.name
 
@@ -356,7 +406,7 @@ def sc_iter_tab_file(
             fh.writelines(data)
         input_file = temp_file_name
     with open(input_file) as fh:
-        fields = data_type().dumpable_attributes
+        fields = expected_fields
         for data in csv.DictReader(
             fh, fieldnames=fields, delimiter="\t", quoting=csv.QUOTE_NONE
         ):
