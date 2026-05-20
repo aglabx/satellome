@@ -151,3 +151,6 @@ PYPI_PUBLISH_INSTRUCTIONS.md
 
 # Local pipeline visualization
 pipeline_overview.html
+
+# macOS
+.DS_Store
