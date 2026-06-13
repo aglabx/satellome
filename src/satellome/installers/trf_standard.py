@@ -39,7 +39,8 @@ def install_trf_standard(force: bool = False) -> bool:
     """
     logger.info("Starting standard TRF installation...")
 
-    platform_name = detect_platform()
+    # detect_platform() returns (platform_name, arch); we only key URLs by name.
+    platform_name, _ = detect_platform()
     bin_dir = get_satellome_bin_dir()
     trf_binary = bin_dir / 'trf'
 
