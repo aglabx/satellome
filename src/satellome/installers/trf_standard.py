@@ -15,6 +15,7 @@ from .base import (
     detect_platform,
     get_satellome_bin_dir,
     verify_installation,
+    write_binary_manifest,
 )
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,17 @@ def install_trf_standard(force: bool = False) -> bool:
         trf_binary.chmod(trf_binary.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
         logger.info(f"TRF binary downloaded to: {trf_binary}")
+
+        # Record provenance/integrity manifest next to the binary. This is a
+        # pre-compiled official release, so provenance is the download URL plus
+        # the SHA-256 of what we fetched (no source git commit).
+        write_binary_manifest(
+            trf_binary,
+            tool='trf',
+            repo=url,
+            source_version='4.09.1',
+            extra={"variant": "trf-standard"},
+        )
 
         # Verify installation
         if verify_installation('trf'):

@@ -13,7 +13,9 @@ from .base import (
     get_satellome_bin_dir,
     check_build_dependencies,
     verify_installation,
-    run_make_with_fallback
+    run_make_with_fallback,
+    write_binary_manifest,
+    get_git_commit,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,9 @@ def install_tanbed(force: bool = False) -> bool:
 
             logger.info("Repository cloned successfully")
 
+            # Capture provenance before the temp checkout is wiped.
+            git_sha = get_git_commit(repo_dir)
+
             # Build alntools (which includes tanbed)
             logger.info("Compiling alntools (including tanbed)...")
 
@@ -108,6 +113,14 @@ def install_tanbed(force: bool = False) -> bool:
             os.chmod(tanbed_path, 0o755)
 
             logger.info("tanbed installed successfully!")
+
+            # Record provenance/integrity manifest next to the binary.
+            write_binary_manifest(
+                tanbed_path,
+                tool='tanbed',
+                repo=ALNTOOLS_REPO,
+                git_sha=git_sha,
+            )
 
             # Verify installation
             if verify_installation('tanbed'):

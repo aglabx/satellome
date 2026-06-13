@@ -13,7 +13,9 @@ from typing import Optional
 from .base import (
     get_satellome_bin_dir,
     check_build_dependencies,
-    verify_installation
+    verify_installation,
+    write_binary_manifest,
+    get_git_commit,
 )
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,9 @@ def install_trf_large(force: bool = False) -> bool:
 
             logger.info("Repository cloned successfully")
 
+            # Capture provenance before the temp checkout is wiped.
+            git_sha = get_git_commit(repo_dir)
+
             # Make build.sh executable
             build_script = repo_dir / 'build.sh'
             if not build_script.exists():
@@ -122,6 +127,15 @@ def install_trf_large(force: bool = False) -> bool:
             os.chmod(trf_path, 0o755)
 
             logger.info("Modified TRF installed successfully!")
+
+            # Record provenance/integrity manifest next to the binary.
+            write_binary_manifest(
+                trf_path,
+                tool='trf',
+                repo=TRF_LARGE_REPO,
+                git_sha=git_sha,
+                extra={"variant": "trf-large"},
+            )
 
             # Verify installation
             if verify_installation('trf'):

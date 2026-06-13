@@ -9,11 +9,15 @@ import tempfile
 import logging
 from pathlib import Path
 
+import re
+
 from .base import (
     get_satellome_bin_dir,
     check_build_dependencies,
     verify_installation,
-    run_make_with_fallback
+    run_make_with_fallback,
+    write_binary_manifest,
+    get_git_commit,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +75,19 @@ def install_fastan(force: bool = False) -> bool:
                 return False
 
             logger.info("Repository cloned successfully")
+
+            # Capture provenance from the checkout before the temp dir is wiped.
+            git_sha = get_git_commit(repo_dir)
+            source_version = None
+            fastan_source = repo_dir / 'FasTAN.c'
+            if fastan_source.exists():
+                try:
+                    text = fastan_source.read_text(errors='replace')
+                    match = re.search(r'#define\s+VERSION\s+"([^"]+)"', text)
+                    if match:
+                        source_version = match.group(1)
+                except OSError as e:
+                    logger.debug(f"Could not read source version from {fastan_source}: {e}")
 
             # Patch Makefile to add pthread linking flag
             makefile_path = repo_dir / 'Makefile'
@@ -154,6 +171,15 @@ def install_fastan(force: bool = False) -> bool:
             os.chmod(fastan_path, 0o755)
 
             logger.info("FasTAN installed successfully!")
+
+            # Record provenance/integrity manifest next to the binary.
+            write_binary_manifest(
+                fastan_path,
+                tool='fastan',
+                repo=FASTAN_REPO,
+                git_sha=git_sha,
+                source_version=source_version,
+            )
 
             # Verify installation
             if verify_installation('fastan'):
