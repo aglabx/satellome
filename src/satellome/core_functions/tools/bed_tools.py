@@ -209,11 +209,31 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     Returns:
         int: Number of sequences successfully extracted
     """
+    import os
+    import gzip
     import shutil
     import subprocess
     from pathlib import Path
 
     logger.info(f"Extracting sequences from {fasta_file} using coordinates from {bed_file}")
+
+    # Guard: a duplicate chromosome first-word would silently make extraction
+    # pull from the wrong sequence. The Rust bed-extract binary does not check
+    # this, so enforce it here (one pass over FASTA headers) — the guard then
+    # holds for BOTH the Rust and the Python backends.
+    seen_headers = set()
+    fa_opener = gzip.open if fasta_file.endswith('.gz') else open
+    with fa_opener(fasta_file, 'rt') as fa_fh:
+        for fa_line in fa_fh:
+            if fa_line.startswith('>'):
+                parts = fa_line[1:].split()
+                first_word = parts[0] if parts else ''
+                if first_word in seen_headers:
+                    raise ValueError(
+                        f"Duplicate chromosome name '{first_word}' found in FASTA. "
+                        f"First word of FASTA headers must be unique."
+                    )
+                seen_headers.add(first_word)
 
     # Try Rust binary first
     bed_extract_bin = None
@@ -225,10 +245,16 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
         bed_extract_bin = shutil.which("bed-extract")
 
     if bed_extract_bin:
-        cmd = [bed_extract_bin, fasta_file, bed_file, output_file]
-        if fasta_output_file:
-            cmd.append(fasta_output_file)
-        cmd.append(project)
+        # CLI: bed-extract <fasta> <bed> <output.sat> [output.fasta] [project]
+        # `project` is the 5th positional, so the 4th slot ([output.fasta]) must
+        # be filled even when no FASTA output is wanted — otherwise `project`
+        # would be misread as the output-FASTA path (silently ignored, and a
+        # spurious file named after the project value created in CWD).
+        cmd = [
+            bed_extract_bin, fasta_file, bed_file, output_file,
+            fasta_output_file if fasta_output_file else os.devnull,
+            project,
+        ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
             if result.returncode == 0:

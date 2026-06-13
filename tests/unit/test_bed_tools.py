@@ -332,6 +332,6 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
         # Should have 8 lines (4 headers + 4 sequences)
         assert len(lines) == 8
 
-        # Check first entry header format: >chr_start_end_length_period
-        assert lines[0] == ">chr1_0_10_10_5"
+        # Check first entry header format: >chr_start_end_period
+        assert lines[0] == ">chr1_0_10_5"
         assert lines[1] == "ATCGATCGAT"

@@ -145,19 +145,24 @@ class OutputDirValidationError(ValidationError):
     pass
 
 
-def validate_fasta_file(fasta_path, check_sequences=True):
+def validate_fasta_file(fasta_path):
     """
-    Validate FASTA file format and content.
+    Lightweight FASTA pre-flight check.
 
-    Args:
-        fasta_path: Path to FASTA file
-        check_sequences: If True, validate sequence content (default: True)
+    Confirms the file exists, is non-empty, is readable, and looks like FASTA
+    (has at least one '>' header in the first lines). It deliberately does NOT
+    read the whole file: the full genome size is computed later by
+    get_genome_size_with_progress, and deep per-base content validation is not
+    performed here to keep pre-flight cheap on genome-scale inputs.
 
     Raises:
-        FastaValidationError: If validation fails
+        FastaValidationError: If the file is missing, empty, unreadable, or has
+            no FASTA header in the inspected prefix.
 
     Returns:
-        dict: Validation statistics (num_sequences, total_length, warnings)
+        dict: {num_sequences, total_length, file_size, warnings}. Note
+            total_length is always 0 here (full size is computed downstream);
+            num_sequences counts only headers seen in the inspected prefix.
     """
     if not os.path.exists(fasta_path):
         raise FastaValidationError(f"FASTA file not found: {fasta_path}")
@@ -530,8 +535,7 @@ def validate_output_directory(output_path, create_if_missing=True):
 
 
 def validate_input_files(fasta_file, gff_file=None, rm_file=None,
-                        trf_binary="trf", output_dir=None,
-                        check_sequences=True):
+                        trf_binary="trf", output_dir=None):
     """
     Validate all input files and directories for Satellome pipeline.
 
@@ -541,7 +545,6 @@ def validate_input_files(fasta_file, gff_file=None, rm_file=None,
         rm_file: Path to RepeatMasker file (optional)
         trf_binary: Path to TRF binary or command name (default: "trf")
         output_dir: Path to output directory (optional)
-        check_sequences: If True, validate FASTA sequence content (default: True)
 
     Raises:
         ValidationError: If any validation fails
@@ -556,13 +559,15 @@ def validate_input_files(fasta_file, gff_file=None, rm_file=None,
     # Validate FASTA file
     try:
         logger.info(f"Validating FASTA file: {fasta_file}")
-        fasta_stats = validate_fasta_file(fasta_file, check_sequences=check_sequences)
+        fasta_stats = validate_fasta_file(fasta_file)
         results['fasta'] = fasta_stats
 
+        # total_length is intentionally not computed here (quick pre-flight);
+        # don't log it as a count or it reads as a misleading "0 bp".
         logger.info(
-            f"✓ FASTA validation passed: "
-            f"{fasta_stats['num_sequences']} sequences, "
-            f"{fasta_stats['total_length']:,} bp total"
+            f"✓ FASTA pre-flight passed "
+            f"(at least {fasta_stats['num_sequences']} sequence(s); "
+            f"full genome size computed later)"
         )
 
         if fasta_stats['warnings']:
