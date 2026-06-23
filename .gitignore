@@ -154,3 +154,7 @@ pipeline_overview.html
 
 # macOS
 .DS_Store
+.satfinder-ref/
+
+# Generated analysis outputs (not source)
+families.json
