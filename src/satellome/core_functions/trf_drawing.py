@@ -22,6 +22,33 @@ CENPB_REGEXP = re.compile(r".ttcg....a..cggg.")
 TELOMERE_REGEXP = re.compile(r"ttagggttagggttagggttagggttaggg")
 CHRM_REGEXP = re.compile(r"chromosome\: (.*)")
 
+
+def _to_int(value, default=0):
+    """Coerce a TSV-derived field to ``int`` for numeric use.
+
+    Records are read from a ``.sat`` file via ``csv.DictReader``, so every field
+    arrives as a *string*. The coordinate / length / period fields are consumed
+    in numeric ops downstream — karyotype drawing does ``max(length, enhance)``
+    (which raises ``TypeError: '>' not supported between 'int' and 'str'`` on a
+    string), and the clustering step takes a *median* of periods (which silently
+    sorts lexicographically, "100" < "20", when they are strings). Coercing once
+    here, at the single point where the records are built, fixes both.
+
+    A legitimately absent value (None / empty string) falls back to ``default``,
+    matching the pre-existing ``.get(field, 0)`` behaviour downstream. A
+    non-empty *malformed* value is surfaced as a visible warning rather than
+    silently crashing a later numeric op or being dropped without trace.
+    """
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        logger.warning(
+            "Non-numeric value %r in TRF record field; using %d", value, default
+        )
+        return default
+
 chm2name = {
     "NC_060925.1": "Chr1",
     "NC_060926.1": "Chr2",
@@ -194,16 +221,19 @@ def read_trf_file(trf_file):
             # Create computed fields
             record = dict(row)  # Copy all original fields
 
-            # Add renamed/computed fields
-            record["start"] = row.get("trf_l_ind")
-            record["end"] = row.get("trf_r_ind")
-            record["period"] = row.get("trf_period")
+            # Add renamed/computed fields. Coordinate/length/period fields are
+            # coerced to int here (see _to_int) because every value out of
+            # csv.DictReader is a string and downstream numeric ops would
+            # otherwise crash or sort lexicographically.
+            record["start"] = _to_int(row.get("trf_l_ind"))
+            record["end"] = _to_int(row.get("trf_r_ind"))
+            record["period"] = _to_int(row.get("trf_period"))
             record["pmatch"] = row.get("trf_pmatch")
             record["mono"] = row.get("trf_consensus")
             record["array"] = row.get("trf_array")
             record["gc"] = row.get("trf_array_gc")
             record["scaffold"] = row.get("trf_head")
-            record["length"] = row.get("trf_array_length")
+            record["length"] = _to_int(row.get("trf_array_length"))
             record["seq"] = record["array"]
             record["mono*3"] = record["mono"] * 3 if record.get("mono") else None
 

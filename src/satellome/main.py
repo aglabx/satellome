@@ -25,7 +25,13 @@ from satellome.core_functions.tools.validation import (
     ValidationError, FastaValidationError, GFFValidationError,
     BinaryValidationError, OutputDirValidationError
 )
-from satellome.installers import install_fastan, install_tanbed, install_trf_large, install_trf_standard
+from satellome.installers import (
+    install_fastan,
+    install_tanbed,
+    install_trf_large,
+    install_trf_standard,
+    ensure_fastan_version,
+)
 from satellome.constants import (
     MIN_SCAFFOLD_LENGTH_DEFAULT, TR_CUTOFF_DEFAULT,
     KMER_THRESHOLD_DEFAULT, DRAWING_ENHANCING_DEFAULT,
@@ -617,6 +623,19 @@ def run_telomere_check(settings, force_rerun):
         return False
 
 
+def build_fastan_command(fastan_bin, fasta_file, aln_file, threads):
+    """Build the FasTAN invocation, forwarding the requested thread count.
+
+    FasTAN's CLI is ``FasTAN [-T(8)] <src> <tgt>`` (``-T`` = number of threads,
+    default 8). satellome's ``-t/--threads`` must be propagated as ``-T`` so the
+    user can actually control FasTAN's threading — and, while the FasTAN ``-T>1``
+    thread race is unfixed, pin it to ``-T1`` for stability. Before this, the
+    command omitted ``-T`` entirely, so FasTAN silently ran at its own default
+    (8) regardless of ``-t``.
+    """
+    return f"{fastan_bin} -T{threads} {fasta_file} {aln_file}"
+
+
 def run_fastan(settings, force_rerun):
     """Run FasTAN analysis step."""
     from satellome.installers.base import (
@@ -737,6 +756,15 @@ def run_fastan(settings, force_rerun):
             return False
 
     logger.info(f"FasTAN binary: {fastan_bin}")
+
+    # Enforce the minimum FasTAN version before running, updating (rebuilding
+    # from the canonical repo) if the installed binary is older. The path may
+    # change after an update, so re-bind fastan_bin before verifying provenance.
+    version_ok, fastan_bin, _fastan_version = ensure_fastan_version(fastan_bin)
+    if not version_ok:
+        logger.warning("Skipping FasTAN analysis (version requirement not met)...")
+        return False
+
     if not check_binary_provenance(fastan_bin, "fastan"):
         return False
 
@@ -774,7 +802,9 @@ def run_fastan(settings, force_rerun):
     else:
         logger.info("Running FasTAN...")
 
-    fastan_command = f"{fastan_bin} {fasta_file} {aln_file}"
+    fastan_command = build_fastan_command(
+        fastan_bin, fasta_file, aln_file, settings["threads"]
+    )
     logger.debug(f"Command: {fastan_command}")
 
     try:
