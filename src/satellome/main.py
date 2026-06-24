@@ -834,7 +834,10 @@ def run_fastan(settings, force_rerun):
         if tanbed_process.returncode == 0:
             logger.info(f"✓ BED file created: {bed_file}")
 
-            # Extract sequences from FASTA based on BED coordinates
+            # Extract sequences from FASTA based on BED coordinates.
+            # This is a transformation of the authoritative BED into the .sat /
+            # FASTA the rest of the pipeline consumes — a failure here must
+            # abort, never silently continue with missing/partial outputs.
             logger.info("Extracting sequences from FASTA based on BED coordinates...")
             try:
                 extracted_count = extract_sequences_from_bed(
@@ -842,39 +845,62 @@ def run_fastan(settings, force_rerun):
                     fasta_output_file=fasta_output,
                     project=project
                 )
-                logger.info(f"✓ Sequence extraction completed: {trf_file}")
-                logger.info(f"✓ FASTA output created: {fasta_output}")
-                logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
+            except Exception as e:
+                logger.error(f"Sequence extraction failed: {e}")
+                return False
 
-                # Create size-filtered TRF files (1kb, 10kb, 100kb, 1000kb)
-                from satellome.core_functions.tools.bed_tools import filter_trf_by_size
+            logger.info(f"✓ Sequence extraction completed: {trf_file}")
+            logger.info(f"✓ FASTA output created: {fasta_output}")
+            logger.info(f"✓ Extracted {extracted_count} sequences from {os.path.basename(fasta_file)}")
 
-                size_cutoffs = [
-                    (1000, "1kb"),
-                    (10000, "10kb"),
-                    (100000, "100kb"),
-                    (1000000, "1000kb"),
-                ]
+            # extracted_count > 0 but no FASTA on disk is a write failure
+            # masquerading as success — surface it instead of skipping silently.
+            fasta_present = os.path.exists(fasta_output) and os.path.getsize(fasta_output) > 0
+            if extracted_count > 0 and not fasta_present:
+                logger.error(
+                    f"Extraction reported {extracted_count} sequences but "
+                    f"{fasta_output} is missing or empty (write failure)"
+                )
+                return False
 
-                logger.info("Creating size-filtered TRF files...")
+            # Create size-filtered TRF files (1kb, 10kb, 100kb, 1000kb).
+            from satellome.core_functions.tools.bed_tools import filter_trf_by_size
+
+            size_cutoffs = [
+                (1000, "1kb"),
+                (10000, "10kb"),
+                (100000, "100kb"),
+                (1000000, "1000kb"),
+            ]
+
+            logger.info("Creating size-filtered TRF files...")
+            try:
                 for cutoff, suffix in size_cutoffs:
                     # .sat files at output_dir level, .fasta files in fasta/ subdir
                     filtered_trf = os.path.join(output_dir, f"{genome_basename}.{suffix}.sat")
                     filtered_fasta = os.path.join(fasta_dir, f"{genome_basename}.{suffix}.arrays.fasta")
                     stats = filter_trf_by_size(trf_file, filtered_trf, cutoff, fasta_output_file=filtered_fasta)
                     logger.info(f"✓ {suffix}: {stats['filtered']} arrays > {cutoff} bp")
-
             except Exception as e:
-                logger.error(f"Sequence extraction failed: {e}")
-                logger.warning("Continuing without sequence extraction...")
-                # Don't fail the whole pipeline - BED file is still useful
+                logger.error(f"Size-filtering of TRF arrays failed: {e}")
+                return False
 
-            # Run ArraySplitter on main FASTA to calculate consensus and HORs
-            if os.path.exists(fasta_output) and os.path.getsize(fasta_output) > 0:
+            # Run ArraySplitter on main FASTA to calculate consensus and HORs.
+            if fasta_present:
                 logger.info("Running ArraySplitter for consensus calculation...")
                 threads = settings.get("threads", 4)
                 arraysplitter_prefix = os.path.join(fastan_dir, genome_basename)
-                run_arraysplitter(fasta_output, arraysplitter_prefix, threads, force_rerun)
+                if not run_arraysplitter(fasta_output, arraysplitter_prefix, threads, force_rerun):
+                    logger.error("ArraySplitter (consensus/HOR calculation) failed")
+                    return False
+            else:
+                # extracted_count == 0: a genome with no tandem repeats is a
+                # valid empty result, but make the skip explicit rather than
+                # reporting full success as if ArraySplitter had run.
+                logger.warning(
+                    "No arrays extracted (no tandem repeats found); "
+                    "skipping ArraySplitter consensus/HOR calculation"
+                )
 
             logger.info(f"✓ FasTAN analysis completed!")
             return True
