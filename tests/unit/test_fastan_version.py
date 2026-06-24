@@ -31,18 +31,22 @@ from satellome.installers.fastan import (
 def test_build_fastan_command_forwards_threads():
     from satellome.main import build_fastan_command
 
+    # FasTAN 0.8 CLI: -a (emit .1aln), -T<n> threads, -o<root> (attached, no
+    # space; FasTAN writes <root>.1aln), single positional <src>.
     cmd = build_fastan_command("/opt/fastan", "/data/g.fna", "/out/g.1aln", 8)
-    assert cmd == "/opt/fastan -T8 /data/g.fna /out/g.1aln"
+    assert cmd == "/opt/fastan -a -T8 -o/out/g /data/g.fna"
     assert "-T8" in cmd
+    assert "-a" in cmd and "-o/out/g" in cmd
 
 
-def test_build_fastan_command_can_pin_single_thread():
-    """`-t 1` -> `-T1`, the confirmed-stable mode while the FasTAN race is open."""
+def test_build_fastan_command_single_thread():
+    """`-t 1` -> `-T1` still forwards (the 0.8 fork is deterministic at any -T,
+    so -T1 is no longer required for stability — just honored when asked)."""
     from satellome.main import build_fastan_command
 
     cmd = build_fastan_command("fastan", "g.fna", "g.1aln", 1)
+    assert cmd == "fastan -a -T1 -og g.fna"
     assert "-T1" in cmd
-    assert cmd.split()[1] == "-T1"
 
 
 # --------------------------------------------------------------------------- #

@@ -624,16 +624,19 @@ def run_telomere_check(settings, force_rerun):
 
 
 def build_fastan_command(fastan_bin, fasta_file, aln_file, threads):
-    """Build the FasTAN invocation, forwarding the requested thread count.
+    """Build the FasTAN 0.8 invocation, forwarding the requested thread count.
 
-    FasTAN's CLI is ``FasTAN [-T(8)] <src> <tgt>`` (``-T`` = number of threads,
-    default 8). satellome's ``-t/--threads`` must be propagated as ``-T`` so the
-    user can actually control FasTAN's threading — and, while the FasTAN ``-T>1``
-    thread race is unfixed, pin it to ``-T1`` for stability. Before this, the
-    command omitted ``-T`` entirely, so FasTAN silently ran at its own default
-    (8) regardless of ``-t``.
+    FasTAN 0.8's CLI is ``FasTAN -a [-T(8)] -o<root> <src>``: ``-a`` selects
+    ``.1aln`` output, ``-T`` = number of threads, and the target is given as a
+    *root* via ``-o`` (attached, no space) — FasTAN writes ``<root>.1aln``. The
+    0.8 fork's earlier ``-T>1`` problems are fixed: the shared-``FILE*`` crash is
+    gone and output is now deterministic and ``-T``-independent (records are
+    sorted in-file), so ``-t/--threads`` is forwarded as-is — no need to pin
+    ``-T1``. (FasTAN 0.8 also dropped the old 2-positional ``<src> <tgt>`` form,
+    so the previous command no longer works.)
     """
-    return f"{fastan_bin} -T{threads} {fasta_file} {aln_file}"
+    aln_root = aln_file[:-5] if aln_file.endswith(".1aln") else aln_file
+    return f"{fastan_bin} -a -T{threads} -o{aln_root} {fasta_file}"
 
 
 def run_fastan(settings, force_rerun):
