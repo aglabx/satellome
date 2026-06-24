@@ -159,7 +159,7 @@ fn extract_from_chr(
         write!(sat_out, "\t{:.2}\t{:.2}\t{}\t0\t\t\n", arr_gc, con_gc, arr_len)?;
 
         if let Some(ref mut fh) = fasta_out {
-            write!(fh, ">{}_{}_{}_{}\n", name, entry.start, entry.end, period)?;
+            write!(fh, ">{}_{}_{}_{}_{}\n", name, entry.start, entry.end, arr_len, period)?;
             fh.write_all(&upper)?;
             fh.write_all(b"\n")?;
         }
