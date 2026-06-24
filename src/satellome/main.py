@@ -19,6 +19,7 @@ from satellome.core_functions.tools.reports import create_html_report
 from satellome.core_functions.tools.processing import get_genome_size_with_progress
 from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
+from satellome.core_functions.tools.version_check import notify_if_update_available
 from satellome.core_functions.tools.validation import (
     validate_input_files, validate_fasta_file, validate_gff_file,
     validate_repeatmasker_file, validate_trf_binary, validate_output_directory,
@@ -115,6 +116,7 @@ def parse_arguments():
     parser.add_argument("--nofastan", help="Skip FasTAN analysis", action='store_true', default=False)
     parser.add_argument("--run-trf", help="Run TRF analysis (disabled by default, FasTAN is the default tool)", action='store_true', default=False)
     parser.add_argument("--notrf", help="[DEPRECATED] TRF is now disabled by default. Use --run-trf to enable.", action='store_true', default=False)
+    parser.add_argument("--no-version-check", dest="no_version_check", help="Do not check GitHub for a newer Satellome release (also: SATELLOME_NO_VERSION_CHECK=1)", action='store_true', default=False)
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -1092,6 +1094,11 @@ def main():
     if not args.get("input") and not args.get("output"):
         print_logo()
         logger.info(f"Satellome v{__version__}")
+        # Explicit info screen: report update status (cached, best-effort).
+        if not args.get("no_version_check"):
+            result = notify_if_update_available(__version__, log=logger)
+            if result.error is None and result.latest and not result.update_available:
+                logger.info(f"You are running the latest version ({result.latest}).")
         logger.info("Satellite DNA analysis in T2T genome assemblies")
         logger.info("")
         logger.info("Usage:")
@@ -1135,6 +1142,10 @@ def main():
         logger.error(f"Missing required arguments: {', '.join(missing_args)}")
         logger.error("Use --help to see all required arguments")
         sys.exit(1)
+
+    # Best-effort, non-fatal check for a newer Satellome release (cached daily).
+    if not args.get("no_version_check"):
+        notify_if_update_available(__version__, log=logger)
 
     # Default project name from input filename if not provided
     if not args.get("project"):
