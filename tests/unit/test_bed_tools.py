@@ -313,6 +313,78 @@ GGGGGGGGGGCCCCCCCCCCAAAAAAAAAATTTTTTTTTT
         assert "Duplicate chromosome name 'chr1' found in FASTA" in str(exc_info.value)
         assert "First word of FASTA headers must be unique" in str(exc_info.value)
 
+    def test_failed_extraction_publishes_no_outputs(self, tmp_path):
+        """A crashed extraction must leave no .sat/.fasta behind.
+
+        Outputs are published atomically, so a half-written extraction never
+        appears under its final name — otherwise a consumer that only checks for
+        the file's existence would ingest a partial .sat as data.
+        """
+        fasta_file = tmp_path / "dup.fasta"
+        fasta_file.write_text(
+            ">chr1 first\nATCGATCGATCGATCG\n>chr1 duplicate\nGGGGCCCCAAAATTTT\n"
+        )
+        bed_file = tmp_path / "dup.bed"
+        bed_file.write_text("chr1\t0\t10\t5\t100\n")
+
+        output_file = tmp_path / "out.sat"
+        fasta_output = tmp_path / "out.fasta"
+
+        with pytest.raises(ValueError):
+            extract_sequences_from_bed(
+                str(fasta_file), str(bed_file), str(output_file),
+                fasta_output_file=str(fasta_output), project="test",
+            )
+
+        assert not output_file.exists()
+        assert not fasta_output.exists()
+        assert not (tmp_path / "out.sat.partial").exists()
+        assert not (tmp_path / "out.fasta.partial").exists()
+
+    def test_outputs_are_absent_until_extraction_completes(self, test_fasta, test_bed_simple, tmp_path, monkeypatch):
+        """The final names must not appear while the files are still growing.
+
+        Exercises the Python fallback: the Rust bed-extract binary writes the
+        same `.partial` files but gives us no point inside the write to observe.
+        """
+        import satellome.core_functions.tools.bed_tools as bed_tools
+
+        # Force the fallback regardless of whether bed-extract is installed here
+        # (extract_sequences_from_bed imports subprocess locally, so patch the
+        # module it imports from).
+        import subprocess as subprocess_module
+
+        def no_binary(*args, **kwargs):
+            raise FileNotFoundError("bed-extract not available in this test")
+
+        monkeypatch.setattr(subprocess_module, "run", no_binary)
+
+        output_file = tmp_path / "out.sat"
+        fasta_output = tmp_path / "out.fasta"
+        seen_midway = {}
+
+        real_iter = bed_tools.sc_iter_fasta_brute
+
+        def spying_iter(path):
+            for i, item in enumerate(real_iter(path)):
+                if i == 0:
+                    seen_midway["sat"] = output_file.exists()
+                    seen_midway["fasta"] = fasta_output.exists()
+                    seen_midway["partial"] = (tmp_path / "out.sat.partial").exists()
+                yield item
+
+        monkeypatch.setattr(bed_tools, "sc_iter_fasta_brute", spying_iter)
+
+        count = extract_sequences_from_bed(
+            test_fasta, test_bed_simple, str(output_file),
+            fasta_output_file=str(fasta_output), project="test",
+        )
+
+        assert count == 4
+        assert seen_midway == {"sat": False, "fasta": False, "partial": True}
+        assert output_file.exists() and fasta_output.exists()
+        assert not (tmp_path / "out.sat.partial").exists()
+
     def test_fasta_output(self, test_fasta, test_bed_simple, tmp_path):
         """Test FASTA output file generation."""
         output_file = tmp_path / "output.sat"

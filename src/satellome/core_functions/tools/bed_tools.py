@@ -62,6 +62,12 @@ See Also:
 import logging
 import os
 from satellome.core_functions.io.fasta_file import sc_iter_fasta_brute
+from satellome.core_functions.tools.atomic_io import (
+    atomic_outputs,
+    discard,
+    partial_path,
+    publish,
+)
 from satellome.core_functions.tools.processing import get_gc_content
 
 logger = logging.getLogger(__name__)
@@ -250,14 +256,23 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
         # be filled even when no FASTA output is wanted — otherwise `project`
         # would be misread as the output-FASTA path (silently ignored, and a
         # spurious file named after the project value created in CWD).
+        #
+        # The binary writes to `<path>.partial` and we publish atomically once it
+        # exits successfully, so the final paths never exist in a half-written
+        # state for a concurrent reader (see atomic_io for why that matters).
+        tmp_output = partial_path(output_file)
+        tmp_fasta = partial_path(fasta_output_file) if fasta_output_file else None
         cmd = [
-            bed_extract_bin, fasta_file, bed_file, output_file,
-            fasta_output_file if fasta_output_file else os.devnull,
+            bed_extract_bin, fasta_file, bed_file, tmp_output,
+            tmp_fasta if tmp_fasta else os.devnull,
             project,
         ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
             if result.returncode == 0:
+                publish(output_file)
+                if fasta_output_file:
+                    publish(fasta_output_file)
                 # Parse extracted count from stderr
                 for line in result.stderr.strip().split('\n'):
                     if line.startswith('Extracted'):
@@ -270,9 +285,15 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
                 logger.info(f"✓ Extracted {count} sequences (Rust)")
                 return count
             else:
+                discard(output_file)
+                if fasta_output_file:
+                    discard(fasta_output_file)
                 logger.warning(f"bed-extract failed: {result.stderr}")
                 logger.warning("Falling back to Python implementation")
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as e:
+            discard(output_file)
+            if fasta_output_file:
+                discard(fasta_output_file)
             logger.warning(f"bed-extract error: {e}, falling back to Python")
 
     # Python fallback
@@ -334,22 +355,21 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
     seen_chromosomes = set()  # Track chromosome names to detect duplicates
     trf_id_counter = 0
 
-    # Open output files
-    out_fh = open(output_file, 'w')
-    fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
+    # Open output files. Both are written to `<path>.partial` and published
+    # together at the end, so the .sat and the .fasta can never disagree with
+    # each other on disk and neither appears until it is complete.
+    with atomic_outputs(output_file, fasta_output_file) as (out_fh, fasta_fh):
+        # Write TRF header
+        out_fh.write(f"# FasTAN results converted to TRF format\n")
+        out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
+        out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
+        out_fh.write(f"# Note: pmatch, pvar, entropy are calculated from sequence data\n")
+        # Write actual header row for DictReader
+        header_fields = ["project", "trf_id", "trf_head", "trf_l_ind", "trf_r_ind", "trf_period", "trf_n_copy",
+                         "trf_pmatch", "trf_pvar", "trf_entropy", "trf_consensus", "trf_array",
+                         "trf_array_gc", "trf_consensus_gc", "trf_array_length", "trf_joined", "trf_family", "trf_ref_annotation"]
+        out_fh.write("\t".join(header_fields) + "\n")
 
-    # Write TRF header
-    out_fh.write(f"# FasTAN results converted to TRF format\n")
-    out_fh.write(f"# Source FASTA: {os.path.basename(fasta_file)}\n")
-    out_fh.write(f"# Source BED: {os.path.basename(bed_file)}\n")
-    out_fh.write(f"# Note: pmatch, pvar, entropy are calculated from sequence data\n")
-    # Write actual header row for DictReader
-    header_fields = ["project", "trf_id", "trf_head", "trf_l_ind", "trf_r_ind", "trf_period", "trf_n_copy",
-                     "trf_pmatch", "trf_pvar", "trf_entropy", "trf_consensus", "trf_array",
-                     "trf_array_gc", "trf_consensus_gc", "trf_array_length", "trf_joined", "trf_family", "trf_ref_annotation"]
-    out_fh.write("\t".join(header_fields) + "\n")
-
-    try:
         logger.info("Processing FASTA file...")
         for header, sequence in sc_iter_fasta_brute(fasta_file):
             # Remove '>' and take first word as chromosome name
@@ -447,11 +467,6 @@ def extract_sequences_from_bed(fasta_file, bed_file, output_file, fasta_output_f
 
                 extracted_count += 1
 
-    finally:
-        out_fh.close()
-        if fasta_fh:
-            fasta_fh.close()
-
     logger.info(f"✓ Extracted {extracted_count} sequences to TRF format")
     if fasta_output_file:
         logger.info(f"✓ FASTA file created: {fasta_output_file}")
@@ -484,52 +499,50 @@ def filter_trf_by_size(input_trf_file, output_trf_file, min_array_length, fasta_
     total_length = 0
 
     with open(input_trf_file, 'r') as in_fh:
-        with open(output_trf_file, 'w') as out_fh:
-            fasta_fh = open(fasta_output_file, 'w') if fasta_output_file else None
-            try:
-                # Write header for filtered file
-                out_fh.write(f"# Filtered TRF file: array_length > {min_array_length} bp\n")
-                out_fh.write(f"# Source: {os.path.basename(input_trf_file)}\n")
-                out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
-                out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
-                out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
+        # Published atomically: a size-filtered .sat/.fasta pair appears under
+        # its final name only once complete, so a consumer that lists the output
+        # directory cannot pick up a partially filtered file.
+        with atomic_outputs(output_trf_file, fasta_output_file) as (out_fh, fasta_fh):
+            # Write header for filtered file
+            out_fh.write(f"# Filtered TRF file: array_length > {min_array_length} bp\n")
+            out_fh.write(f"# Source: {os.path.basename(input_trf_file)}\n")
+            out_fh.write(f"# Fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, trf_n_copy,\n")
+            out_fh.write(f"#         trf_pmatch, trf_pvar, trf_entropy, trf_consensus, trf_array,\n")
+            out_fh.write(f"#         trf_array_gc, trf_consensus_gc, trf_array_length, trf_joined, trf_family, trf_ref_annotation\n")
 
-                for line in in_fh:
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
+            for line in in_fh:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
 
-                    total_count += 1
-                    fields = line.split('\t')
+                total_count += 1
+                fields = line.split('\t')
 
-                    # TRF format: column 15 (index 14) is trf_array_length
-                    if len(fields) < 15:
-                        continue
+                # TRF format: column 15 (index 14) is trf_array_length
+                if len(fields) < 15:
+                    continue
 
-                    try:
-                        array_length = int(fields[14])
-                    except ValueError:
-                        continue
+                try:
+                    array_length = int(fields[14])
+                except ValueError:
+                    continue
 
-                    if array_length > min_array_length:
-                        out_fh.write(line + '\n')
-                        filtered_count += 1
-                        total_length += array_length
+                if array_length > min_array_length:
+                    out_fh.write(line + '\n')
+                    filtered_count += 1
+                    total_length += array_length
 
-                        # Write FASTA if requested
-                        if fasta_fh and len(fields) >= 12:
-                            # fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, ...
-                            # fields[2]=chr, fields[3]=start, fields[4]=end, fields[5]=period, fields[11]=sequence
-                            chr_name = fields[2]
-                            start = fields[3]
-                            end = fields[4]
-                            period = fields[5]
-                            sequence = fields[11]
-                            fasta_header = f">{chr_name}_{start}_{end}_{array_length}_{period}"
-                            fasta_fh.write(f"{fasta_header}\n{sequence}\n")
-            finally:
-                if fasta_fh:
-                    fasta_fh.close()
+                    # Write FASTA if requested
+                    if fasta_fh and len(fields) >= 12:
+                        # fields: project, trf_id, trf_head, trf_l_ind, trf_r_ind, trf_period, ...
+                        # fields[2]=chr, fields[3]=start, fields[4]=end, fields[5]=period, fields[11]=sequence
+                        chr_name = fields[2]
+                        start = fields[3]
+                        end = fields[4]
+                        period = fields[5]
+                        sequence = fields[11]
+                        fasta_header = f">{chr_name}_{start}_{end}_{array_length}_{period}"
+                        fasta_fh.write(f"{fasta_header}\n{sequence}\n")
 
     logger.info(f"Filtered {filtered_count}/{total_count} entries with array_length > {min_array_length} bp")
 

@@ -8,10 +8,24 @@
 import sys
 import os
 import argparse
+import atexit
+import datetime
 import subprocess
 import logging
 
 from satellome import __version__
+from satellome.core_functions.tools.dir_lock import (
+    OutputDirLocked,
+    acquire_output_lock,
+    release_output_lock,
+)
+from satellome.core_functions.tools.run_manifest import (
+    MANIFEST_NAME,
+    build_manifest,
+    format_verify_result,
+    verify_run,
+    write_run_manifest,
+)
 from satellome.core_functions.io.tab_file import sc_iter_tab_file
 from satellome.core_functions.models.trf_model import TRModel
 from satellome.core_functions.tools.gene_intersect import add_annotation_from_gff
@@ -117,6 +131,8 @@ def parse_arguments():
     parser.add_argument("--run-trf", help="Run TRF analysis (disabled by default, FasTAN is the default tool)", action='store_true', default=False)
     parser.add_argument("--notrf", help="[DEPRECATED] TRF is now disabled by default. Use --run-trf to enable.", action='store_true', default=False)
     parser.add_argument("--no-version-check", dest="no_version_check", help="Do not check GitHub for a newer Satellome release (also: SATELLOME_NO_VERSION_CHECK=1)", action='store_true', default=False)
+    parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
+    parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -522,9 +538,14 @@ def run_trf_drawing(settings, force_rerun):
             results_yaml=results_yaml if os.path.exists(results_yaml) else None,
         )
         return True
-    else:
-        logger.error(f"trf_draw.py failed with return code {completed_process.returncode}")
-        sys.exit(1)
+
+    # Report the failure to the caller instead of exiting here. The data files
+    # are already complete at this point, and main() still has to write the run
+    # manifest — with this step marked `failed` — so that a consumer sees the
+    # failed drawing in the run's own record rather than only in an exit code.
+    # main() exits non-zero afterwards, so the observable exit status is unchanged.
+    logger.error(f"trf_draw.py failed with return code {completed_process.returncode}")
+    return False
 
 
 def run_sat_family(settings, force_rerun):
@@ -1090,6 +1111,20 @@ def main():
     if handle_installation_commands(args):
         sys.exit(0)
 
+    # Verification mode: check a finished run against its own manifest and exit.
+    # This is what a driver script should call before it archives, compresses or
+    # ingests an output directory — existence of .sat / *.monomers.tsv cannot
+    # tell a complete run from one whose files were read while still growing.
+    if args.get("verify_run"):
+        target = os.path.abspath(args["verify_run"])
+        if not os.path.isdir(target):
+            logger.error(f"--verify-run: not a directory: {target}")
+            sys.exit(2)
+        result = verify_run(target)
+        for line in format_verify_result(target, result):
+            (logger.info if result.ok else logger.error)(line)
+        sys.exit(0 if result.ok else 1)
+
     # If no arguments provided, show version and info
     if not args.get("input") and not args.get("output"):
         print_logo()
@@ -1162,6 +1197,19 @@ def main():
 
     # Validate and prepare environment
     html_report_file, output_image_dir = validate_and_prepare_environment(args)
+
+    # Lock the output directory for the duration of the run. Two runs writing
+    # the same -o overwrite each other's files mid-write; the lock turns that
+    # into an explicit refusal instead of silently mixed output.
+    started_at = datetime.datetime.now().isoformat(timespec="seconds")
+    try:
+        output_lock = acquire_output_lock(
+            args["output"], started_at, ignore_lock=args.get("ignore_lock", False)
+        )
+    except OutputDirLocked as e:
+        logger.error(str(e))
+        sys.exit(1)
+    atexit.register(release_output_lock, output_lock)
 
     # Extract main parameters
     fasta_file = args["input"]
@@ -1322,6 +1370,13 @@ def main():
     except Exception:
         logger.debug("Telomere check still running or failed, continuing")
 
+    # Step statuses recorded in the run manifest, so a consumer can tell a fully
+    # successful run from one that produced complete data with a failed tail step.
+    steps = {
+        "trf_search": "ok" if run_trf else "skipped",
+        "fastan": "ok" if fastan_success else ("skipped" if skip_fastan else "failed"),
+    }
+
     # Remaining steps run if TRF was executed OR FasTAN was successful OR using existing FasTAN output
     if run_trf or fastan_success or use_existing_fastan:
         # Step 2: Add annotations (only if GFF provided)
@@ -1330,31 +1385,76 @@ def main():
             logger.info("STEP 2: ADD ANNOTATIONS")
             logger.info(SEPARATOR_LINE)
             add_annotations(settings, force_downstream)
+            steps["annotations"] = "ok"
         else:
             logger.info(SEPARATOR_LINE)
             logger.info("STEP 2: ADD ANNOTATIONS - SKIPPED (no GFF/RM files provided)")
             logger.info(SEPARATOR_LINE)
+            steps["annotations"] = "skipped"
 
         # Step 3: Classification
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3: CLASSIFICATION")
         logger.info(SEPARATOR_LINE)
-        run_trf_classification(settings, args, force_downstream)
+        steps["classification"] = "ok" if run_trf_classification(settings, args, force_downstream) else "failed"
 
         # Step 3b: Satellite DNA family clustering
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3b: SATELLITE FAMILY CLUSTERING")
         logger.info(SEPARATOR_LINE)
-        run_sat_family(settings, force_downstream)
+        steps["sat_family"] = "ok" if run_sat_family(settings, force_downstream) else "failed"
 
         # Step 4: Drawing and HTML report
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 4: DRAWING AND REPORT")
         logger.info(SEPARATOR_LINE)
-        run_trf_drawing(settings, force_downstream)
+        drawing_ok = run_trf_drawing(settings, force_downstream)
+        steps["drawing"] = "ok" if drawing_ok else "failed"
+    else:
+        steps["downstream"] = "skipped"
+
+    # Write the run manifest last: it is the run's own record of every file it
+    # produced (with byte sizes) and the status of every step. Downstream
+    # consumers verify against it — `satellome --verify-run <dir>` — instead of
+    # guessing completeness from the presence of a few filenames.
+    manifest_written = False
+    try:
+        manifest = build_manifest(
+            output_dir,
+            project=project,
+            version=__version__,
+            steps=steps,
+            extra={
+                "started": started_at,
+                "finished": datetime.datetime.now().isoformat(timespec="seconds"),
+                "input_fasta": os.path.abspath(fasta_file),
+                "taxon_name": taxon_name,
+                "taxid": taxid,
+                "genome_size": genome_size,
+            },
+        )
+        write_run_manifest(output_dir, manifest)
+        manifest_written = True
+    except OSError as e:
+        # Without a manifest the directory is indistinguishable from an
+        # unfinished run. That is a visible failure, not a footnote.
+        logger.error(f"Failed to write run manifest in {output_dir}: {e}")
 
     # Print summary
     print_summary(project, taxon_name, output_dir, html_report_file)
+
+    failed_steps = sorted(name for name, status in steps.items() if status == "failed")
+    if failed_steps:
+        logger.error(f"Run finished with failed steps: {', '.join(failed_steps)}")
+        if manifest_written:
+            logger.error(
+                f"Data files are complete and recorded in "
+                f"{os.path.join(output_dir, MANIFEST_NAME)}; verify with "
+                f"'satellome --verify-run {output_dir}'"
+            )
+        sys.exit(1)
+    if not manifest_written:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
