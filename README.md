@@ -138,6 +138,7 @@ output_dir/
 ├── genome.tssr.sat               # Tandem simple sequence repeats
 ├── genome.gaps.bed               # Gaps annotation
 ├── results.yaml                  # Analysis statistics
+├── run_manifest.json             # What the run produced (written last) + step statuses
 ├── fastan/                       # FasTAN intermediate files
 │   ├── genome.1aln               # FasTAN alignment output
 │   └── genome.bed                # FasTAN BED format
@@ -152,6 +153,47 @@ output_dir/
 └── reports/                      # HTML reports
     └── satellome_report.html
 ```
+
+## Verifying a Run
+
+Do not decide that an output directory is complete by checking that some files
+exist. A file that was read or copied while satellome was still writing it exists
+just as hard as a complete one, and a `gzip` of such a partial read is a valid
+archive that `gzip -t` accepts — so truncated data can enter downstream analysis
+unnoticed.
+
+Every run writes `run_manifest.json` **last**, recording each file it produced
+with its byte size plus the status of every step. Verify against it:
+
+```bash
+satellome --verify-run output_dir
+```
+
+* exit `0` — the directory matches its manifest and no step failed
+* exit `1` — not a verifiably complete run: no/corrupt manifest, a failed step, a
+  missing file, a leftover `*.partial`, or a file whose size no longer matches
+  what the run wrote (the truncated-copy case)
+* exit `2` — the argument is not a directory
+
+Files already compressed by your own pipeline are still checked: for a missing
+`X` with an `X.gz` next to it, the gzip ISIZE trailer (the uncompressed length
+the compressor actually consumed) is compared to the recorded size, which catches
+a `.gz` made from an incomplete read. Above 4 GiB that comparison is modulo
+4 GiB and the report says so.
+
+Two other guarantees back this up:
+
+* **Atomic outputs** — files are written as `<path>.partial` and renamed into
+  place, so a final name never refers to a half-written file. If you compress or
+  copy an output directory concurrently, you either get the complete file or no
+  file, never a truncated one.
+* **Output-directory lock** — a second satellome run into the same `-o` is
+  refused, naming the pid and host that holds it, instead of overwriting the
+  first run's files mid-write. Override with `--ignore-lock` only if you are sure.
+
+A run whose drawing step fails still writes a manifest — with `drawing: failed` —
+and exits non-zero. The data files are complete and usable; the failed step is
+recorded in the run's own artifact rather than only in an exit code.
 
 ## SAT File Format
 
