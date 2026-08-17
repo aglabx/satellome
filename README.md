@@ -154,6 +154,17 @@ output_dir/
     └── satellome_report.html
 ```
 
+### Taxon Names in File Names
+
+Karyotype charts are named after the taxon (`--taxon`, or the name resolved from
+`--taxid`). Organism names are free text and NCBI strain designations often
+contain slashes — `Leishmania braziliensis MHOM/BR/75/M2904`, `Chlorella
+vulgaris CCAP 1055/1`. Such a name is reduced to a single safe file-name
+component (`..._MHOM_BR_75_M2904.karyo.*`) and the substitution is logged; the
+plot titles keep the original name. Without this the slash was read as a path
+separator and the drawing step died with `FileNotFoundError` after the whole
+pipeline had already written its data.
+
 ## Verifying a Run
 
 Do not decide that an output directory is complete by checking that some files

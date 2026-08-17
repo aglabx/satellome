@@ -519,12 +519,24 @@ def run_trf_drawing(settings, force_rerun):
     if settings["large_file_suffix"]:
         trf_file = f"{settings['trf_prefix']}.{settings['large_file_suffix']}.sat"
 
-    # Add --force flag if force_rerun is True
-    force_flag = " --force" if force_rerun else ""
-    command = f"{sys.executable} {settings['trf_draw_path']} -f {settings['fasta_file']} -i {trf_file} -o {settings['output_image_dir']} -c {settings['minimal_scaffold_length']} -e {settings['drawing_enhancing']} -t '{settings['taxon_name']}' -s {settings['genome_size']}{force_flag}"
+    # Passed as an argument list, not through a shell: the taxon name comes from
+    # NCBI and is free text — quotes ("'Nostoc azollae' 0708") and other shell
+    # metacharacters in it would otherwise mangle the command line.
+    command = [
+        sys.executable, settings["trf_draw_path"],
+        "-f", settings["fasta_file"],
+        "-i", trf_file,
+        "-o", settings["output_image_dir"],
+        "-c", str(settings["minimal_scaffold_length"]),
+        "-e", str(settings["drawing_enhancing"]),
+        "-t", str(settings["taxon_name"]),
+        "-s", str(settings["genome_size"]),
+    ]
+    if force_rerun:
+        command.append("--force")
 
-    logger.debug(f"Command: {command}")
-    completed_process = subprocess.run(command, shell=True)
+    logger.debug(f"Command: {' '.join(command)}")
+    completed_process = subprocess.run(command)
 
     if completed_process.returncode == 0:
         logger.info("trf_draw.py executed successfully!")

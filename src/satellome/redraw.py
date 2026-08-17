@@ -131,7 +131,6 @@ if __name__ == "__main__":
         "-c", str(minimal_scaffold_length),
         "-e", str(drawing_enhancing),
         "-t", taxon_name,
-        "-d", distance_file,
         "-s", str(genome_size)
     ]
     logging.info("Running trf_draw.py with command: %s", " ".join(command))

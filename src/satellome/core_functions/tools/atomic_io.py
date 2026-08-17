@@ -84,9 +84,7 @@ def atomic_output(path, mode="w", **open_kwargs):
         raise ValueError(f"atomic_output is for writing, got mode={mode!r}")
 
     tmp = partial_path(path)
-    parent = os.path.dirname(os.path.abspath(tmp))
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent, exist_ok=True)
+    _ensure_parent(tmp)
 
     fh = open(tmp, mode, **open_kwargs)
     try:
@@ -127,9 +125,7 @@ def atomic_outputs(*paths, mode="w", **open_kwargs):
                 handles.append(None)
                 continue
             tmp = partial_path(path)
-            parent = os.path.dirname(os.path.abspath(tmp))
-            if parent and not os.path.isdir(parent):
-                os.makedirs(parent, exist_ok=True)
+            _ensure_parent(tmp)
             fh = open(tmp, mode, **open_kwargs)
             handles.append(fh)
             opened.append((path, fh))
@@ -149,6 +145,24 @@ def atomic_outputs(*paths, mode="w", **open_kwargs):
             fh.close()
         for path, _ in opened:
             os.replace(partial_path(path), path)
+
+
+def _ensure_parent(tmp):
+    """Make sure the directory of ``tmp`` exists, reporting if we had to build it.
+
+    The pipeline creates all of its output subdirectories up front, so a missing
+    parent here means the *file name* contained a path separator — an organism
+    name like ``MHOM/BR/75/M2904`` interpolated into a path, for instance. Making
+    the directory silently would scatter outputs into a hierarchy nobody looks
+    in, which is worse than the crash it replaces: say so.
+    """
+    parent = os.path.dirname(os.path.abspath(tmp))
+    if parent and not os.path.isdir(parent):
+        logger.warning(
+            f"Creating missing output directory {parent} for {os.path.basename(tmp)} "
+            f"— check the file name for stray path separators"
+        )
+        os.makedirs(parent, exist_ok=True)
 
 
 def _fsync_file(path):

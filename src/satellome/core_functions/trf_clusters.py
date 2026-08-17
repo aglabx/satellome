@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 from satellome.core_functions.trf_drawing import (get_gaps_annotation, read_trf_file,
                                   scaffold_length_sort_length)
 from satellome.core_functions.trf_embedings import get_disances
+from satellome.core_functions.tools.atomic_io import atomic_output
+from satellome.core_functions.tools.filenames import safe_filename_component
 from satellome.constants import (
     CANVAS_WIDTH_DEFAULT, CANVAS_HEIGHT_DEFAULT, CANVAS_HEIGHT_MIN, CANVAS_HEIGHT_MAX,
     CHROMOSOME_HEIGHT, VERTICAL_SPACER, BASE_HEIGHT,
@@ -195,7 +197,10 @@ def safe_write_figure(fig, output_file, width=None, height=None, engine="kaleido
     plotly_div = pio.to_html(fig, full_html=False, include_plotlyjs='cdn')
     themed_html = _themed_html_wrapper(plotly_div, title=title)
 
-    with open(html_file, 'w', encoding='utf-8') as f:
+    # Atomic: the images directory is read (and compressed) by driver scripts
+    # while the pipeline runs, and a half-written chart must never be visible
+    # under its final name.
+    with atomic_output(html_file, encoding='utf-8') as f:
         f.write(themed_html)
 
     logger.debug(f"Exported themed interactive plot to {html_file}")
@@ -1039,6 +1044,29 @@ def _sort_simple_chromosomes(scaffold_items):
     
     return sorted(scaffold_items, key=get_sort_key)
 
+def karyotype_prefix(output_folder, taxon):
+    """Build the karyotype file-name prefix for *taxon* inside *output_folder*.
+
+    The taxon name is free text from NCBI (or from ``--taxon``), and strain
+    designations such as ``MHOM/BR/75/M2904`` or ``CCAP 1055/1`` contain path
+    separators. Interpolated into a path as is, the name stops being a file name
+    and becomes a directory hierarchy that nobody created, so drawing dies with
+    ``FileNotFoundError`` after the whole pipeline has already written its data.
+
+    The taxon is therefore sanitized for the *file name* only; the plot titles
+    keep the real name. A name that had to be changed is reported, because a
+    silently renamed output is an output the caller cannot find.
+    """
+    safe_taxon = safe_filename_component(taxon)
+    if safe_taxon != str(taxon):
+        logger.warning(
+            f"Taxon name {taxon!r} cannot be used in a file name as is "
+            f"(path separators or other special characters); "
+            f"karyotype files are named after {safe_taxon!r} instead"
+        )
+    return os.path.join(output_folder, f"{safe_taxon}.karyo")
+
+
 def draw_all(
     trf_file,
     fasta_file,
@@ -1093,6 +1121,7 @@ def draw_all(
     bed_output_file = os.path.join(os.path.dirname(output_folder), f"{project_name}.gaps.bed")
 
     # Check if BED file exists and load from it, or compute and create it
+    gaps_bed_needs_write = True
     if os.path.isfile(bed_output_file) and os.path.getsize(bed_output_file) > 0 and not force_rerun:
         logger.info(f"Loading gaps data from existing BED file: {bed_output_file}")
         gaps_data = []
@@ -1106,9 +1135,16 @@ def draw_all(
                         chrm, start, end, name, length = parts[:5]
                         gaps_data.append((chrm, int(start), int(end), int(length)))
             logger.info(f"✓ Loaded {len(gaps_data)} gaps from BED file")
+            # An existing file that parsed to nothing is not trusted as "no gaps".
+            gaps_bed_needs_write = not gaps_data
         except Exception as e:
-            logger.warning(f"Failed to load gaps from BED file: {e}")
-            logger.info("Computing gaps annotation...")
+            # The file exists but is not readable as gaps. Recomputing is right,
+            # but the unreadable file must not survive the run: it would be
+            # listed as a produced output and reused by the next run as cache.
+            logger.warning(
+                f"Existing gaps BED file {bed_output_file} could not be read "
+                f"({e}); recomputing gaps and rewriting the file"
+            )
             gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
     else:
         if force_rerun and os.path.isfile(bed_output_file):
@@ -1117,29 +1153,27 @@ def draw_all(
             logger.info("Computing gaps annotation (this may take a while)...")
         gaps_data = get_gaps_annotation(fasta_file, genome_size, lenght_cutoff=lenght_cutoff)
 
-    # Export/update gaps to BED format in output root directory (not in images/)
-    # Only write if we computed new data or force_rerun
-    if not os.path.isfile(bed_output_file) or force_rerun or len(gaps_data) == 0:
+    # Export/update gaps to BED format in output root directory (not in images/).
+    # Published atomically: a driver script may be compressing this directory
+    # while we write, and a gzip of a half-written BED is a valid .gz.
+    if gaps_bed_needs_write:
         logger.info(f"Exporting gaps to BED format: {bed_output_file}")
-        try:
-            with open(bed_output_file, 'w') as f:
-                # BED format header
-                f.write("# Gaps annotation from Satellome\n")
-                f.write(f"# Project: {project_name}\n")
-                f.write(f"# Taxon: {taxon}\n")
-                f.write(f"# Total gaps: {len(gaps_data)}\n")
-                f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
+        with atomic_output(bed_output_file) as f:
+            # BED format header
+            f.write("# Gaps annotation from Satellome\n")
+            f.write(f"# Project: {project_name}\n")
+            f.write(f"# Taxon: {taxon}\n")
+            f.write(f"# Total gaps: {len(gaps_data)}\n")
+            f.write(f"# Format: chr\\tstart\\tend\\tname\\tscore\\tstrand\n")
 
-                # Write gaps in BED6 format
-                for chrm, start, end, length in gaps_data:
-                    # BED format: chr, start, end, name, score, strand
-                    # score = length of gap (for filtering)
-                    # strand = . (not applicable for gaps)
-                    f.write(f"{chrm}\t{start}\t{end}\tgap\t{length}\t.\n")
+            # Write gaps in BED6 format
+            for chrm, start, end, length in gaps_data:
+                # BED format: chr, start, end, name, score, strand
+                # score = length of gap (for filtering)
+                # strand = . (not applicable for gaps)
+                f.write(f"{chrm}\t{start}\t{end}\tgap\t{length}\t.\n")
 
-            logger.info(f"✓ Exported {len(gaps_data)} gaps to BED format")
-        except Exception as e:
-            logger.warning(f"Failed to export gaps to BED format: {e}")
+        logger.info(f"✓ Exported {len(gaps_data)} gaps to BED format")
 
     gaps_lengths = Counter([x[-1] for x in gaps_data])
 
@@ -1240,8 +1274,8 @@ def draw_all(
 
     ### TODO: save gaps
 
-    # Draw karyotypes    
-    output_file_name_prefix = os.path.join(output_folder, f"{taxon}.karyo")
+    # Draw karyotypes
+    output_file_name_prefix = karyotype_prefix(output_folder, taxon)
     draw_karyotypes(
         output_file_name_prefix,
         taxon,
