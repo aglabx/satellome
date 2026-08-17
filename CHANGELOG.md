@@ -5,6 +5,48 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-08-17
+
+### Added
+- **Run manifest and `satellome --verify-run <dir>`**: every run writes
+  `run_manifest.json` **last**, listing each produced file with its byte size and
+  the status of every step. `--verify-run` exits 0 only for a verifiably complete
+  run; 1 for a missing or corrupt manifest, a failed step, a missing file, a
+  leftover `*.partial`, or a file whose size no longer matches what the run
+  wrote; 2 for a bad argument. Existence checks cannot detect truncation — this
+  can. For `.gz` copies the gzip ISIZE trailer is compared to the recorded size,
+  which catches an archive made from a partially read file (such an archive is
+  structurally valid and passes `gzip -t`).
+- **Output-directory lock**: a second run into the same `-o` is refused, naming
+  the pid and host that holds the lock. Override explicitly with `--ignore-lock`.
+
+### Changed
+- **Atomic output publication**: every output file is written to
+  `<path>.partial` and `os.replace`-d into place, so a final name never refers to
+  a half-written file — `.sat` and FASTA extraction outputs, the gaps BED, the
+  karyotype charts and the manifest itself. A driver script that compresses the
+  output directory concurrently now gets either the complete file or no file.
+- A failing drawing step no longer exits on the spot: the manifest is still
+  written, with `drawing: failed`, and satellome exits 1. The failure is recorded
+  in the run's own artifact instead of only in an exit code.
+- The drawing step is invoked as an argument list instead of through a shell, so
+  quotes in an organism name cannot mangle the command line.
+- `atomic_io` reports when it has to create an output file's parent directory:
+  the pipeline creates its directories up front, so a missing parent means a
+  stray path separator in a file name.
+
+### Fixed
+- **Drawing crash on organism names containing a slash**: NCBI strain
+  designations such as `MHOM/BR/75/M2904` or `CCAP 1055/1` went into the
+  karyotype file name unchanged, so the slash was read as a path separator and
+  drawing died with `FileNotFoundError` — after the whole pipeline had already
+  written its data. Taxon names are now reduced to a single safe file-name
+  component and the substitution is logged; plot titles keep the original name.
+- A failure to write the gaps BED file propagates instead of being logged and
+  ignored, and a gaps BED that exists but cannot be parsed is rewritten instead
+  of being reused as cache by the next run.
+- `redraw.py` no longer passes `-d` to `trf_draw.py`, which does not accept it.
+
 ## [1.5.2] - 2025-01-27
 
 ### Changed
