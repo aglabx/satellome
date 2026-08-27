@@ -34,6 +34,12 @@ from satellome.core_functions.tools.processing import get_genome_size_with_progr
 from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
 from satellome.core_functions.tools.version_check import notify_if_update_available
+from satellome.core_functions.tools.env_check import (
+    find_console_script,
+    hidden_tool_warning,
+    run_doctor,
+    warn_if_entrypoint_misconfigured,
+)
 from satellome.core_functions.tools.validation import (
     validate_input_files, validate_fasta_file, validate_gff_file,
     validate_repeatmasker_file, validate_trf_binary, validate_output_directory,
@@ -133,6 +139,7 @@ def parse_arguments():
     parser.add_argument("--no-version-check", dest="no_version_check", help="Do not check GitHub for a newer Satellome release (also: SATELLOME_NO_VERSION_CHECK=1)", action='store_true', default=False)
     parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
     parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
+    parser.add_argument("--doctor", help="Diagnose the installation (PATH, launcher, external tools) and exit (0 = healthy, 1 = problems found)", action='store_true', default=False)
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -974,8 +981,14 @@ def run_arraysplitter(fasta_file, output_prefix, threads, force_rerun=False):
         logger.warning(f"Input FASTA file not found or empty: {fasta_file}")
         return False
 
-    # Find arraysplitter binary
-    arraysplitter_bin = shutil.which("arraysplitter")
+    # Find arraysplitter binary. Resolution is PATH-first but falls back to this
+    # interpreter's scripts directory: a 'pip install --user' puts the launcher
+    # in ~/.local/bin, which is frequently absent from PATH, and shutil.which
+    # alone would report a tool that is sitting right there as "not installed".
+    arraysplitter = find_console_script("arraysplitter")
+    if arraysplitter.hidden:
+        logger.warning(hidden_tool_warning(arraysplitter))
+    arraysplitter_bin = arraysplitter.path
     if not arraysplitter_bin:
         # Try to install via pip
         logger.warning("arraysplitter not found. Installing via pip...")
@@ -988,9 +1001,18 @@ def run_arraysplitter(fasta_file, output_prefix, threads, force_rerun=False):
             )
             if install_result.returncode == 0:
                 logger.info("✓ arraysplitter installed successfully!")
-                arraysplitter_bin = shutil.which("arraysplitter")
+                arraysplitter = find_console_script("arraysplitter")
+                arraysplitter_bin = arraysplitter.path
+                if arraysplitter.hidden:
+                    logger.warning(hidden_tool_warning(arraysplitter))
                 if not arraysplitter_bin:
-                    logger.error("arraysplitter installed but binary not found in PATH")
+                    logger.error(
+                        "arraysplitter reported a successful install but no "
+                        "launcher was found on PATH or in this interpreter's "
+                        f"scripts directories ({sys.executable}). Install it "
+                        "explicitly with: "
+                        f"{sys.executable} -m pip install --force-reinstall arraysplitter"
+                    )
                     return False
             else:
                 logger.error(f"Failed to install arraysplitter: {install_result.stderr}")
@@ -1119,6 +1141,12 @@ def print_summary(project, taxon_name, output_dir, html_report_file):
 def main():
     args = parse_arguments()
 
+    # Environment diagnosis: where this install lives, whether the shell can
+    # actually see the launcher, and where every external tool resolves from.
+    # Answers "pip said it installed but 'satellome' is command not found".
+    if args.get("doctor"):
+        sys.exit(0 if run_doctor(log=logger) else 1)
+
     # Handle installation commands first (exits if installation was performed)
     if handle_installation_commands(args):
         sys.exit(0)
@@ -1175,11 +1203,22 @@ def main():
                 logger.info(f"  {tool}: {shutil.which(tool)}")
             else:
                 logger.info(f"  {tool}: not installed (use --install-all)")
-        arraysplitter_path = shutil.which("arraysplitter")
-        if arraysplitter_path:
-            logger.info(f"  arraysplitter: {arraysplitter_path}")
+        arraysplitter = find_console_script("arraysplitter")
+        if arraysplitter.hidden:
+            logger.info(f"  arraysplitter: {arraysplitter.path} (off PATH)")
+        elif arraysplitter.found:
+            logger.info(f"  arraysplitter: {arraysplitter.path}")
         else:
             logger.info("  arraysplitter: not installed (pip install arraysplitter)")
+
+        # Surface an unusable launcher / hidden tools here too: this screen is
+        # what a user sees right after installing.
+        logger.info("")
+        report = warn_if_entrypoint_misconfigured(log=logger)
+        if arraysplitter.hidden:
+            logger.warning(hidden_tool_warning(arraysplitter))
+        if report.ok and not arraysplitter.hidden:
+            logger.info("Environment looks healthy (details: satellome --doctor)")
         sys.exit(0)
 
     # Validate required arguments for pipeline mode
@@ -1193,6 +1232,12 @@ def main():
     # Best-effort, non-fatal check for a newer Satellome release (cached daily).
     if not args.get("no_version_check"):
         notify_if_update_available(__version__, log=logger)
+
+    # An invisible or shadowed launcher does not stop this run (we are already
+    # executing), but it does mean the next 'satellome ...' may fail or run a
+    # different install. Say so instead of leaving it to the pip warning the
+    # user has long scrolled past.
+    warn_if_entrypoint_misconfigured(log=logger)
 
     # Default project name from input filename if not provided
     if not args.get("project"):

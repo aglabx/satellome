@@ -53,6 +53,44 @@ pip install satellome
 satellome --install-all
 ```
 
+### Checking the installation
+
+```bash
+satellome --doctor
+```
+
+`--doctor` reports where this install lives, whether your shell can actually
+see the launcher, and where each external tool resolves from. It exits 0 when
+everything is healthy and 1 when it finds a problem, so it can be used as a
+setup gate in a driver script.
+
+It is the answer to the most common post-install surprise:
+
+```
+WARNING: The script satellome is installed in '/home/user/.local/bin'
+which is not on PATH.
+```
+
+That means `pip` used a user install and your shell cannot see the launcher —
+`satellome` will report `command not found` even though the package is fine.
+Any one of these fixes it:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"                       # this shell only
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # permanent
+python -m satellome ...                                    # no PATH change needed
+```
+
+`python -m satellome` is the most robust form in batch scripts: it always
+follows the active environment, whereas a console script keeps the interpreter
+its shebang was written with. Satellome resolves pip-installed companion tools
+(such as `arraysplitter`) through the same interpreter-aware lookup, so a
+directory missing from `PATH` degrades nothing silently — it is reported and
+the tool is still used.
+
+Set `SATELLOME_NO_ENV_CHECK=1` to silence the startup warning on machines where
+this layout is deliberate; `--doctor` still reports it.
+
 ### From Source
 
 ```bash
