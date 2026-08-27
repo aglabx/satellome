@@ -5,6 +5,29 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-08-28
+
+### Added
+- **`satellome --fix-path`, and the same repair automatically**: when the
+  launcher's directory is missing from `PATH`, satellome now adds it instead of
+  only explaining how. One marked block (`# >>> satellome path >>>`) is appended
+  to the startup file the user's shell already reads — bash, zsh (honouring
+  `ZDOTDIR`), and fish (`fish_add_path`) — written in `$HOME/...` form so the
+  file stays portable between machines. The edit is idempotent via its marker,
+  does not duplicate an entry added by hand, and prefers a startup file that
+  already exists: creating `~/.bash_profile` where none existed would stop a
+  login shell from reading `~/.profile`.
+  Since no process can change its parent shell's environment, the `source ...`
+  command needed for the *current* shell is always printed.
+  `SATELLOME_NO_PATH_FIX=1` keeps the diagnosis but never edits a file;
+  `SATELLOME_NO_ENV_CHECK=1` disables the check entirely.
+
+### Changed
+- A shadowed launcher (a `satellome` on `PATH` belonging to a different install
+  than the active interpreter) is reported but deliberately **not** auto-fixed:
+  choosing which of two installations to remove is the user's decision, and no
+  `PATH` edit can express it.
+
 ## [1.9.0] - 2026-08-28
 
 ### Added
