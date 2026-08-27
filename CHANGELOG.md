@@ -5,6 +5,35 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-08-28
+
+### Fixed
+- **`--doctor` no longer reports "No problems found" while tools are missing.**
+  It listed `sat-family`, `telomere-check`, `find-gaps`, `bed-extract` and
+  `genome-size` as "not installed" and then declared the installation healthy —
+  the precise report that leads to a run finishing with less output than the
+  user believes it produced. Every tool now carries its consequence, and the
+  ones whose absence removes results make `--doctor` exit non-zero.
+- **The Rust helper tools had no install path at all.** They are not in the
+  wheel (they are native per-platform binaries, which a `py3-none-any` wheel
+  must not carry across operating systems), they were not in the sdist, and
+  `--install-all` did not know about them, so no pip user ever had them. Their
+  absence silently skipped satellite family clustering and the telomere check.
+
+### Added
+- **`satellome --install-rust-tools`**, also covered by `--install-all`: builds
+  the five crates in `rust/` with cargo and installs them into the managed bin
+  directory. Sources come from a local checkout when there is one and are
+  cloned otherwise, so it works from a wheel install. A missing Rust toolchain,
+  a compiler error, or a partially completed install is reported with the
+  actual output and the names still missing — a partial install is never
+  reported as success.
+- `rust/` sources are now included in the sdist.
+- **Missing-tool banner at the start of a run**, naming what this run will not
+  produce, before the compute rather than in the middle of it. Tools that only
+  cost speed (a Python fallback gives the same result) are listed separately
+  and are not treated as problems.
+
 ## [1.10.0] - 2026-08-28
 
 ### Added
