@@ -39,6 +39,7 @@ from satellome.core_functions.tools.env_check import (
     hidden_tool_warning,
     run_doctor,
     run_fix_path,
+    warn_about_missing_tools,
     warn_if_entrypoint_misconfigured,
 )
 from satellome.core_functions.tools.validation import (
@@ -49,6 +50,7 @@ from satellome.core_functions.tools.validation import (
 )
 from satellome.installers import (
     install_fastan,
+    install_rust_tools,
     install_tanbed,
     install_trf_large,
     install_trf_standard,
@@ -148,7 +150,8 @@ def parse_arguments():
     parser.add_argument("--install-tanbed", help="Install tanbed binary to ~/.satellome/bin/", action='store_true', default=False)
     parser.add_argument("--install-trf", help="Install standard TRF (download pre-compiled binary)", action='store_true', default=False)
     parser.add_argument("--install-trf-large", help="Install modified TRF (for large genomes) to ~/.satellome/bin/", action='store_true', default=False)
-    parser.add_argument("--install-all", help="Install all external dependencies (FasTAN, tanbed, and modified TRF)", action='store_true', default=False)
+    parser.add_argument("--install-rust-tools", dest="install_rust_tools", help="Build and install the bundled Rust helper tools (sat-family, telomere-check, find-gaps, bed-extract, genome-size); requires cargo", action='store_true', default=False)
+    parser.add_argument("--install-all", help="Install all external dependencies (FasTAN, tanbed, modified TRF, and the Rust helper tools)", action='store_true', default=False)
 
     return vars(parser.parse_args())
 
@@ -1061,9 +1064,10 @@ def handle_installation_commands(args):
     install_trf_flag = args.get("install_trf", False)
     install_trf_large_flag = args.get("install_trf_large", False)
     install_all_flag = args.get("install_all", False)
+    install_rust_flag = args.get("install_rust_tools", False)
 
     # If no installation commands, return False to continue with main pipeline
-    if not (install_fastan_flag or install_tanbed_flag or install_trf_flag or install_trf_large_flag or install_all_flag):
+    if not (install_fastan_flag or install_tanbed_flag or install_trf_flag or install_trf_large_flag or install_all_flag or install_rust_flag):
         return False
 
     logger.info(SEPARATOR_LINE_DOUBLE)
@@ -1109,6 +1113,18 @@ def handle_installation_commands(args):
             logger.info("✓ Modified TRF installed successfully")
         else:
             logger.error("✗ Modified TRF installation failed")
+            success = False
+        logger.info(SEPARATOR_LINE)
+
+    # Install the bundled Rust helper tools. Two of them (sat-family,
+    # telomere-check) decide whether a run produces family-clustering and
+    # telomere output at all, so --install-all must cover them.
+    if install_rust_flag or install_all_flag:
+        logger.info("Installing Rust helper tools...")
+        if install_rust_tools(force=install_rust_flag):
+            logger.info("✓ Rust helper tools installed successfully")
+        else:
+            logger.error("✗ Rust helper tool installation failed")
             success = False
         logger.info(SEPARATOR_LINE)
 
@@ -1244,6 +1260,10 @@ def main():
     # different install. Say so instead of leaving it to the pip warning the
     # user has long scrolled past.
     warn_if_entrypoint_misconfigured(log=logger)
+
+    # Name the results this run will not produce, before hours of compute rather
+    # than as a warning that scrolls past in the middle of it.
+    warn_about_missing_tools(log=logger)
 
     # Default project name from input filename if not provided
     if not args.get("project"):

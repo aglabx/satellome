@@ -251,9 +251,8 @@ class TestDoctorReport:
         missing = ToolLocation(name="trf")
         text = "\n".join(format_doctor_report(report, [hidden, missing]))
 
-        assert "PROBLEMS (2)" in text
         assert "arraysplitter" in text and "off PATH" in text
-        assert "trf" in text and "not installed" in text
+        assert "trf" in text and "only needed with --run-trf" in text
         assert "NOT on PATH" in text
 
     def test_healthy_report_says_so(self, tmp_path, monkeypatch):
@@ -528,3 +527,128 @@ class TestStartupFileSelection:
 
         assert result.status == "added"
         assert (home / ".bashrc").exists()
+
+
+class TestMissingToolsAreNotCalledHealthy:
+    """A run missing sat-family finishes and silently lacks family clustering.
+
+    Reporting that as "No problems found" is the exact failure these tests pin.
+    """
+
+    def _healthy_entrypoint(self, tmp_path, monkeypatch):
+        scripts_dir = tmp_path / "bin"
+        scripts_dir.mkdir()
+        make_script(scripts_dir, "satellome", f"#!{sys.executable}\n")
+        monkeypatch.setenv("PATH", str(scripts_dir))
+        monkeypatch.setattr(env_check, "interpreter_script_dirs", lambda: [scripts_dir])
+        return check_satellome_entrypoint()
+
+    def test_missing_result_affecting_tool_is_a_problem(self, tmp_path, monkeypatch):
+        report = self._healthy_entrypoint(tmp_path, monkeypatch)
+        tools = [
+            ToolLocation(name="fastan", path="/opt/bin/fastan", source="managed", on_path=True),
+            ToolLocation(name="sat-family"),
+            ToolLocation(name="telomere-check"),
+        ]
+
+        text = "\n".join(format_doctor_report(report, tools))
+
+        assert "No problems found." not in text, "missing tools must never read as healthy"
+        assert "PROBLEMS (2)" in text
+        assert "sat-family is not installed" in text
+        assert "family clustering is SKIPPED" in text
+        assert env_check.RUST_TOOLS_INSTALL in text, "must say how to get them"
+
+    def test_speedup_tools_are_not_problems_but_are_listed(self, tmp_path, monkeypatch):
+        report = self._healthy_entrypoint(tmp_path, monkeypatch)
+        tools = [
+            ToolLocation(name="fastan", path="/opt/bin/fastan", source="managed", on_path=True),
+            ToolLocation(name="genome-size"),
+            ToolLocation(name="find-gaps"),
+        ]
+
+        text = "\n".join(format_doctor_report(report, tools))
+
+        assert "No problems found." in text, "a Python fallback gives the same result"
+        assert "SLOWER WITHOUT (results are identical)" in text
+        assert "genome-size" in text and "find-gaps" in text
+
+    def test_optional_trf_is_not_a_problem(self, tmp_path, monkeypatch):
+        report = self._healthy_entrypoint(tmp_path, monkeypatch)
+        text = "\n".join(format_doctor_report(report, [ToolLocation(name="trf")]))
+
+        assert "No problems found." in text
+        assert "only needed with --run-trf" in text
+
+    def test_required_tools_rank_above_skipped_steps(self):
+        tools = [ToolLocation(name="sat-family"), ToolLocation(name="fastan")]
+        assert [t.name for t in env_check.missing_tools(tools)] == ["fastan", "sat-family"]
+
+    def test_present_tool_is_never_reported_missing(self):
+        tools = [ToolLocation(name="sat-family", path="/opt/bin/sat-family",
+                              source="managed", on_path=True)]
+        assert env_check.missing_tools(tools) == []
+        assert env_check.degraded_tools(tools) == []
+
+    def test_every_spec_declares_an_impact_and_an_install_route(self):
+        for spec in env_check.TOOL_SPECS:
+            assert spec.impact.strip(), f"{spec.name} has no stated consequence"
+            assert spec.install.strip(), f"{spec.name} has no install command"
+            assert spec.impact_class in ("required", "results", "speedup", "optional")
+
+    def test_doctor_exit_code_is_non_zero_when_a_tool_is_missing(self, tmp_path, monkeypatch, caplog):
+        self._healthy_entrypoint(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            env_check, "check_companion_tools",
+            lambda: [ToolLocation(name="sat-family")],
+        )
+
+        with caplog.at_level("WARNING"):
+            healthy = env_check.run_doctor()
+
+        assert healthy is False, "exit 0 would tell a driver script everything is fine"
+        assert "sat-family is not installed" in caplog.text
+
+
+class TestStartupToolWarning:
+    def test_missing_tools_are_announced_before_the_run(self, monkeypatch, caplog):
+        monkeypatch.delenv(env_check.ENV_DISABLE, raising=False)
+        monkeypatch.setattr(
+            env_check, "check_companion_tools",
+            lambda: [
+                ToolLocation(name="fastan", path="/opt/bin/fastan", source="managed", on_path=True),
+                ToolLocation(name="sat-family"),
+            ],
+        )
+
+        with caplog.at_level("WARNING"):
+            broken = env_check.warn_about_missing_tools()
+
+        assert [t.name for t in broken] == ["sat-family"]
+        assert "WILL PRODUCE LESS THAN A COMPLETE ONE" in caplog.text
+        assert "family clustering is SKIPPED" in caplog.text
+        assert env_check.RUST_TOOLS_INSTALL in caplog.text
+
+    def test_speedup_tools_do_not_trigger_the_banner(self, monkeypatch, caplog):
+        monkeypatch.delenv(env_check.ENV_DISABLE, raising=False)
+        monkeypatch.setattr(
+            env_check, "check_companion_tools",
+            lambda: [ToolLocation(name="genome-size")],
+        )
+
+        with caplog.at_level("WARNING"):
+            broken = env_check.warn_about_missing_tools()
+
+        assert broken == []
+        assert caplog.text == "", "same results, only slower — not worth a banner"
+
+    def test_opt_out_silences_the_banner(self, monkeypatch, caplog):
+        monkeypatch.setenv(env_check.ENV_DISABLE, "1")
+        monkeypatch.setattr(
+            env_check, "check_companion_tools",
+            lambda: [ToolLocation(name="sat-family")],
+        )
+
+        with caplog.at_level("WARNING"):
+            assert env_check.warn_about_missing_tools() == []
+        assert caplog.text == ""

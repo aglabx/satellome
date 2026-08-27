@@ -18,12 +18,15 @@ from .fastan import (
 from .tanbed import install_tanbed
 from .trf_large import install_trf_large
 from .trf_standard import install_trf_standard
+from .rust_tools import install_rust_tools, RUST_TOOLS
 
 __all__ = [
     'detect_platform',
     'check_binary_exists',
     'check_command_exists',
     'get_satellome_bin_dir',
+    'install_rust_tools',
+    'RUST_TOOLS',
     'verify_installation',
     'install_fastan',
     'ensure_fastan_version',

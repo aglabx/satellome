@@ -35,7 +35,7 @@ The tool is designed to work with various genome assembly projects including:
 # Install from PyPI
 pip install satellome
 
-# Install required binaries (FasTAN, tanbed)
+# Install required binaries (FasTAN, tanbed, Rust helpers)
 satellome --install-all
 
 # Run on a genome
@@ -63,6 +63,29 @@ satellome --doctor
 see the launcher, and where each external tool resolves from. It exits 0 when
 everything is healthy and 1 when it finds a problem, so it can be used as a
 setup gate in a driver script.
+
+Missing tools are reported by **consequence**, not merely as "not installed",
+because that is the part that decides whether a finished run is complete:
+
+| Tool | Missing means |
+|------|---------------|
+| `fastan`, `tanbed`, `arraysplitter` | the analysis cannot run |
+| `sat-family` | family clustering is **skipped** — no families output |
+| `telomere-check` | the telomere check is **skipped** — no telomere output |
+| `find-gaps`, `bed-extract`, `genome-size` | a Python fallback gives the **same result**, slower |
+| `trf` | only needed with `--run-trf` |
+
+A tool whose absence removes results makes `--doctor` exit non-zero, and is
+announced at the start of a run — before hours of compute, rather than as a
+line that scrolls past in the middle of it. Tools that only cost speed are
+listed separately and are not treated as problems.
+
+Install the Rust helpers (they are compiled from the `rust/` sources in this
+repository, so a Rust toolchain is required):
+
+```bash
+satellome --install-rust-tools    # or: satellome --install-all
+```
 
 It is the answer to the most common post-install surprise:
 

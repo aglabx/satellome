@@ -48,13 +48,68 @@ PATH_BLOCK_START = "# >>> satellome path >>>"
 PATH_BLOCK_END = "# <<< satellome path <<<"
 
 CONSOLE_SCRIPT = "satellome"
+SEPARATOR = "-" * 70
 
-# Companion console scripts / binaries Satellome shells out to. ``pip`` marks
-# the ones installed as Python console scripts, i.e. the ones exposed to the
-# very same "--user install is not on PATH" failure.
-PIP_COMPANIONS = ("arraysplitter",)
-MANAGED_BINARIES = ("fastan", "tanbed", "trf")
-BUNDLED_BINARIES = ("sat-family", "telomere-check", "find-gaps", "bed-extract", "genome-size")
+# What every external tool costs when it is absent. Reporting a tool as merely
+# "not installed" is useless to someone who then has a run produce fewer
+# results than they expected: the consequence is the part that matters, and it
+# differs sharply per tool. Three classes:
+#   "required" - the analysis cannot run at all
+#   "results"  - the run succeeds but a step is SKIPPED, so output is missing
+#   "speedup"  - a Python fallback produces the same result, more slowly
+#   "optional" - only needed for a non-default mode
+RUST_TOOLS_INSTALL = "satellome --install-rust-tools"
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    kind: str          # "managed" (installer-provided) or "script" (pip console script)
+    impact_class: str  # required | results | speedup | optional
+    impact: str        # what the user loses without it
+    install: str       # the command that provides it
+
+    @property
+    def breaks_results(self) -> bool:
+        """True when a missing tool silently changes what a run produces."""
+        return self.impact_class in ("required", "results")
+
+
+TOOL_SPECS = (
+    ToolSpec("fastan", "managed", "required",
+             "the default tandem-repeat search cannot run",
+             "satellome --install-fastan"),
+    ToolSpec("tanbed", "managed", "required",
+             "monomer/array extraction cannot run",
+             "satellome --install-tanbed"),
+    ToolSpec("trf", "managed", "optional",
+             "only needed with --run-trf (TRF is off by default)",
+             "satellome --install-trf"),
+    ToolSpec("arraysplitter", "script", "required",
+             "consensus/HOR calculation fails and the FasTAN step aborts",
+             "pip install arraysplitter"),
+    ToolSpec("sat-family", "managed", "results",
+             "satellite family clustering is SKIPPED - no families output",
+             RUST_TOOLS_INSTALL),
+    ToolSpec("telomere-check", "managed", "results",
+             "the telomere check is SKIPPED - no telomere output",
+             RUST_TOOLS_INSTALL),
+    ToolSpec("find-gaps", "managed", "speedup",
+             "gap detection falls back to Python (same result, slower)",
+             RUST_TOOLS_INSTALL),
+    ToolSpec("bed-extract", "managed", "speedup",
+             "sequence extraction falls back to Python (same result, slower)",
+             RUST_TOOLS_INSTALL),
+    ToolSpec("genome-size", "managed", "speedup",
+             "genome size falls back to Python (same result, slower)",
+             RUST_TOOLS_INSTALL),
+)
+
+TOOL_SPECS_BY_NAME = {spec.name: spec for spec in TOOL_SPECS}
+
+# Kept for callers that only need the names.
+PIP_COMPANIONS = tuple(s.name for s in TOOL_SPECS if s.kind == "script")
+MANAGED_BINARIES = tuple(s.name for s in TOOL_SPECS if s.kind == "managed")
 
 
 @dataclass
@@ -72,8 +127,18 @@ class ToolLocation:
     dir_off_path: Optional[str] = None
 
     @property
+    def spec(self) -> Optional["ToolSpec"]:
+        return TOOL_SPECS_BY_NAME.get(self.name)
+
+    @property
     def found(self) -> bool:
         return self.path is not None
+
+    @property
+    def breaks_results(self) -> bool:
+        """Missing, and its absence changes what a run produces."""
+        spec = self.spec
+        return not self.found and spec is not None and spec.breaks_results
 
     @property
     def hidden(self) -> bool:
@@ -535,26 +600,39 @@ def check_companion_tools() -> List[ToolLocation]:
         logger.warning("cannot access the satellome bin directory: %s", error)
         managed_dir = None
 
-    for name in MANAGED_BINARIES + BUNDLED_BINARIES:
-        if managed_dir is not None:
-            candidate = Path(managed_dir) / name
+    for spec in TOOL_SPECS:
+        if spec.kind == "managed" and managed_dir is not None:
+            candidate = Path(managed_dir) / spec.name
             if _executable(candidate):
+                on_path = dir_on_path(managed_dir)
                 locations.append(
                     ToolLocation(
-                        name=name,
+                        name=spec.name,
                         path=str(candidate),
                         source="managed",
-                        on_path=dir_on_path(managed_dir),
-                        dir_off_path=None if dir_on_path(managed_dir) else str(managed_dir),
+                        on_path=on_path,
+                        dir_off_path=None if on_path else str(managed_dir),
                     )
                 )
                 continue
-        locations.append(find_console_script(name))
-
-    for name in PIP_COMPANIONS:
-        locations.append(find_console_script(name))
+        locations.append(find_console_script(spec.name))
 
     return locations
+
+
+def missing_tools(tools: List[ToolLocation]) -> List[ToolLocation]:
+    """Absent tools whose absence changes results, worst class first."""
+    order = {"required": 0, "results": 1}
+    broken = [t for t in tools if t.breaks_results]
+    return sorted(broken, key=lambda t: order.get(t.spec.impact_class, 9))
+
+
+def degraded_tools(tools: List[ToolLocation]) -> List[ToolLocation]:
+    """Absent tools that only cost speed; results are unchanged."""
+    return [
+        t for t in tools
+        if not t.found and t.spec is not None and t.spec.impact_class == "speedup"
+    ]
 
 
 def hidden_tool_warning(location: ToolLocation) -> str:
@@ -598,6 +676,34 @@ def warn_if_entrypoint_misconfigured(log=None, fix=True) -> EntrypointReport:
     return report
 
 
+def warn_about_missing_tools(log=None) -> List[ToolLocation]:
+    """Say up front which results this run will not produce.
+
+    Called before the pipeline starts, because a genome run takes hours and
+    "sat-family binary not found, skipping" scrolling past mid-run is how a
+    user ends up with an output directory that quietly lacks family clustering.
+    Returns the missing result-affecting tools.
+    """
+    log = log or logger
+    if os.environ.get(ENV_DISABLE):
+        return []
+
+    tools = check_companion_tools()
+    broken = missing_tools(tools)
+    if not broken:
+        return []
+
+    log.warning(SEPARATOR)
+    log.warning(f"{len(broken)} tool(s) missing - THIS RUN WILL PRODUCE LESS THAN A COMPLETE ONE:")
+    for tool in broken:
+        log.warning(f"  {tool.name}: {tool.spec.impact}")
+    for command in sorted({t.spec.install for t in broken}):
+        log.warning(f"  install with: {command}")
+    log.warning("Full report: satellome --doctor")
+    log.warning(SEPARATOR)
+    return broken
+
+
 def format_doctor_report(report: EntrypointReport, tools: List[ToolLocation]) -> List[str]:
     """Render the full ``--doctor`` output as log lines."""
     lines = [
@@ -627,17 +733,40 @@ def format_doctor_report(report: EntrypointReport, tools: List[ToolLocation]) ->
     lines.append("")
     lines.append("EXTERNAL TOOLS")
     for tool in tools:
+        spec = tool.spec
         if not tool.found:
-            lines.append(f"  {tool.name:<14}: not installed")
+            impact = f" -> {spec.impact}" if spec else ""
+            label = "MISSING" if (spec and spec.breaks_results) else "missing"
+            lines.append(f"  {tool.name:<14}: {label}{impact}")
         elif tool.hidden:
-            lines.append(f"  {tool.name:<14}: {tool.path}  [off PATH — usable by satellome only]")
+            lines.append(f"  {tool.name:<14}: {tool.path}  [off PATH - usable by satellome only]")
         else:
             lines.append(f"  {tool.name:<14}: {tool.path}  [{tool.source}]")
 
+    broken = missing_tools(tools)
+    slow = degraded_tools(tools)
     hidden = [t for t in tools if t.hidden]
+
+    if slow:
+        lines.append("")
+        lines.append("SLOWER WITHOUT (results are identical)")
+        for tool in slow:
+            lines.append(f"  {tool.name:<14}: {tool.spec.impact}")
+        installs = sorted({t.spec.install for t in slow})
+        for command in installs:
+            lines.append(f"  install with: {command}")
+
+    problem_count = len(report.problems) + len(hidden) + len(broken)
     lines.append("")
-    if report.problems or hidden:
-        lines.append(f"PROBLEMS ({len(report.problems) + len(hidden)})")
+    if problem_count:
+        lines.append(f"PROBLEMS ({problem_count})")
+        # Missing tools first: they are what makes a run produce less than the
+        # user thinks it did, which no amount of PATH advice will explain.
+        for tool in broken:
+            lines.append(f"  ! {tool.name} is not installed - {tool.spec.impact}")
+        if broken:
+            for command in sorted({t.spec.install for t in broken}):
+                lines.append(f"    install with: {command}")
         for problem in report.problems:
             first, *rest = problem.splitlines()
             lines.append(f"  ! {first}")
@@ -665,7 +794,10 @@ def run_doctor(log=None, fix=False) -> bool:
     report = check_satellome_entrypoint()
     applied = fix_entrypoint_path(report=report, log=log) if fix else None
     tools = check_companion_tools()
-    healthy = report.ok and not any(t.hidden for t in tools)
+    # A run with sat-family missing finishes "successfully" and silently lacks
+    # family clustering. Calling that healthy is the failure this report exists
+    # to prevent, so a missing result-affecting tool is a non-zero exit.
+    healthy = report.ok and not any(t.hidden for t in tools) and not missing_tools(tools)
     emit = log.info if healthy else log.warning
     for line in format_doctor_report(report, tools):
         emit(line)
