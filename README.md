@@ -73,13 +73,45 @@ which is not on PATH.
 
 That means `pip` used a user install and your shell cannot see the launcher —
 `satellome` will report `command not found` even though the package is fine.
-Any one of these fixes it:
+Satellome repairs this itself:
+
+```bash
+python -m satellome --fix-path
+```
+
+`python -m satellome` always works, because it does not depend on PATH at all —
+which is what makes it the way in when the `satellome` command is exactly the
+thing you cannot reach. `--fix-path` appends one marked block to the startup
+file your shell already reads:
+
+```bash
+# >>> satellome path >>>
+export PATH="$HOME/.local/bin:$PATH"
+# <<< satellome path <<<
+```
+
+It is idempotent (the marker means it is written once and never again), it will
+not duplicate an entry you added by hand, and it appends to a file that already
+exists rather than creating a new one — creating `~/.bash_profile` where none
+existed would stop a login shell from reading `~/.profile`.
+
+A process cannot change its parent shell's environment, so the block applies to
+**new** shells. For the shell you are in: `source ~/.bashrc`.
+
+The same repair runs automatically at the start of any run that detects the
+problem, so it does not have to be found first. To keep the warning but never
+let satellome touch a shell file, set `SATELLOME_NO_PATH_FIX=1`. Manual
+equivalents, if you prefer:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"                       # this shell only
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # permanent
 python -m satellome ...                                    # no PATH change needed
 ```
+
+Two competing installations (a `satellome` on PATH that is not the one your
+active interpreter owns) are reported but never "fixed" — deciding which one to
+delete is yours to make.
 
 `python -m satellome` is the most robust form in batch scripts: it always
 follows the active environment, whereas a console script keeps the interpreter
@@ -88,8 +120,8 @@ its shebang was written with. Satellome resolves pip-installed companion tools
 directory missing from `PATH` degrades nothing silently — it is reported and
 the tool is still used.
 
-Set `SATELLOME_NO_ENV_CHECK=1` to silence the startup warning on machines where
-this layout is deliberate; `--doctor` still reports it.
+Set `SATELLOME_NO_ENV_CHECK=1` to silence the startup check entirely on machines
+where this layout is deliberate; `--doctor` still reports it.
 
 ### From Source
 

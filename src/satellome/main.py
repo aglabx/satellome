@@ -38,6 +38,7 @@ from satellome.core_functions.tools.env_check import (
     find_console_script,
     hidden_tool_warning,
     run_doctor,
+    run_fix_path,
     warn_if_entrypoint_misconfigured,
 )
 from satellome.core_functions.tools.validation import (
@@ -140,6 +141,7 @@ def parse_arguments():
     parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
     parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
     parser.add_argument("--doctor", help="Diagnose the installation (PATH, launcher, external tools) and exit (0 = healthy, 1 = problems found)", action='store_true', default=False)
+    parser.add_argument("--fix-path", dest="fix_path", help="Add the directory holding the satellome launcher to your PATH (writes one marked block to your shell startup file) and exit", action='store_true', default=False)
 
     # Installation commands
     parser.add_argument("--install-fastan", help="Install FasTAN binary to ~/.satellome/bin/", action='store_true', default=False)
@@ -1146,6 +1148,10 @@ def main():
     # Answers "pip said it installed but 'satellome' is command not found".
     if args.get("doctor"):
         sys.exit(0 if run_doctor(log=logger) else 1)
+
+    # Repair the one PATH problem that can be repaired, then exit.
+    if args.get("fix_path"):
+        sys.exit(0 if run_fix_path(log=logger) else 1)
 
     # Handle installation commands first (exits if installation was performed)
     if handle_installation_commands(args):

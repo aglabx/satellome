@@ -39,6 +39,13 @@ logger = logging.getLogger(__name__)
 
 # Any non-empty value silences the startup PATH warning (--doctor still works).
 ENV_DISABLE = "SATELLOME_NO_ENV_CHECK"
+# Any non-empty value stops satellome from editing shell startup files on its own.
+ENV_NO_FIX = "SATELLOME_NO_PATH_FIX"
+
+# Marker around the block we own in a shell startup file. Its presence is what
+# makes the edit idempotent: we append exactly once and never touch it again.
+PATH_BLOCK_START = "# >>> satellome path >>>"
+PATH_BLOCK_END = "# <<< satellome path <<<"
 
 CONSOLE_SCRIPT = "satellome"
 
@@ -75,6 +82,36 @@ class ToolLocation:
 
 
 @dataclass
+class PathFixResult:
+    """Outcome of trying to put a directory on the user's PATH for good."""
+
+    status: str = "no-target"
+    # "added"              - the block was appended to a startup file just now
+    # "already-configured" - a previous run (or the user) already added it
+    # "already-on-path"    - nothing to do
+    # "no-target"          - no shell startup file could be determined
+    # "error"              - the startup file exists but could not be read/written
+    directory: Optional[str] = None
+    rc_file: Optional[str] = None
+    detail: str = ""
+
+    @property
+    def changed(self) -> bool:
+        return self.status == "added"
+
+    @property
+    def ok(self) -> bool:
+        return self.status in ("added", "already-configured", "already-on-path")
+
+    @property
+    def activate_command(self) -> Optional[str]:
+        """What the *current* shell needs, since we cannot change its PATH."""
+        if self.rc_file and self.status in ("added", "already-configured"):
+            return f"source {_tilde(self.rc_file)}"
+        return None
+
+
+@dataclass
 class EntrypointReport:
     """State of the ``satellome`` launcher itself."""
 
@@ -86,6 +123,7 @@ class EntrypointReport:
     path_script_interpreter: Optional[str] = None  # shebang of script_on_path
     problems: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    path_fix: Optional["PathFixResult"] = None
 
     @property
     def ok(self) -> bool:
@@ -242,17 +280,171 @@ def _same_file(left, right) -> bool:
         return os.path.realpath(str(left)) == os.path.realpath(str(right))
 
 
+def _tilde(path, dollar: bool = False) -> str:
+    """Render a path under $HOME as ``~/x`` (or ``$HOME/x``) for display."""
+    home = os.path.expanduser("~")
+    text = str(path)
+    if text == home or text.startswith(home + os.sep):
+        return ("$HOME" if dollar else "~") + text[len(home):]
+    return text
+
+
 def _shell_fix_lines(directory) -> List[str]:
     """Copy-pasteable ways out, most convenient first."""
-    home = os.path.expanduser("~")
-    shown = str(directory)
-    if shown.startswith(home + os.sep):
-        shown = "$HOME" + shown[len(home):]
+    shown = _tilde(directory, dollar=True)
     return [
         f'    export PATH="{shown}:$PATH"      # this shell only',
         f"    echo 'export PATH=\"{shown}:$PATH\"' >> ~/.bashrc   # permanent",
         f"    python -m {CONSOLE_SCRIPT} ...   # no PATH change needed",
     ]
+
+
+def shell_rc_files() -> List[Path]:
+    """Startup files for the user's login shell, most specific first.
+
+    The first entry is what we append to; the rest are only inspected so an
+    entry the user already added by hand is not duplicated.
+    """
+    shell = os.path.basename(os.environ.get("SHELL") or "")
+    home = Path.home()
+
+    if shell == "zsh":
+        base = Path(os.environ.get("ZDOTDIR") or home)
+        return [base / ".zshrc"]
+    if shell == "fish":
+        return [home / ".config" / "fish" / "config.fish"]
+    if shell == "bash":
+        # A macOS Terminal tab is a login shell and reads .bash_profile; most
+        # Linux terminals read .bashrc. Write to the one the shell will read.
+        if sys.platform == "darwin":
+            return [home / ".bash_profile", home / ".bashrc", home / ".profile"]
+        return [home / ".bashrc", home / ".bash_profile", home / ".profile"]
+    return [home / ".profile"]
+
+
+def _path_block(directory: str) -> str:
+    """The lines we append. Marked on both sides so it can be found and removed."""
+    shown = _tilde(directory, dollar=True)
+    if os.path.basename(os.environ.get("SHELL") or "") == "fish":
+        body = f"fish_add_path {shown}"
+    else:
+        body = f'export PATH="{shown}:$PATH"'
+    return f"\n{PATH_BLOCK_START}\n{body}\n{PATH_BLOCK_END}\n"
+
+
+def _already_configured(text: str, directory: str) -> bool:
+    """True if this file already puts ``directory`` on PATH, ours or the user's."""
+    if PATH_BLOCK_START in text:
+        return True
+    forms = {directory, _tilde(directory), _tilde(directory, dollar=True)}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if "PATH" not in stripped and "fish_add_path" not in stripped:
+            continue
+        if any(form in stripped for form in forms):
+            return True
+    return False
+
+
+def ensure_path_entry(directory, rc_file=None) -> PathFixResult:
+    """Put ``directory`` on the PATH of future shells, exactly once.
+
+    This is deliberately not a silent convenience: the caller reports what was
+    written and where. A process cannot change its parent shell's environment,
+    so the current shell still needs ``source <rc>`` — the result carries that
+    command rather than leaving the user to wonder why nothing changed.
+    """
+    directory = str(directory)
+    if dir_on_path(directory):
+        return PathFixResult(status="already-on-path", directory=directory)
+
+    targets = [Path(rc_file)] if rc_file else shell_rc_files()
+    if not targets:
+        return PathFixResult(
+            status="no-target",
+            directory=directory,
+            detail="could not determine a shell startup file for $SHELL",
+        )
+
+    # An existing entry anywhere wins: never write a second one.
+    existing = []
+    for candidate in targets:
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            continue
+        except OSError as error:
+            # The file is there but unreadable — that is a real problem the user
+            # must see, not a reason to quietly append to a different file.
+            return PathFixResult(
+                status="error",
+                directory=directory,
+                rc_file=str(candidate),
+                detail=f"cannot read {candidate}: {error}",
+            )
+        existing.append(candidate)
+        if _already_configured(text, directory):
+            return PathFixResult(
+                status="already-configured", directory=directory, rc_file=str(candidate)
+            )
+
+    # Append to a file the shell already reads. Creating a startup file that did
+    # not exist can change which files the shell reads at all — on macOS a new
+    # ~/.bash_profile makes a login shell stop reading ~/.profile — so a file
+    # that is already there is always the safer target.
+    target = existing[0] if existing else targets[0]
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(str(target), "a", encoding="utf-8") as handle:
+            handle.write(_path_block(directory))
+    except OSError as error:
+        return PathFixResult(
+            status="error",
+            directory=directory,
+            rc_file=str(target),
+            detail=f"cannot write {target}: {error}",
+        )
+
+    return PathFixResult(status="added", directory=directory, rc_file=str(target))
+
+
+def fix_entrypoint_path(report=None, log=None) -> Optional[PathFixResult]:
+    """Add this interpreter's scripts directory to PATH if it is missing.
+
+    Returns ``None`` when there is nothing to fix (no launcher, or already
+    visible). Adding a directory cannot repair a *shadowed* launcher — two
+    competing installs need one of them removed — so that case is left alone.
+    """
+    log = log or logger
+    report = report or check_satellome_entrypoint()
+
+    if not report.script_for_interpreter or report.script_on_path:
+        return None
+
+    directory = os.path.dirname(report.script_for_interpreter)
+    result = ensure_path_entry(directory)
+
+    if result.status == "added":
+        log.warning(f"Added {_tilde(directory)} to your PATH in {_tilde(result.rc_file)}")
+        log.warning(f"It applies to new shells. For this one: {result.activate_command}")
+    elif result.status == "already-configured":
+        log.warning(
+            f"{_tilde(directory)} is already configured in {_tilde(result.rc_file)}, "
+            "but this shell has not picked it up yet. Run: "
+            f"{result.activate_command}   (or open a new shell)"
+        )
+    elif result.status == "error":
+        log.error(f"Could not put {_tilde(directory)} on your PATH: {result.detail}")
+        for line in _shell_fix_lines(directory):
+            log.error(line)
+    elif result.status == "no-target":
+        log.warning(f"Could not put {_tilde(directory)} on your PATH: {result.detail}")
+        for line in _shell_fix_lines(directory):
+            log.warning(line)
+
+    return result
 
 
 def check_satellome_entrypoint() -> EntrypointReport:
@@ -288,7 +480,7 @@ def check_satellome_entrypoint() -> EntrypointReport:
         report.problems.append(
             f"The '{CONSOLE_SCRIPT}' command is installed at {own} but that "
             f"directory is not on your PATH, so typing '{CONSOLE_SCRIPT}' will "
-            "fail with 'command not found'. Fix with any one of:\n"
+            "fail with 'command not found'. Equivalent manual fixes:\n"
             + "\n".join(_shell_fix_lines(directory))
         )
     elif own and report.script_on_path and not _same_file(own, report.script_on_path):
@@ -374,20 +566,35 @@ def hidden_tool_warning(location: ToolLocation) -> str:
     )
 
 
-def warn_if_entrypoint_misconfigured(log=None) -> EntrypointReport:
-    """Cheap startup check: surface PATH problems, never abort the run.
+def warn_if_entrypoint_misconfigured(log=None, fix=True) -> EntrypointReport:
+    """Cheap startup check: surface PATH problems and repair the fixable one.
 
-    Returns the report so callers can record it; set ``SATELLOME_NO_ENV_CHECK``
-    to keep the pipeline output quiet on machines where this is known.
+    A launcher that is merely invisible is repaired in place — the scripts
+    directory is appended, once, to the user's shell startup file — because
+    telling someone to edit ``~/.bashrc`` on every run of a genome pipeline is
+    a worse answer than doing it and saying so. A *shadowed* launcher is only
+    reported: choosing which of two installs to delete is not ours to make.
+
+    ``SATELLOME_NO_ENV_CHECK`` silences the whole check;
+    ``SATELLOME_NO_PATH_FIX`` keeps the warning but never touches a file.
     """
     log = log or logger
     report = check_satellome_entrypoint()
     if os.environ.get(ENV_DISABLE):
         return report
+
     for problem in report.problems:
         for line in problem.splitlines():
             log.warning(line)
-        log.warning(f"(silence this check with {ENV_DISABLE}=1, or run 'satellome --doctor')")
+
+    if report.problems:
+        if fix and not os.environ.get(ENV_NO_FIX):
+            report.path_fix = fix_entrypoint_path(report=report, log=log)
+        log.warning(
+            f"(silence this check with {ENV_DISABLE}=1; "
+            f"keep it but never edit shell files with {ENV_NO_FIX}=1; "
+            "details: 'satellome --doctor')"
+        )
     return report
 
 
@@ -447,13 +654,65 @@ def format_doctor_report(report: EntrypointReport, tools: List[ToolLocation]) ->
     return lines
 
 
-def run_doctor(log=None) -> bool:
-    """Print the environment report. Returns True when nothing is wrong."""
+def run_doctor(log=None, fix=False) -> bool:
+    """Print the environment report. Returns True when nothing is wrong.
+
+    With ``fix=True`` the repairable problem (a launcher directory missing from
+    PATH) is also written to the shell startup file before the report is
+    rendered, so the report reflects what was done.
+    """
     log = log or logger
     report = check_satellome_entrypoint()
+    applied = fix_entrypoint_path(report=report, log=log) if fix else None
     tools = check_companion_tools()
     healthy = report.ok and not any(t.hidden for t in tools)
     emit = log.info if healthy else log.warning
     for line in format_doctor_report(report, tools):
         emit(line)
+    if applied and applied.activate_command:
+        log.warning("")
+        log.warning(
+            f"PATH updated in {_tilde(applied.rc_file)}. New shells get it "
+            f"automatically; for this one run: {applied.activate_command}"
+        )
     return healthy
+
+
+def run_fix_path(log=None) -> bool:
+    """Repair the PATH for future shells. Returns True when PATH is settled."""
+    log = log or logger
+    report = check_satellome_entrypoint()
+
+    result = fix_entrypoint_path(report=report, log=log)
+    if result is None:
+        if not report.script_for_interpreter:
+            log.info(
+                f"No '{CONSOLE_SCRIPT}' launcher belongs to this interpreter "
+                f"({sys.executable}) — nothing to add to PATH. This is normal "
+                "for a source checkout; use 'python -m satellome'."
+            )
+            return True
+        log.info(
+            f"'{CONSOLE_SCRIPT}' is already on your PATH "
+            f"({report.script_on_path}) — nothing to do."
+        )
+
+    # Hidden companion tools live in the same directories; fix those too.
+    for tool in check_companion_tools():
+        if tool.hidden:
+            outcome = ensure_path_entry(tool.dir_off_path)
+            if outcome.status == "added":
+                log.warning(
+                    f"Added {_tilde(tool.dir_off_path)} to your PATH in "
+                    f"{_tilde(outcome.rc_file)} (needed by {tool.name})"
+                )
+            elif outcome.status == "error":
+                log.error(
+                    f"Could not put {_tilde(tool.dir_off_path)} on your PATH "
+                    f"({tool.name}): {outcome.detail}"
+                )
+
+    if report.problems and not (result and result.ok):
+        return False
+    # A shadowed launcher is a problem PATH edits cannot solve.
+    return report.ok or bool(result and result.changed)
