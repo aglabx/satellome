@@ -5,6 +5,32 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-08-28
+
+### Added
+- **`satellome --doctor`**: diagnoses the installation itself — where the
+  package lives, which interpreter runs it, whether the shell can actually see
+  the `satellome` launcher, which script directories are on `PATH`, and where
+  every external tool resolves from. Exits 0 when healthy and 1 when it finds a
+  problem, so a driver script can gate a setup on it.
+- **Startup PATH check**: every run (and the no-argument info screen) now warns
+  when the launcher is missing from `PATH` or is shadowed by a competing
+  install running a different interpreter. `pip install --user` puts the
+  launcher in `~/.local/bin`, which is frequently absent from `PATH`; the
+  warning names the directory and gives the three fixes. Silence it with
+  `SATELLOME_NO_ENV_CHECK=1` (`--doctor` still reports it).
+
+### Fixed
+- **Companion tools installed off `PATH` are no longer reported as missing.**
+  `arraysplitter` was resolved with bare `shutil.which`, so on a machine whose
+  `PATH` lacks the user scripts directory the tool was declared absent, an
+  automatic `pip install` "succeeded", the second lookup failed again, and the
+  step gave up with "arraysplitter installed but binary not found in PATH" —
+  every run, while the executable sat in `~/.local/bin`. Resolution now falls
+  back to the running interpreter's own scripts directories
+  (`core_functions/tools/env_check.py`), so the tool is used by absolute path
+  and the broken shell setup is reported instead of silently degrading the run.
+
 ## [1.8.0] - 2026-08-17
 
 ### Added
