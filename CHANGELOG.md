@@ -5,6 +5,18 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.1] - 2026-08-28
+
+### Fixed
+- **The release no longer waits on an unavailable runner.** v1.12.0's binaries
+  were never attached: the Linux and Apple-silicon builds finished in minutes,
+  and the whole release job then sat behind `macos-13`, whose Intel runners no
+  longer schedule. Intel macOS is dropped from the matrix (that platform uses
+  the cargo fallback), and the release job now runs even when a build job does
+  not, so one unavailable runner cannot withhold the binaries that did build.
+  A missing platform is annotated as an error on the run, so a short set of
+  assets stays visible rather than being silently accepted.
+
 ## [1.12.0] - 2026-08-28
 
 ### Added
