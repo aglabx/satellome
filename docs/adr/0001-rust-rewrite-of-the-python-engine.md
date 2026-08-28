@@ -1,6 +1,6 @@
 # ADR 0001 — Rewriting the Python engine in Rust
 
-**Status:** deferred (measured, not acted on)
+**Status:** deferred (measured on CHM13, not acted on)
 **Date:** 2026-08-28
 **Context version:** satellome 1.14.0
 
@@ -67,15 +67,49 @@ TSV parser sustains 200–500 MB/s, i.e. 20–40× the current implementation.
 For a T2T assembly (~5 M repeats, ~1.3 GB `.sat`) that is ~50 s per pass in
 Python versus ~2 s in Rust, and the pipeline makes several passes.
 
-## What is not measured
+## The real run — CHM13, measured 2026-08-28
 
-**Python's share of a real run.** If FasTAN takes two hours on a 3 Gb genome,
-four minutes of parsing is noise and none of this is worth doing. If FasTAN
-takes ten minutes, Python is a third of the wall clock. Without that number any
-decision is a guess.
+T2T-CHM13v2.0 (UCSC hs1, 3 117 292 070 bp, 25 sequences), aglab0, `-t 32`,
+satellome 1.15.1, `--force --ucsc-track`. **Caveat: the machine was heavily
+loaded** with other jobs (load average 300–650 on 192 cores), so absolute times
+are contended; the ratio is what this table is for.
 
-Getting it is cheap: record per-step wall time into `run_manifest.json` during a
-normal run. That is worth having regardless of this decision.
+Output: 614 099 tandem repeat arrays, `hs1.sat` = 0.37 GB.
+
+| Stage | Time | Share | Implementation |
+|---|---:|---:|---|
+| ArraySplitter (consensus/HOR) | 14m08s | 57.4% | native (pip) |
+| FasTAN search | 3m14s | 13.1% | native |
+| **classification** | **3m55s** | **15.9%** | **Python** |
+| drawing + HTML report | 57.8s | 3.9% | Python (plotly) |
+| UCSC track | 53.9s | 3.6% | Python |
+| sat-family clustering | 38.6s | 2.6% | native (Rust) |
+| bed-extract | 20s | 1.4% | native (Rust) |
+| size filtering | 8s | 0.5% | Python |
+| other (validation, genome size, manifest) | 21.9s | 1.5% | Python |
+| **TOTAL** | **24m37s** | | |
+
+**Native ≈ 74.5%. Python ≈ 25.5%**, and within Python, classification alone is
+62% of it.
+
+### What this changes
+
+The extraction order proposed below was wrong. The `.sat` parser is *not* the
+prize:
+
+* 614 099 records at the measured 9.9 µs/record is **~6 seconds** for a full
+  parse pass.
+* Classification takes **235 seconds** — roughly forty parse-passes' worth.
+
+So classification is dominated by its own per-record logic, not by reading the
+file. A Rust parser would save seconds; a Rust classification would save
+minutes. **If anything is extracted, classification is the only stage with a
+case**, and it is worth ~16% of a run — an upper bound of about four minutes on
+a genome this size.
+
+The genome is also smaller than assumed: 614 k arrays, not the millions the
+earlier extrapolation used, so every per-record cost is proportionally smaller
+than this ADR first estimated.
 
 ## Decision
 
@@ -113,18 +147,25 @@ Compatibility is verifiable rather than hoped for:
 * the existing `--verify-run` manifest check, which already asserts that a run
   produced exactly the files it claims, at the sizes it claims.
 
-Order of extraction, hottest and most isolated first:
+Order of extraction, by measured cost rather than by assumption:
 
-1. `.sat` reader/writer and the record model
-2. classification
-3. annotation intersection
-4. statistics
+1. **classification** — 15.9% of a run, the only stage with a real case
+2. the `.sat` reader/writer, only if profiling inside classification shows
+   parsing to be a meaningful part of its 235 s (it is ~6 s, so probably not)
+3. annotation intersection and statistics — unmeasured; the CHM13 run had no
+   GFF, so `annotations` was skipped and contributes nothing to the table above
 
 Each step keeps its Python implementation as a fallback until the Rust one has
 run clean on real genomes.
 
 ## Revisit when
 
-* per-step timings show Python above ~20% of a real run, or
-* a genome large enough that the parse passes cost more than the search, or
-* a new stage is needed that is intrinsically per-record and hot.
+* classification grows beyond ~16% of a run, or becomes the wall-clock
+  bottleneck once ArraySplitter is faster;
+* a run with `--gff` shows `annotations` to be expensive (not measured yet);
+* a genome markedly larger than CHM13 changes the per-record share.
+
+At 25.5% total and 15.9% for the single addressable stage, the ceiling on a
+perfect Rust rewrite of everything Python does is a 1.34× speedup of the whole
+run. That is the number to weigh against the cost of maintaining a second
+implementation.
