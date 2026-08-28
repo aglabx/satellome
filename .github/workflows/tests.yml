@@ -8,7 +8,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Self-hosted when the repo variable CI_RUNNER is set to 'self-hosted'
+    # (used while the GitHub-hosted Actions quota is exhausted), GitHub-hosted
+    # otherwise. Flip it in Settings > Secrets and variables > Actions >
+    # Variables; no workflow edit is needed to switch back.
+    #
+    # A pull request from a FORK always goes to a GitHub-hosted runner, never
+    # to ours. This repository is public, so a self-hosted runner would
+    # otherwise execute a stranger's patch on our own machine, with our
+    # network and whatever the runner user can reach. Fork PRs are rare, so
+    # the quota cost of this exception is negligible.
+    runs-on: ${{ (vars.CI_RUNNER == 'self-hosted' && github.event.pull_request.head.repo.fork != true) && fromJSON('["self-hosted","vm"]') || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
