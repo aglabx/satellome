@@ -5,6 +5,18 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-08-28
+
+### Added
+- **Per-step wall-clock timing**, printed as a table at the end of a run and
+  recorded in `run_manifest.json` as `steps_timing` plus `wall_seconds`. A run
+  takes hours and until now left no record of where they went, which made every
+  performance question answerable only by running it again with a stopwatch.
+  Percentages are of wall clock, not of the sum of the steps, so untimed work
+  (validation, genome size, manifest) shows up as `(other)` instead of
+  vanishing. A step that fails is timed too - how long a failure took is often
+  the interesting part.
+
 ## [1.14.0] - 2026-08-28
 
 ### Added
