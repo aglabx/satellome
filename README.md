@@ -80,12 +80,22 @@ announced at the start of a run — before hours of compute, rather than as a
 line that scrolls past in the middle of it. Tools that only cost speed are
 listed separately and are not treated as problems.
 
-Install the Rust helpers (they are compiled from the `rust/` sources in this
-repository, so a Rust toolchain is required):
+Install the Rust helpers:
 
 ```bash
 satellome --install-rust-tools    # or: satellome --install-all
 ```
+
+This downloads binaries built by CI and attached to the GitHub Release for your
+version, verifying each against the `SHA256SUMS-<platform>.txt` published
+alongside it — a binary whose checksum does not match is refused rather than
+installed, because a wrong binary is worse than a missing one: the pipeline
+would run it. Prebuilt binaries are published for `linux-x86_64`,
+`macos-arm64` and `macos-x86_64`.
+
+On any other platform, or if the assets are unreachable, it falls back to
+building the `rust/` crates with cargo, which then requires a Rust toolchain.
+Set `SATELLOME_NO_PREBUILT=1` to always build from source.
 
 It is the answer to the most common post-install surprise:
 

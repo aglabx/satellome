@@ -6,6 +6,7 @@ native per-platform binaries), absent from the sdist, and unknown to
 telomere output, so "partially installed" must never read as success.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -157,3 +158,131 @@ class TestInstallOutcome:
 
         assert ok is False
         assert "no binary at" in caplog.text
+
+
+class TestPrebuiltDownload:
+    """The fast path: binaries built by CI and attached to the release."""
+
+    def _no_network(self, monkeypatch):
+        monkeypatch.setattr(rust_tools, "_fetch", lambda url, timeout=None: None)
+
+    def test_platform_suffix_maps_known_platforms(self, monkeypatch):
+        import satellome.installers.base as base
+
+        for (plat, arch), expected in [
+            (("linux", "x86_64"), "linux-x86_64"),
+            (("darwin", "arm64"), "macos-arm64"),
+            (("darwin", "x86_64"), "macos-x86_64"),
+        ]:
+            monkeypatch.setattr(base, "detect_platform", lambda p=plat, a=arch: (p, a))
+            assert rust_tools.platform_asset_suffix() == expected
+
+    def test_unknown_platform_has_no_asset(self, monkeypatch):
+        import satellome.installers.base as base
+
+        monkeypatch.setattr(base, "detect_platform", lambda: ("linux", "aarch64"))
+        assert rust_tools.platform_asset_suffix() is None
+
+    def test_checksum_mismatch_refuses_to_install(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        monkeypatch.setattr(
+            rust_tools, "_expected_checksums",
+            lambda v, s: {"genome-size-linux-x86_64": "0" * 64},
+        )
+        monkeypatch.setattr(rust_tools, "_fetch", lambda url, timeout=None: b"tampered")
+
+        with caplog.at_level("ERROR"):
+            ok = rust_tools.download_prebuilt("genome-size", "1.11.0", tmp_path)
+
+        assert ok is False
+        assert not (tmp_path / "genome-size").exists(), (
+            "a wrong binary is worse than a missing one - the pipeline would run it"
+        )
+        assert "Checksum mismatch" in caplog.text
+
+    def test_matching_checksum_installs_and_is_executable(self, tmp_path, monkeypatch):
+        import hashlib
+
+        payload = b"\x7fELF fake binary"
+        digest = hashlib.sha256(payload).hexdigest()
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        monkeypatch.setattr(
+            rust_tools, "_expected_checksums",
+            lambda v, s: {"genome-size-linux-x86_64": digest},
+        )
+        monkeypatch.setattr(rust_tools, "_fetch", lambda url, timeout=None: payload)
+
+        assert rust_tools.download_prebuilt("genome-size", "1.11.0", tmp_path) is True
+
+        installed = tmp_path / "genome-size"
+        assert installed.read_bytes() == payload
+        assert os.access(installed, os.X_OK)
+        assert not (tmp_path / "genome-size.partial").exists(), "no leftover partial"
+
+    def test_missing_asset_falls_back_rather_than_failing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        self._no_network(monkeypatch)
+
+        assert rust_tools.download_prebuilt("sat-family", "1.11.0", tmp_path) is False
+
+    def test_checksum_file_is_parsed_from_sha256sum_format(self, monkeypatch):
+        body = (
+            b"aaaa  sat-family-linux-x86_64\n"
+            b"bbbb *genome-size-linux-x86_64\n"
+        )
+        monkeypatch.setattr(rust_tools, "_fetch", lambda url, timeout=None: body)
+
+        sums = rust_tools._expected_checksums("1.11.0", "linux-x86_64")
+
+        assert sums["sat-family-linux-x86_64"] == "aaaa"
+        assert sums["genome-size-linux-x86_64"] == "bbbb", "the '*' binary marker must be stripped"
+
+    def test_install_prefers_download_and_skips_cargo_entirely(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        monkeypatch.delenv(rust_tools.ENV_NO_DOWNLOAD, raising=False)
+        monkeypatch.setattr(rust_tools, "get_satellome_bin_dir", lambda: bin_dir)
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        monkeypatch.setattr(rust_tools, "download_prebuilt", lambda n, v, d: True)
+
+        def fail():
+            raise AssertionError("cargo must not be needed when downloads succeed")
+
+        monkeypatch.setattr(rust_tools, "check_cargo", fail)
+
+        assert rust_tools.install_rust_tools(force=True, tools=["find-gaps"]) is True
+
+    def test_download_failure_falls_back_to_building(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        sources = tmp_path / "rust"
+        (sources / "find-gaps").mkdir(parents=True)
+        (sources / "find-gaps" / "Cargo.toml").write_text("[package]\n")
+        monkeypatch.delenv(rust_tools.ENV_NO_DOWNLOAD, raising=False)
+        monkeypatch.setattr(rust_tools, "get_satellome_bin_dir", lambda: bin_dir)
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        monkeypatch.setattr(rust_tools, "download_prebuilt", lambda n, v, d: False)
+        monkeypatch.setattr(rust_tools, "check_cargo", lambda: (True, "cargo"))
+        monkeypatch.setattr(rust_tools, "find_rust_sources", lambda: sources)
+        built = []
+        monkeypatch.setattr(
+            rust_tools, "_build_one",
+            lambda crate, name, target: built.append(name) or True,
+        )
+
+        assert rust_tools.install_rust_tools(force=True, tools=["find-gaps"]) is True
+        assert built == ["find-gaps"], "must actually build what it could not download"
+
+    def test_opt_out_skips_the_download_path(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        monkeypatch.setenv(rust_tools.ENV_NO_DOWNLOAD, "1")
+        monkeypatch.setattr(rust_tools, "get_satellome_bin_dir", lambda: bin_dir)
+
+        def fail(*a, **k):
+            raise AssertionError("must not download when opted out")
+
+        monkeypatch.setattr(rust_tools, "download_prebuilt", fail)
+        monkeypatch.setattr(rust_tools, "check_cargo", lambda: (False, "no cargo"))
+
+        assert rust_tools.install_rust_tools(force=True, tools=["find-gaps"]) is False

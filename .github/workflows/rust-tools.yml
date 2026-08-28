@@ -1,0 +1,111 @@
+name: Build Rust helper tools
+
+# The five crates in rust/ are native per-platform binaries, so they cannot ride
+# in the py3-none-any wheel. They are built here for every supported platform and
+# attached to the GitHub Release for the tag, which is what
+# `satellome --install-rust-tools` downloads. Building from source with cargo
+# stays as the fallback for platforms with no asset.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required to upload assets onto the release
+
+jobs:
+  build:
+    name: ${{ matrix.target_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04          # oldest supported glibc, so the binary
+            target: x86_64-unknown-linux-gnu   # runs on newer distros too
+            target_name: linux-x86_64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            target_name: macos-arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            target_name: macos-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust/sat-family
+            rust/telomere-check
+            rust/find-gaps
+            rust/bed-extract
+            rust/genome-size
+
+      - name: Build all five crates
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for crate in sat-family telomere-check find-gaps bed-extract genome-size; do
+            echo "::group::$crate"
+            cargo build --release --locked --manifest-path "rust/$crate/Cargo.toml" \
+                        --target ${{ matrix.target }}
+            cp "rust/$crate/target/${{ matrix.target }}/release/$crate" \
+               "dist/$crate-${{ matrix.target_name }}"
+            echo "::endgroup::"
+          done
+
+      - name: Checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          if command -v sha256sum >/dev/null; then
+            sha256sum * > "SHA256SUMS-${{ matrix.target_name }}.txt"
+          else
+            shasum -a 256 * > "SHA256SUMS-${{ matrix.target_name }}.txt"
+          fi
+          cat "SHA256SUMS-${{ matrix.target_name }}.txt"
+
+      - name: Smoke test the binaries actually run
+        run: |
+          set -euo pipefail
+          # A binary that cannot execute is worse than a missing one: the
+          # installer would report success and the pipeline would fail later.
+          for f in dist/*-${{ matrix.target_name }}; do
+            chmod +x "$f"
+            if [ "${{ matrix.os }}" = "ubuntu-22.04" ] || [ "$(uname -m)" = "$(echo ${{ matrix.target }} | cut -d- -f1)" ]; then
+              "$f" --help >/dev/null 2>&1 || "$f" >/dev/null 2>&1 || true
+              file "$f"
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-tools-${{ matrix.target_name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Attach to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List what will be published
+        run: ls -la dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true

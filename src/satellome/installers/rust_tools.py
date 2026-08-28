@@ -27,6 +27,16 @@ logger = logging.getLogger(__name__)
 
 SATELLOME_REPO = "https://github.com/aglabx/satellome.git"
 
+# Prebuilt binaries are attached to the GitHub Release for each version by
+# .github/workflows/rust-tools.yml, together with a SHA256SUMS file per
+# platform. Downloading one is the fast path; building with cargo is the
+# fallback for a platform with no asset or an unreachable network.
+RELEASE_ASSET_URL = (
+    "https://github.com/aglabx/satellome/releases/download/v{version}/{asset}"
+)
+DOWNLOAD_TIMEOUT = 120
+ENV_NO_DOWNLOAD = "SATELLOME_NO_PREBUILT"
+
 # Crate directory name -> produced binary name (identical here, but keep the
 # mapping explicit so a crate rename does not silently install nothing).
 RUST_TOOLS = (
@@ -55,6 +65,98 @@ def find_rust_sources() -> Optional[Path]:
         if (candidate / RUST_TOOLS[0] / "Cargo.toml").is_file():
             return candidate
     return None
+
+
+def platform_asset_suffix() -> Optional[str]:
+    """Asset suffix for this machine, or None if we publish nothing for it."""
+    from satellome.installers.base import detect_platform
+
+    platform_name, arch = detect_platform()
+    mapping = {
+        ("linux", "x86_64"): "linux-x86_64",
+        ("darwin", "arm64"): "macos-arm64",
+        ("darwin", "x86_64"): "macos-x86_64",
+    }
+    return mapping.get((platform_name, arch))
+
+
+def _fetch(url: str, timeout: int = DOWNLOAD_TIMEOUT) -> Optional[bytes]:
+    """GET a URL, returning None (with a reason logged) on any failure."""
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as error:
+        # 404 is the expected "no asset for this version/platform", and is the
+        # signal to fall back to building rather than an error to shout about.
+        logger.debug(f"{url} -> HTTP {error.code}")
+        return None
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        logger.warning(f"Could not download {url}: {error}")
+        return None
+
+
+def _expected_checksums(version: str, suffix: str) -> dict:
+    """filename -> sha256, from the SHA256SUMS file published with the release."""
+    url = RELEASE_ASSET_URL.format(version=version, asset=f"SHA256SUMS-{suffix}.txt")
+    data = _fetch(url, timeout=30)
+    if data is None:
+        return {}
+
+    checksums = {}
+    for line in data.decode("utf-8", "replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            checksums[parts[-1].lstrip("*")] = parts[0]
+    return checksums
+
+
+def download_prebuilt(name: str, version: str, bin_dir: Path) -> bool:
+    """Install one tool from the release assets, verifying its checksum.
+
+    Returns False for "not available" as well as for a failed verification;
+    the caller falls back to building. A binary whose checksum does not match
+    is never installed - a wrong binary is worse than a missing one, because
+    the pipeline would run it.
+    """
+    import hashlib
+
+    suffix = platform_asset_suffix()
+    if suffix is None:
+        return False
+
+    asset = f"{name}-{suffix}"
+    expected = _expected_checksums(version, suffix).get(asset)
+    if expected is None:
+        logger.debug(f"No published checksum for {asset} in v{version}")
+        return False
+
+    data = _fetch(RELEASE_ASSET_URL.format(version=version, asset=asset))
+    if data is None:
+        return False
+
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected:
+        logger.error(
+            f"Checksum mismatch for {asset}: expected {expected}, got {actual}. "
+            "Refusing to install it."
+        )
+        return False
+
+    target = bin_dir / name
+    partial = bin_dir / f"{name}.partial"
+    try:
+        partial.write_bytes(data)
+        partial.chmod(partial.stat().st_mode | 0o111)
+        os.replace(str(partial), str(target))
+    except OSError as error:
+        logger.error(f"Could not install {name} into {bin_dir}: {error}")
+        return False
+
+    logger.info(f"✓ {name} downloaded ({asset}) to {target}")
+    return True
 
 
 def check_cargo() -> Tuple[bool, str]:
@@ -155,6 +257,37 @@ def install_rust_tools(force: bool = False, tools: Optional[Sequence[str]] = Non
         if not remaining:
             return True
         wanted = remaining
+
+    # Fast path: prebuilt binaries published with this version's release.
+    if not os.environ.get(ENV_NO_DOWNLOAD):
+        from satellome import __version__
+
+        suffix = platform_asset_suffix()
+        if suffix is None:
+            logger.info(
+                "No prebuilt binaries are published for this platform; "
+                "building from source."
+            )
+        else:
+            logger.info(f"Fetching prebuilt binaries for {suffix} (v{__version__})...")
+            still_needed = [
+                name for name in wanted
+                if not download_prebuilt(name, __version__, bin_dir)
+            ]
+            if not still_needed:
+                logger.info(f"Installed: {', '.join(wanted)}")
+                return True
+            if len(still_needed) < len(wanted):
+                logger.info(
+                    f"Downloaded {len(wanted) - len(still_needed)} of {len(wanted)}; "
+                    f"building the rest: {', '.join(still_needed)}"
+                )
+            else:
+                logger.info(
+                    "No prebuilt binaries available for this version; "
+                    "building from source."
+                )
+            wanted = still_needed
 
     cargo_ok, message = check_cargo()
     if not cargo_ok:
