@@ -198,6 +198,52 @@ xcode-select --install
 satellome -i genome.fasta -o output_dir -p project_name -t 8
 ```
 
+### Input formats
+
+The genome may be given as plain FASTA, as an archive, or as a UCSC `.2bit`:
+
+| Input | Handling |
+|---|---|
+| `.fasta` / `.fa` / `.fna` | used directly |
+| `.gz`, `.bz2`, `.xz` | decompressed once into `<output>/input/` |
+| `.zst` | same, if the `zstandard` package is installed |
+| `.zip` | the single FASTA inside is extracted; an archive with several is refused rather than guessed at |
+| `.2bit` | converted to FASTA, preserving N runs and soft-masking |
+
+The format is detected **by content, not by extension** — a gzip named
+`genome.fasta` is common enough to be worth handling. The conversion is
+announced, written atomically, and cached: a second run on the same compressed
+genome reuses it, and a source file newer than the cache invalidates it.
+
+Downstream tools (FasTAN, TRF, the Rust helpers) are handed a path and read
+plain FASTA, which is why conversion happens once up front rather than in each
+reader. A corrupt archive stops the run — decompressing it as far as it goes
+would otherwise produce a genome with no tandem repeats and no visible reason.
+
+### UCSC Genome Browser track
+
+```bash
+satellome -i genome.fasta -o out -t 8 --ucsc-track
+satellome -i genome.fasta -o out -t 8 --ucsc-track --ucsc-min-length 1000
+```
+
+Writes, on request:
+
+* `<project>.ucsc.bed` — BED9 custom track, one feature per repeat, coloured by
+  period class (microsatellite 1–6 bp, short SSR 7–9, minisatellite 10–100,
+  satellite 101–1000, macrosatellite >1000). Score is percent identity. Ready
+  to paste into *add custom track*.
+* `<project>.chrom.sizes` — sequence lengths for the same assembly.
+* `<project>.ucsc.bb` — bigBed, when `bedToBigBed` is on PATH. A whole-genome
+  BED exceeds the browser's custom-track size limit; bigBed does not, and it is
+  what a track hub needs.
+
+Sequence names are written exactly as the assembly spells them (the first token
+of the FASTA header), not the normalised form used internally for grouping — a
+track whose names disagree with `chrom.sizes` displays nothing and makes
+`bedToBigBed` fail. Rows are sorted by position, which the browser tolerates
+either way but `bedToBigBed` requires.
+
 ### Common Options
 
 ```bash

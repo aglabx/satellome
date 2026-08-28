@@ -7,14 +7,7 @@ on:
 
 jobs:
   build-and-publish:
-    # Same CI_RUNNER switch as tests.yml. Trusted publishing keeps working on a
-    # self-hosted runner: the OIDC token is minted by GitHub, not by the runner.
-    # The runner does need Docker, because pypa/gh-action-pypi-publish is a
-    # container action.
-    #
-    # This job only ever runs on a v* tag push, which cannot come from a fork,
-    # but the same guard is kept so both workflows read identically.
-    runs-on: ${{ (vars.CI_RUNNER == 'self-hosted' && github.event.pull_request.head.repo.fork != true) && fromJSON('["self-hosted","vm"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write  # Required for trusted publishing

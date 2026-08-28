@@ -34,6 +34,11 @@ from satellome.core_functions.tools.processing import get_genome_size_with_progr
 from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
 from satellome.core_functions.tools.version_check import notify_if_update_available
+from satellome.core_functions.tools.ucsc_track import build_ucsc_track
+from satellome.core_functions.tools.input_prep import (
+    InputFormatError,
+    ensure_plain_fasta,
+)
 from satellome.core_functions.tools.env_check import (
     find_console_script,
     hidden_tool_warning,
@@ -141,6 +146,8 @@ def parse_arguments():
     parser.add_argument("--notrf", help="[DEPRECATED] TRF is now disabled by default. Use --run-trf to enable.", action='store_true', default=False)
     parser.add_argument("--no-version-check", dest="no_version_check", help="Do not check GitHub for a newer Satellome release (also: SATELLOME_NO_VERSION_CHECK=1)", action='store_true', default=False)
     parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
+    parser.add_argument("--ucsc-track", dest="ucsc_track", help="Also write a UCSC Genome Browser track (BED9 coloured by period class, chrom.sizes, and a bigBed if bedToBigBed is available)", action='store_true', default=False)
+    parser.add_argument("--ucsc-min-length", dest="ucsc_min_length", help="Only put repeats at least this long into the UCSC track [0 = all]", required=False, default=0, type=int)
     parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
     parser.add_argument("--doctor", help="Diagnose the installation (PATH, launcher, external tools) and exit (0 = healthy, 1 = problems found)", action='store_true', default=False)
     parser.add_argument("--fix-path", dest="fix_path", help="Add the directory holding the satellome launcher to your PATH (writes one marked block to your shell startup file) and exit", action='store_true', default=False)
@@ -184,6 +191,33 @@ def validate_and_prepare_environment(args):
     logger.info(SEPARATOR_LINE)
     logger.info("INPUT VALIDATION")
     logger.info(SEPARATOR_LINE)
+
+    # Validate output directory
+    try:
+        output_path = validate_output_directory(output_dir, create_if_missing=True)
+        logger.info(f"✓ Output directory: {output_path}")
+        args["output"] = output_path  # Update with absolute path
+        output_dir = output_path
+    except OutputDirValidationError as e:
+        logger.error(f"✗ Output directory validation failed: {e}")
+        sys.exit(1)
+
+    # Accept .gz/.bz2/.xz/.zst/.zip archives and UCSC .2bit. Downstream tools
+    # (FasTAN, TRF, the Rust helpers) are handed a path and read plain FASTA,
+    # so anything else is converted once into the output directory and that
+    # path is used from here on. Detection is by content, not by extension.
+    try:
+        usable_fasta, source_format = ensure_plain_fasta(
+            fasta_file, os.path.join(output_dir, "input"), force=args.get("force", False)
+        )
+    except InputFormatError as e:
+        logger.error(f"✗ Input format: {e}")
+        sys.exit(1)
+    if source_format is not None:
+        logger.info(f"✓ Input: {source_format} converted to FASTA ({usable_fasta})")
+        args["input"] = usable_fasta
+        args["original_input"] = fasta_file
+        fasta_file = usable_fasta
 
     # Validate FASTA file first (required)
     try:
@@ -289,15 +323,6 @@ def validate_and_prepare_environment(args):
                 sys.exit(1)
     else:
         logger.info("✓ TRF validation skipped (TRF disabled by default, use --run-trf to enable)")
-
-    # Validate output directory
-    try:
-        output_path = validate_output_directory(output_dir, create_if_missing=True)
-        logger.info(f"✓ Output directory: {output_path}")
-        args["output"] = output_path  # Update with absolute path
-    except OutputDirValidationError as e:
-        logger.error(f"✗ Output directory validation failed: {e}")
-        sys.exit(1)
 
     logger.info("All input validations passed!")
     logger.info(SEPARATOR_LINE)
@@ -1493,6 +1518,28 @@ def main():
         logger.info(SEPARATOR_LINE)
         drawing_ok = run_trf_drawing(settings, force_downstream)
         steps["drawing"] = "ok" if drawing_ok else "failed"
+
+        # Step 5 (on request): a track to load into the UCSC browser.
+        if args.get("ucsc_track"):
+            logger.info(SEPARATOR_LINE)
+            logger.info("STEP 5: UCSC BROWSER TRACK")
+            logger.info(SEPARATOR_LINE)
+            try:
+                produced = build_ucsc_track(
+                    settings["trf_file"],
+                    fasta_file,
+                    output_dir,
+                    project,
+                    min_length=int(args.get("ucsc_min_length", 0) or 0),
+                )
+                for kind, path in produced.items():
+                    logger.info(f"  {kind}: {path}")
+                steps["ucsc_track"] = "ok" if produced.get("bed") else "failed"
+            except (OSError, ValueError) as e:
+                # A failed track must not pass as a completed run: the manifest
+                # records it and satellome exits non-zero, like any other step.
+                logger.error(f"UCSC track generation failed: {e}")
+                steps["ucsc_track"] = "failed"
     else:
         steps["downstream"] = "skipped"
 
