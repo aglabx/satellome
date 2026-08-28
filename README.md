@@ -220,6 +220,44 @@ plain FASTA, which is why conversion happens once up front rather than in each
 reader. A corrupt archive stops the run — decompressing it as far as it goes
 would otherwise produce a genome with no tandem repeats and no visible reason.
 
+### Re-running steps on a finished analysis
+
+The tandem-repeat search dominates a run, and its result does not change when
+you later decide you also want a browser track, a redrawn report, or
+annotations from a GFF that arrived afterwards. Those steps can be re-run
+against an existing output directory:
+
+```bash
+satellome --list-steps                              # what can be re-run
+satellome --rerun ucsc_track -o /path/to/output     # add a track, recompute nothing
+satellome --rerun drawing,ucsc_track -o /path/to/output
+```
+
+| Step | Does |
+|---|---|
+| `classification` | re-classify repeats and rewrite the classified `.sat` |
+| `annotations` | intersect with the GFF / RepeatMasker file the run used |
+| `sat_family` | re-cluster satellite families |
+| `drawing` | redraw plots and the HTML report |
+| `ucsc_track` | write the UCSC track files |
+
+The original options — cutoffs, `--gff`, taxon, genome size — are recovered
+from `run_manifest.json`, which records the run's own command line. You do not
+retype the command, and a re-run therefore cannot quietly apply *different*
+parameters than the run it is amending, which would leave an output directory
+whose files disagree with each other.
+
+A re-run takes the same output-directory lock as a full run, updates the
+statuses of the steps it ran while keeping the others, refreshes the file
+inventory, and appends to a `reruns` history in the manifest — so
+`satellome --verify-run` keeps working on an amended directory.
+
+It refuses, with the reason, when the directory has no usable manifest, when a
+step's inputs are missing (naming which file), or when a step name is unknown.
+The search steps are deliberately not re-runnable this way: recomputing them is
+what `--force` on a normal run is for, and putting hours of work behind a
+one-word option would be a trap.
+
 ### UCSC Genome Browser track
 
 ```bash

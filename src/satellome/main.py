@@ -35,6 +35,15 @@ from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
 from satellome.core_functions.tools.version_check import notify_if_update_available
 from satellome.core_functions.tools.ucsc_track import build_ucsc_track
+from satellome.core_functions.tools.rerun import (
+    RerunError,
+    check_requirements,
+    format_step_list,
+    load_run_context,
+    merge_steps,
+    parse_step_names,
+    record_rerun,
+)
 from satellome.core_functions.tools.input_prep import (
     InputFormatError,
     ensure_plain_fasta,
@@ -102,8 +111,13 @@ def print_logo():
     
 
 
-def parse_arguments():
-    """Parse command line arguments."""
+def build_parser():
+    """Build the CLI parser.
+
+    Separate from parse_arguments() so a finished run's recorded argv can be
+    re-parsed: that is how --rerun recovers the options (cutoffs, --gff, taxon)
+    the original run used, instead of asking the user to retype them.
+    """
     parser = argparse.ArgumentParser(description="Satellome - Tandem Repeat Analysis Pipeline")
 
     # Version argument (handle it first)
@@ -146,6 +160,8 @@ def parse_arguments():
     parser.add_argument("--notrf", help="[DEPRECATED] TRF is now disabled by default. Use --run-trf to enable.", action='store_true', default=False)
     parser.add_argument("--no-version-check", dest="no_version_check", help="Do not check GitHub for a newer Satellome release (also: SATELLOME_NO_VERSION_CHECK=1)", action='store_true', default=False)
     parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
+    parser.add_argument("--rerun", dest="rerun", help="Re-run named steps on an existing output directory without recomputing the rest (comma-separated; see --list-steps). Requires -o and a run_manifest.json", required=False, default=None, metavar="STEPS")
+    parser.add_argument("--list-steps", dest="list_steps", help="List the steps that --rerun accepts and exit", action='store_true', default=False)
     parser.add_argument("--ucsc-track", dest="ucsc_track", help="Also write a UCSC Genome Browser track (BED9 coloured by period class, chrom.sizes, and a bigBed if bedToBigBed is available)", action='store_true', default=False)
     parser.add_argument("--ucsc-min-length", dest="ucsc_min_length", help="Only put repeats at least this long into the UCSC track [0 = all]", required=False, default=0, type=int)
     parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
@@ -160,7 +176,12 @@ def parse_arguments():
     parser.add_argument("--install-rust-tools", dest="install_rust_tools", help="Build and install the bundled Rust helper tools (sat-family, telomere-check, find-gaps, bed-extract, genome-size); requires cargo", action='store_true', default=False)
     parser.add_argument("--install-all", help="Install all external dependencies (FasTAN, tanbed, modified TRF, and the Rust helper tools)", action='store_true', default=False)
 
-    return vars(parser.parse_args())
+    return parser
+
+
+def parse_arguments():
+    """Parse command line arguments."""
+    return vars(build_parser().parse_args())
 
 
 def validate_and_prepare_environment(args):
@@ -1181,6 +1202,163 @@ def print_summary(project, taxon_name, output_dir, html_report_file):
     logger.info(SEPARATOR_LINE_DOUBLE)
 
 
+def run_rerun_mode(output_dir, step_spec):
+    """Re-run named steps against an existing output directory.
+
+    Returns the process exit code. Reconstructs the run's parameters from its
+    manifest rather than from the current command line, so an amended run
+    cannot end up with files produced under different settings than its
+    neighbours.
+    """
+    output_dir = os.path.abspath(output_dir)
+
+    try:
+        step_names = parse_step_names(step_spec)
+        context = load_run_context(output_dir)
+    except RerunError as e:
+        logger.error(f"--rerun: {e}")
+        return 2
+
+    logger.info(SEPARATOR_LINE_DOUBLE)
+    logger.info(f"RE-RUN: {', '.join(step_names)}")
+    logger.info(SEPARATOR_LINE_DOUBLE)
+    logger.info(f"Output directory : {output_dir}")
+    logger.info(f"Project          : {context['project']}")
+    logger.info(f"Original command : satellome {' '.join(context['argv'])}")
+
+    # Recover the original options, then pin the paths to this directory.
+    try:
+        original = vars(build_parser().parse_args(context["argv"]))
+    except SystemExit:
+        # argparse exits on an argv this version no longer understands.
+        logger.error(
+            "--rerun: the recorded command line cannot be parsed by this "
+            "version of satellome. Re-run the full pipeline, or use an older "
+            "version to amend this directory."
+        )
+        return 2
+
+    original["output"] = output_dir
+    if context["input_fasta"]:
+        original["input"] = context["input_fasta"]
+    original["force"] = True  # the point of asking is to redo these steps
+
+    fasta_file = original.get("input")
+    project = context["project"]
+    threads = original.get("threads") or 1
+    html_report_file = os.path.join(output_dir, "reports", "satellome_report.html")
+    output_image_dir = os.path.join(output_dir, "images")
+    for directory in (os.path.dirname(html_report_file), output_image_dir):
+        os.makedirs(directory, exist_ok=True)
+
+    settings = build_settings(
+        original, fasta_file, output_dir, project, threads,
+        original.get("trf", "trf"), context["genome_size"],
+        context["taxon_name"], context["taxid"],
+        html_report_file, output_image_dir,
+    )
+
+    try:
+        check_requirements(step_names, settings)
+    except RerunError as e:
+        logger.error(f"--rerun: {e}")
+        return 2
+
+    # The same lock a normal run takes: two processes writing one output
+    # directory is exactly as harmful here as it is during a full run.
+    started_at = datetime.datetime.now().isoformat(timespec="seconds")
+    try:
+        output_lock = acquire_output_lock(
+            output_dir, started_at, ignore_lock=original.get("ignore_lock", False)
+        )
+    except OutputDirLocked as e:
+        logger.error(str(e))
+        return 1
+    atexit.register(release_output_lock, output_lock)
+
+    just_run = {}
+    for name in step_names:
+        logger.info(SEPARATOR_LINE)
+        logger.info(f"RE-RUN STEP: {name}")
+        logger.info(SEPARATOR_LINE)
+        try:
+            just_run[name] = _run_single_step(name, settings, original, project,
+                                              fasta_file, output_dir)
+        except Exception as e:
+            # One step failing must not leave the manifest claiming success for
+            # it; record the failure and carry on with the rest.
+            logger.error(f"Step '{name}' raised {type(e).__name__}: {e}")
+            just_run[name] = "failed"
+
+    manifest = build_manifest(
+        output_dir,
+        project=project,
+        version=__version__,
+        steps=merge_steps(context["steps"], just_run),
+        extra={
+            "started": context["manifest"].get("started"),
+            "finished": datetime.datetime.now().isoformat(timespec="seconds"),
+            "input_fasta": context["input_fasta"],
+            "taxon_name": context["taxon_name"],
+            "taxid": context["taxid"],
+            "genome_size": context["genome_size"],
+            "argv": context["argv"],
+            "reruns": record_rerun(context["manifest"], step_names, __version__),
+        },
+    )
+    try:
+        write_run_manifest(output_dir, manifest)
+    except OSError as e:
+        logger.error(f"Failed to update run manifest in {output_dir}: {e}")
+        return 1
+
+    failed = sorted(n for n, status in just_run.items() if status == "failed")
+    logger.info(SEPARATOR_LINE_DOUBLE)
+    for name, status in just_run.items():
+        logger.info(f"  {name}: {status}")
+    if failed:
+        logger.error(f"Re-run finished with failed steps: {', '.join(failed)}")
+        return 1
+    logger.info("Re-run complete.")
+    return 0
+
+
+def _run_single_step(name, settings, args, project, fasta_file, output_dir):
+    """Execute one re-runnable step. Returns its manifest status."""
+    if name == "classification":
+        return "ok" if run_trf_classification(settings, args, True) else "failed"
+
+    if name == "annotations":
+        gff_file = args.get("gff")
+        if not gff_file:
+            logger.warning("No --gff was recorded for this run; nothing to annotate")
+            return "skipped"
+        add_annotation_from_gff(
+            settings["trf_file"], gff_file,
+            os.path.join(output_dir, f"{project}_gff_report.txt"),
+            rm_file=args.get("rm"),
+        )
+        return "ok"
+
+    if name == "sat_family":
+        return "ok" if run_sat_family(settings, True) else "failed"
+
+    if name == "drawing":
+        return "ok" if run_trf_drawing(settings, True) else "failed"
+
+    if name == "ucsc_track":
+        produced = build_ucsc_track(
+            settings["trf_file"], fasta_file, output_dir, project,
+            min_length=int(args.get("ucsc_min_length", 0) or 0),
+        )
+        for kind, path in produced.items():
+            logger.info(f"  {kind}: {path}")
+        return "ok" if produced.get("bed") else "failed"
+
+    logger.error(f"No runner wired for step '{name}'")
+    return "failed"
+
+
 def main():
     args = parse_arguments()
 
@@ -1193,6 +1371,19 @@ def main():
     # Repair the one PATH problem that can be repaired, then exit.
     if args.get("fix_path"):
         sys.exit(0 if run_fix_path(log=logger) else 1)
+
+    if args.get("list_steps"):
+        for line in format_step_list():
+            logger.info(line)
+        sys.exit(0)
+
+    # Amend an existing analysis: run only the named steps, reusing everything
+    # that is already computed.
+    if args.get("rerun"):
+        if not args.get("output"):
+            logger.error("--rerun needs -o/--output pointing at an existing run")
+            sys.exit(2)
+        sys.exit(run_rerun_mode(args["output"], args["rerun"]))
 
     # Handle installation commands first (exits if installation was performed)
     if handle_installation_commands(args):
