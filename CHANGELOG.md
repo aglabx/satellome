@@ -5,6 +5,23 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-08-28
+
+### Added
+- **Prebuilt Rust helper binaries in every release.** A new
+  `rust-tools.yml` workflow builds the five crates for `linux-x86_64`,
+  `macos-arm64` and `macos-x86_64` on each `v*` tag and attaches them to the
+  GitHub Release with a `SHA256SUMS-<platform>.txt` per platform. Linux is
+  built on ubuntu-22.04 so the binary links the oldest supported glibc and
+  therefore runs on newer distributions too.
+- `--install-rust-tools` now downloads those assets instead of requiring a Rust
+  toolchain on every machine, verifying each against the published checksum. A
+  mismatch is refused, never installed — a wrong binary is worse than a missing
+  one, because the pipeline would run it. Binaries are published atomically
+  (`.partial` + `os.replace`), consistent with the rest of the output policy.
+- Building from source stays as the fallback for a platform with no asset or an
+  unreachable network, and can be forced with `SATELLOME_NO_PREBUILT=1`.
+
 ## [1.11.0] - 2026-08-28
 
 ### Fixed
