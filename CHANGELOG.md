@@ -5,6 +5,25 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1] - 2026-08-28
+
+### Fixed
+- **A compressed genome killed the run after the search had already run.**
+  Found on CHM13: the converted input was named `hs1.fa.satellome.fasta`, two
+  extensions deep, so FasTAN - which strips a trailing dot-segment from the
+  `-o` root it is handed - wrote `hs1.fa.1aln` while satellome looked for
+  `hs1.fa.satellome.1aln`. FasTAN reported success, tanbed then failed with
+  "failed to open .1aln file", and three minutes of whole-genome search were
+  thrown away. Converted inputs now carry exactly one extension
+  (`hs1.fa.gz` -> `hs1.fasta`).
+- **The same trap for uncompressed genomes with dotted names**, which is how
+  NCBI names assemblies (`GCA_009914755.4_T2T-CHM13v2.0_genomic.fna`): the
+  `.1aln` root is now dot-free by construction, leaving FasTAN nothing to
+  strip. If FasTAN still writes the alignment elsewhere and exactly one
+  `.1aln` is present, it is used with a loud warning rather than failing a
+  search that succeeded; several candidates are refused rather than guessed
+  between.
+
 ## [1.15.0] - 2026-08-28
 
 ### Added
