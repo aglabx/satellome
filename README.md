@@ -90,8 +90,9 @@ This downloads binaries built by CI and attached to the GitHub Release for your
 version, verifying each against the `SHA256SUMS-<platform>.txt` published
 alongside it — a binary whose checksum does not match is refused rather than
 installed, because a wrong binary is worse than a missing one: the pipeline
-would run it. Prebuilt binaries are published for `linux-x86_64`,
-`macos-arm64` and `macos-x86_64`.
+would run it. Prebuilt binaries are published for `linux-x86_64`
+and `macos-arm64`. Intel macOS is not published — GitHub's Intel runners no
+longer schedule in reasonable time — so it uses the source fallback below.
 
 On any other platform, or if the assets are unreachable, it falls back to
 building the `rust/` crates with cargo, which then requires a Rust toolchain.

@@ -28,9 +28,6 @@ jobs:
           - os: macos-14
             target: aarch64-apple-darwin
             target_name: macos-arm64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            target_name: macos-x86_64
 
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +91,10 @@ jobs:
   release:
     name: Attach to release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # always(): one platform's runner being unavailable must not withhold the
+    # binaries that did build. The run still goes red if a build job failed, so
+    # a short set of assets is visible rather than silently accepted.
+    if: ${{ always() && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -102,8 +102,17 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: List what will be published
-        run: ls -la dist/
+      - name: Report which platforms were built
+        run: |
+          set -euo pipefail
+          ls -la dist/
+          for want in linux-x86_64 macos-arm64; do
+            if ls dist/*-"$want" >/dev/null 2>&1; then
+              echo "::notice::$want built"
+            else
+              echo "::error::$want is MISSING from this release"
+            fi
+          done
 
       - uses: softprops/action-gh-release@v2
         with:
