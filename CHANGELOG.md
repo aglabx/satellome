@@ -5,6 +5,33 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-08-28
+
+### Added
+- **`--rerun <steps> -o <dir>`**: re-run individual steps against a finished
+  output directory without recomputing the tandem-repeat search. Accepts
+  `classification`, `annotations`, `sat_family`, `drawing` and `ucsc_track`
+  (`--list-steps` prints them). Adding a browser track to an existing analysis
+  no longer means paying for the search again.
+- The run's original options are recovered from the `argv` recorded in
+  `run_manifest.json`, so the command need not be retyped and a re-run cannot
+  silently apply different parameters than the run it amends - which would
+  leave an output directory whose files disagree with each other.
+- A re-run takes the same output-directory lock as a full run, replaces the
+  statuses of the steps it ran while keeping the rest, refreshes the file
+  inventory and appends to a `reruns` history, so `--verify-run` keeps working
+  on an amended directory. A step that fails overwrites a previous success
+  rather than leaving the manifest claiming it.
+- It refuses with an actionable reason when the directory has no usable
+  manifest, when a step's inputs are missing (naming the file), or when a step
+  name is unknown. The search steps are deliberately not re-runnable this way:
+  that is what `--force` is for, and hiding hours of recomputation behind a
+  one-word option would be a trap.
+
+### Changed
+- The CLI parser is built by `build_parser()` so a recorded command line can be
+  re-parsed; `parse_arguments()` is unchanged for callers.
+
 ## [1.13.0] - 2026-08-28
 
 ### Added
