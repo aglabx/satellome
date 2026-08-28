@@ -213,3 +213,48 @@ class TestCaching:
         again, _ = ensure_plain_fasta(source, work, force=True)
 
         assert os.path.getmtime(again) > 0
+
+
+class TestConvertedFileName:
+    """The converted name must carry exactly one extension.
+
+    Downstream tools derive their output names by stripping the last extension,
+    and FasTAN strips a further one from the -o root it is given. A converted
+    name like `hs1.fa.satellome.fasta` made FasTAN write `hs1.fa.1aln` while
+    satellome looked for `hs1.fa.satellome.1aln` — killing the run *after* the
+    genome-wide search had already been paid for. Caught on CHM13.
+    """
+
+    @pytest.mark.parametrize("source,expected", [
+        ("hs1.fa.gz", "hs1.fasta"),
+        ("hs1.fasta.gz", "hs1.fasta"),
+        ("genome.fna.bz2", "genome.fasta"),
+        ("genome.fa.xz", "genome.fasta"),
+        ("g.2bit", "g.fasta"),
+        ("x.zip", "x.fasta"),
+        ("HS1.FA.GZ", "HS1.fasta"),
+    ])
+    def test_exactly_one_extension(self, source, expected, tmp_path):
+        from satellome.core_functions.tools.input_prep import converted_path
+
+        name = converted_path(source, tmp_path).name
+        assert name == expected
+        assert name.count(".") == 1, f"{name} has more than one extension"
+
+    def test_dots_inside_the_stem_are_preserved(self, tmp_path):
+        """An NCBI name keeps its dots; that case is handled at the FasTAN root."""
+        from satellome.core_functions.tools.input_prep import converted_path
+
+        name = converted_path("GCA_009914755.4_T2T-CHM13v2.0_genomic.fna.gz", tmp_path).name
+        assert name == "GCA_009914755.4_T2T-CHM13v2.0_genomic.fasta"
+
+    def test_converted_file_is_actually_written_under_that_name(self, tmp_path):
+        import gzip
+        from satellome.core_functions.tools.input_prep import ensure_plain_fasta
+
+        source = tmp_path / "hs1.fa.gz"
+        source.write_bytes(gzip.compress(b">chr1\nACGT\n"))
+
+        usable, _ = ensure_plain_fasta(source, tmp_path / "work")
+
+        assert os.path.basename(usable) == "hs1.fasta"

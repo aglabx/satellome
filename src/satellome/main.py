@@ -796,7 +796,15 @@ def run_fastan(settings, force_rerun):
         genome_basename = os.path.splitext(genome_basename)[0]
 
     # Intermediate files in fastan/
-    aln_file = os.path.join(fastan_dir, f"{genome_basename}.1aln")
+    #
+    # The .1aln root must contain no dots. FasTAN strips a trailing dot-segment
+    # from the -o root it is given, so a genome named the way NCBI names them
+    # (GCA_009914755.4_T2T-CHM13v2.0_genomic.fna) makes it write a file under a
+    # different name than the one we then look for - and the run dies after the
+    # search has already been paid for. A dot-free root leaves it nothing to
+    # strip.
+    aln_stem = genome_basename.replace(".", "_")
+    aln_file = os.path.join(fastan_dir, f"{aln_stem}.1aln")
     bed_file = os.path.join(fastan_dir, f"{genome_basename}.bed")
 
     # Output files at output_dir level or in dedicated subdirs
@@ -914,6 +922,31 @@ def run_fastan(settings, force_rerun):
 
         if fastan_process.returncode == 0:
             logger.info("FasTAN executed successfully!")
+
+            # Belt and braces for the naming above: if FasTAN still wrote the
+            # alignment somewhere else, use what it actually produced rather
+            # than failing a search that succeeded - but say so, loudly, so a
+            # naming mismatch cannot hide as normal operation.
+            if not os.path.exists(aln_file):
+                produced = sorted(
+                    os.path.join(fastan_dir, name)
+                    for name in os.listdir(fastan_dir)
+                    if name.endswith(".1aln")
+                )
+                if len(produced) == 1:
+                    logger.warning(
+                        f"FasTAN wrote {produced[0]} instead of the expected "
+                        f"{aln_file}; using it. Please report the genome file "
+                        "name - this means FasTAN mangled the -o root."
+                    )
+                    aln_file = produced[0]
+                elif len(produced) > 1:
+                    logger.error(
+                        f"Expected {aln_file}, and {len(produced)} .1aln files "
+                        f"are present: {', '.join(os.path.basename(p) for p in produced)}. "
+                        "Refusing to guess which one this run produced."
+                    )
+                    return False
         else:
             logger.error(f"FasTAN failed with return code {fastan_process.returncode}")
             return False

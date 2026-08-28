@@ -38,7 +38,7 @@ MAGIC = {
 }
 
 PLAIN = "fasta"
-CONVERTED_SUFFIX = ".satellome.fasta"
+CONVERTED_SUFFIX = ".fasta"
 
 
 class InputFormatError(Exception):
@@ -112,10 +112,23 @@ def _single_fasta_member(archive: zipfile.ZipFile, path: str) -> str:
 
 
 def converted_path(path, work_dir) -> Path:
-    """Where the plain-FASTA form of ``path`` is cached."""
+    """Where the plain-FASTA form of ``path`` is cached.
+
+    The name gets exactly one extension. Downstream tools derive their own
+    output names by stripping the last extension from this one, and FasTAN in
+    particular strips a further extension from the ``-o`` root it is given: a
+    name like ``hs1.fa.satellome.fasta`` makes it write ``hs1.fa.1aln`` while
+    satellome looks for ``hs1.fa.satellome.1aln``, and the run dies after the
+    search has already been paid for. So every container and FASTA suffix is
+    stripped before ``.fasta`` is appended.
+    """
     stem = Path(str(path)).name
     for suffix in (".gz", ".bz2", ".xz", ".zst", ".zip", ".2bit"):
-        if stem.endswith(suffix):
+        if stem.lower().endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    for suffix in (".fasta", ".fna", ".fas", ".fa", ".seq"):
+        if stem.lower().endswith(suffix):
             stem = stem[: -len(suffix)]
             break
     return Path(work_dir) / f"{stem}{CONVERTED_SUFFIX}"

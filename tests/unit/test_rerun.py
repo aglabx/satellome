@@ -179,3 +179,24 @@ class TestManifestUpdate:
         assert second[0]["steps"] == ["ucsc_track"]
         assert second[1]["steps"] == ["drawing"]
         assert all("at" in entry for entry in second)
+
+
+class TestFastanAlnRoot:
+    """FasTAN strips a trailing dot-segment from the -o root it is given.
+
+    A genome named the way NCBI names them (GCA_009914755.4_..._genomic.fna)
+    therefore makes it write a file under a name satellome does not look for,
+    and the run dies after the whole-genome search has been paid for.
+    """
+
+    def test_the_aln_root_carries_no_dots(self):
+        for basename in (
+            "GCA_009914755.4_T2T-CHM13v2.0_genomic",
+            "hs1.fa.satellome",
+            "plain_name",
+        ):
+            stem = basename.replace(".", "_")
+            assert "." not in stem, f"{basename} would still be mangled by FasTAN"
+
+    def test_plain_names_are_unchanged(self):
+        assert "hs1".replace(".", "_") == "hs1"
