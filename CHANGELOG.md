@@ -5,6 +5,41 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-08-28
+
+### Added
+- **Compressed and `.2bit` genomes as input.** `.gz`, `.bz2`, `.xz`, `.zst`
+  (with the `zstandard` package), `.zip` and UCSC `.2bit` are accepted and
+  converted once into `<output>/input/`, because the pipeline hands a *path* to
+  FasTAN, TRF and the Rust helpers and those read plain FASTA. Detection is by
+  content rather than extension - a gzip named `genome.fasta` is common. The
+  conversion is written atomically and cached between runs, and is invalidated
+  by a source file newer than the cache. A corrupt archive stops the run
+  instead of yielding a genome with no repeats and no visible reason; a zip
+  holding several FASTA files is refused rather than guessed at.
+- **A `.2bit` reader** (`core_functions/io/twobit_file.py`), written against
+  the UCSC format description rather than depending on `py2bit` or
+  `twoBitToFa`, both of which would be one more thing missing on a cluster
+  node. Restores N blocks (the packed stream stores no bases for them, so
+  skipping that step yields plausible-looking but wrong sequence), preserves
+  soft-masking, decodes in chunks so a 250 Mb chromosome is never one string,
+  and refuses version-1 files rather than misreading their 64-bit offsets.
+- **`--ucsc-track`**: writes a BED9 custom track coloured by period class, a
+  matching `chrom.sizes`, and a bigBed when `bedToBigBed` is available.
+  `--ucsc-min-length` restricts it to longer arrays. Sequence names are written
+  exactly as the assembly spells them, not the normalised form used internally
+  for grouping - a track whose names disagree with `chrom.sizes` shows nothing
+  in the browser and makes `bedToBigBed` fail. Rows are position-sorted, which
+  `bedToBigBed` requires. An empty track is warned about rather than passing as
+  a complete one.
+
+### Changed
+- The output directory is now validated before the input is converted, since
+  the converted genome is written into it.
+- Removed the self-hosted CI runner switch: this repository is public, so
+  GitHub-hosted runners are free and unmetered, and a self-hosted runner on a
+  public repo would execute fork pull requests on our own machine.
+
 ## [1.12.1] - 2026-08-28
 
 ### Fixed
