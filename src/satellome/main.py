@@ -35,6 +35,11 @@ from satellome.core_functions.tools.ncbi import get_taxon_name
 from satellome.core_functions.tools.bed_tools import extract_sequences_from_bed
 from satellome.core_functions.tools.version_check import notify_if_update_available
 from satellome.core_functions.tools.ucsc_track import build_ucsc_track
+from satellome.core_functions.tools.step_timing import (
+    StepTimer,
+    format_duration,
+    format_timing_table,
+)
 from satellome.core_functions.tools.rerun import (
     RerunError,
     check_requirements,
@@ -1494,6 +1499,10 @@ def main():
 
     print_logo()
 
+    # Wall-clock accounting for the whole run: without it, "where did the four
+    # hours go" is only answerable by running it again with a stopwatch.
+    timer = StepTimer()
+
     # Validate and prepare environment
     html_report_file, output_image_dir = validate_and_prepare_environment(args)
 
@@ -1606,7 +1615,8 @@ def main():
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1: TRF SEARCH")
         logger.info(SEPARATOR_LINE)
-        trf_search_result = run_trf_search(settings, args, force_rerun)
+        with timer.step("trf_search"):
+            trf_search_result = run_trf_search(settings, args, force_rerun)
 
         # If recompute-failed mode was used and TRF was updated, force regeneration of downstream files
         force_downstream = force_rerun or (trf_search_result == "recomputed")
@@ -1626,7 +1636,8 @@ def main():
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 1b: FASTAN ANALYSIS")
         logger.info(SEPARATOR_LINE)
-        fastan_success = run_fastan(settings, force_downstream)
+        with timer.step("fastan"):
+            fastan_success = run_fastan(settings, force_downstream)
         if not fastan_success:
             logger.error("FasTAN analysis failed!")
             logger.error("Please check the error messages above.")
@@ -1683,7 +1694,8 @@ def main():
             logger.info(SEPARATOR_LINE)
             logger.info("STEP 2: ADD ANNOTATIONS")
             logger.info(SEPARATOR_LINE)
-            add_annotations(settings, force_downstream)
+            with timer.step("annotations"):
+                add_annotations(settings, force_downstream)
             steps["annotations"] = "ok"
         else:
             logger.info(SEPARATOR_LINE)
@@ -1695,19 +1707,24 @@ def main():
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3: CLASSIFICATION")
         logger.info(SEPARATOR_LINE)
-        steps["classification"] = "ok" if run_trf_classification(settings, args, force_downstream) else "failed"
+        with timer.step("classification"):
+            classification_ok = run_trf_classification(settings, args, force_downstream)
+        steps["classification"] = "ok" if classification_ok else "failed"
 
         # Step 3b: Satellite DNA family clustering
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3b: SATELLITE FAMILY CLUSTERING")
         logger.info(SEPARATOR_LINE)
-        steps["sat_family"] = "ok" if run_sat_family(settings, force_downstream) else "failed"
+        with timer.step("sat_family"):
+            sat_family_ok = run_sat_family(settings, force_downstream)
+        steps["sat_family"] = "ok" if sat_family_ok else "failed"
 
         # Step 4: Drawing and HTML report
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 4: DRAWING AND REPORT")
         logger.info(SEPARATOR_LINE)
-        drawing_ok = run_trf_drawing(settings, force_downstream)
+        with timer.step("drawing"):
+            drawing_ok = run_trf_drawing(settings, force_downstream)
         steps["drawing"] = "ok" if drawing_ok else "failed"
 
         # Step 5 (on request): a track to load into the UCSC browser.
@@ -1716,13 +1733,14 @@ def main():
             logger.info("STEP 5: UCSC BROWSER TRACK")
             logger.info(SEPARATOR_LINE)
             try:
-                produced = build_ucsc_track(
-                    settings["trf_file"],
-                    fasta_file,
-                    output_dir,
-                    project,
-                    min_length=int(args.get("ucsc_min_length", 0) or 0),
-                )
+                with timer.step("ucsc_track"):
+                    produced = build_ucsc_track(
+                        settings["trf_file"],
+                        fasta_file,
+                        output_dir,
+                        project,
+                        min_length=int(args.get("ucsc_min_length", 0) or 0),
+                    )
                 for kind, path in produced.items():
                     logger.info(f"  {kind}: {path}")
                 steps["ucsc_track"] = "ok" if produced.get("bed") else "failed"
@@ -1752,6 +1770,8 @@ def main():
                 "taxon_name": taxon_name,
                 "taxid": taxid,
                 "genome_size": genome_size,
+                "steps_timing": timer.as_dict(),
+                "wall_seconds": round(timer.total, 2),
             },
         )
         write_run_manifest(output_dir, manifest)
@@ -1760,6 +1780,13 @@ def main():
         # Without a manifest the directory is indistinguishable from an
         # unfinished run. That is a visible failure, not a footnote.
         logger.error(f"Failed to write run manifest in {output_dir}: {e}")
+
+    # Where the wall clock actually went. Printed before the summary so it is
+    # the last thing above it in a long log.
+    logger.info(SEPARATOR_LINE)
+    for line in format_timing_table(timer, steps):
+        logger.info(line)
+    logger.info(SEPARATOR_LINE)
 
     # Print summary
     print_summary(project, taxon_name, output_dir, html_report_file)
