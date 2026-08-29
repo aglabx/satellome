@@ -1240,6 +1240,30 @@ def print_summary(project, taxon_name, output_dir, html_report_file):
     logger.info(SEPARATOR_LINE_DOUBLE)
 
 
+def guarded_step(name, timer, steps, func, *args, **kwargs):
+    """Run one pipeline step so that no failure can cost the run its manifest.
+
+    A step that raises used to take the whole process down before the manifest
+    was written, leaving an output directory indistinguishable from an
+    unfinished run - on CHM13 that discarded the record of 65 minutes of work
+    because a binary built for another platform could not be executed. An
+    exception is now the step's failure, not the run's.
+
+    Returns whatever the step returned, or False if it raised.
+    """
+    with timer.step(name):
+        try:
+            result = func(*args, **kwargs)
+        except Exception as e:
+            logger.error(
+                f"Step '{name}' raised {type(e).__name__}: {e}", exc_info=True
+            )
+            steps[name] = "failed"
+            return False
+    steps[name] = "ok" if result or result is None else "failed"
+    return result
+
+
 def run_rerun_mode(output_dir, step_spec):
     """Re-run named steps against an existing output directory.
 
@@ -1649,7 +1673,14 @@ def main():
         logger.info("STEP 1: TRF SEARCH")
         logger.info(SEPARATOR_LINE)
         with timer.step("trf_search"):
-            trf_search_result = run_trf_search(settings, args, force_rerun)
+            try:
+                trf_search_result = run_trf_search(settings, args, force_rerun)
+            except Exception as e:
+                # Same rule as the downstream steps: a raising step is that
+                # step's failure, not a reason to lose the run's manifest.
+                logger.error(f"TRF search raised {type(e).__name__}: {e}", exc_info=True)
+                trf_search_result = None
+                run_trf = False
 
         # If recompute-failed mode was used and TRF was updated, force regeneration of downstream files
         force_downstream = force_rerun or (trf_search_result == "recomputed")
@@ -1670,7 +1701,11 @@ def main():
         logger.info("STEP 1b: FASTAN ANALYSIS")
         logger.info(SEPARATOR_LINE)
         with timer.step("fastan"):
-            fastan_success = run_fastan(settings, force_downstream)
+            try:
+                fastan_success = run_fastan(settings, force_downstream)
+            except Exception as e:
+                logger.error(f"FasTAN step raised {type(e).__name__}: {e}", exc_info=True)
+                fastan_success = False
         if not fastan_success:
             logger.error("FasTAN analysis failed!")
             logger.error("Please check the error messages above.")
@@ -1727,9 +1762,8 @@ def main():
             logger.info(SEPARATOR_LINE)
             logger.info("STEP 2: ADD ANNOTATIONS")
             logger.info(SEPARATOR_LINE)
-            with timer.step("annotations"):
-                add_annotations(settings, force_downstream)
-            steps["annotations"] = "ok"
+            guarded_step("annotations", timer, steps,
+                         add_annotations, settings, force_downstream)
         else:
             logger.info(SEPARATOR_LINE)
             logger.info("STEP 2: ADD ANNOTATIONS - SKIPPED (no GFF/RM files provided)")
@@ -1740,48 +1774,38 @@ def main():
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3: CLASSIFICATION")
         logger.info(SEPARATOR_LINE)
-        with timer.step("classification"):
-            classification_ok = run_trf_classification(settings, args, force_downstream)
-        steps["classification"] = "ok" if classification_ok else "failed"
+        guarded_step("classification", timer, steps,
+                     run_trf_classification, settings, args, force_downstream)
 
         # Step 3b: Satellite DNA family clustering
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 3b: SATELLITE FAMILY CLUSTERING")
         logger.info(SEPARATOR_LINE)
-        with timer.step("sat_family"):
-            sat_family_ok = run_sat_family(settings, force_downstream)
-        steps["sat_family"] = "ok" if sat_family_ok else "failed"
+        guarded_step("sat_family", timer, steps,
+                     run_sat_family, settings, force_downstream)
 
         # Step 4: Drawing and HTML report
         logger.info(SEPARATOR_LINE)
         logger.info("STEP 4: DRAWING AND REPORT")
         logger.info(SEPARATOR_LINE)
-        with timer.step("drawing"):
-            drawing_ok = run_trf_drawing(settings, force_downstream)
-        steps["drawing"] = "ok" if drawing_ok else "failed"
+        drawing_ok = guarded_step("drawing", timer, steps,
+                                  run_trf_drawing, settings, force_downstream)
 
         # Step 5 (on request): a track to load into the UCSC browser.
         if args.get("ucsc_track"):
             logger.info(SEPARATOR_LINE)
             logger.info("STEP 5: UCSC BROWSER TRACK")
             logger.info(SEPARATOR_LINE)
-            try:
-                with timer.step("ucsc_track"):
-                    produced = build_ucsc_track(
-                        settings["trf_file"],
-                        fasta_file,
-                        output_dir,
-                        project,
-                        min_length=int(args.get("ucsc_min_length", 0) or 0),
-                    )
+            produced = guarded_step(
+                "ucsc_track", timer, steps, build_ucsc_track,
+                settings["trf_file"], fasta_file, output_dir, project,
+                min_length=int(args.get("ucsc_min_length", 0) or 0),
+            )
+            if produced:
                 for kind, path in produced.items():
                     logger.info(f"  {kind}: {path}")
-                steps["ucsc_track"] = "ok" if produced.get("bed") else "failed"
-            except (OSError, ValueError) as e:
-                # A failed track must not pass as a completed run: the manifest
-                # records it and satellome exits non-zero, like any other step.
-                logger.error(f"UCSC track generation failed: {e}")
-                steps["ucsc_track"] = "failed"
+                if not produced.get("bed"):
+                    steps["ucsc_track"] = "failed"
     else:
         steps["downstream"] = "skipped"
 

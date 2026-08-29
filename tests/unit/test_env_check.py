@@ -652,3 +652,101 @@ class TestStartupToolWarning:
         with caplog.at_level("WARNING"):
             assert env_check.warn_about_missing_tools() == []
         assert caplog.text == ""
+
+
+class TestBinaryArchitecture:
+    """A binary can be present, executable, and unable to run.
+
+    On a production Linux box five of the eight installed binaries turned out
+    to be macOS arm64 builds copied from a laptop. satellome reported them as
+    installed, and the run died 65 minutes in with "Exec format error".
+    """
+
+    ELF_X86_64 = b"\x7fELF\x02\x01\x01" + b"\x00" * 11 + b"\x3e\x00" + b"\x00" * 4
+    ELF_ARM64 = b"\x7fELF\x02\x01\x01" + b"\x00" * 11 + b"\xb7\x00" + b"\x00" * 4
+    MACHO_ARM64 = b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01" + b"\x00" * 16
+    MACHO_X86_64 = b"\xcf\xfa\xed\xfe\x07\x00\x00\x01" + b"\x00" * 16
+
+    def _write(self, tmp_path, name, data):
+        path = tmp_path / name
+        path.write_bytes(data)
+        path.chmod(0o755)
+        return path
+
+    def test_identifies_elf_and_macho(self, tmp_path):
+        cases = [
+            (self.ELF_X86_64, "linux-x86_64"),
+            (self.ELF_ARM64, "linux-arm64"),
+            (self.MACHO_ARM64, "macos-arm64"),
+            (self.MACHO_X86_64, "macos-x86_64"),
+            (b"MZ\x90\x00", "windows"),
+            (b"\xca\xfe\xba\xbe\x00\x00\x00\x02", "macos-universal"),
+        ]
+        for data, expected in cases:
+            path = self._write(tmp_path, "b", data)
+            assert env_check.binary_platform(path) == expected
+
+    def test_a_script_has_no_platform_of_its_own(self, tmp_path):
+        path = self._write(tmp_path, "s", b"#!/bin/sh\necho hi\n")
+        assert env_check.binary_platform(path) is None
+        assert env_check.runnable_here(path) is None, "the interpreter decides, not the file"
+
+    def test_unreadable_or_tiny_file_is_unknown_not_a_mismatch(self, tmp_path):
+        assert env_check.binary_platform(tmp_path / "absent") is None
+        assert env_check.binary_platform(self._write(tmp_path, "t", b"ab")) is None
+
+    def test_macho_on_linux_is_not_runnable(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(env_check, "host_platform", lambda: "linux-x86_64")
+        path = self._write(tmp_path, "sat-family", self.MACHO_ARM64)
+        assert env_check.runnable_here(path) is False
+
+    def test_matching_platform_is_runnable(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(env_check, "host_platform", lambda: "linux-x86_64")
+        path = self._write(tmp_path, "sat-family", self.ELF_X86_64)
+        assert env_check.runnable_here(path) is True
+
+    def test_wrong_arch_tool_counts_as_breaking_results(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(env_check, "host_platform", lambda: "linux-x86_64")
+        path = self._write(tmp_path, "sat-family", self.MACHO_ARM64)
+        tool = ToolLocation(name="sat-family", path=str(path), source="managed", on_path=True)
+
+        assert tool.found is True, "the file really is there"
+        assert tool.wrong_arch is True
+        assert tool.usable is False
+        assert tool.breaks_results is True, (
+            "worse than missing: reported as installed, fails only when executed"
+        )
+
+    def test_doctor_reports_the_mismatch_and_the_two_platforms(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(env_check, "host_platform", lambda: "linux-x86_64")
+        scripts_dir = tmp_path / "bin"
+        scripts_dir.mkdir()
+        make_script(scripts_dir, "satellome", f"#!{sys.executable}\n")
+        monkeypatch.setenv("PATH", str(scripts_dir))
+        monkeypatch.setattr(env_check, "interpreter_script_dirs", lambda: [scripts_dir])
+        report = check_satellome_entrypoint()
+
+        path = self._write(tmp_path, "sat-family", self.MACHO_ARM64)
+        tool = ToolLocation(name="sat-family", path=str(path), source="managed", on_path=True)
+        text = "\n".join(format_doctor_report(report, [tool]))
+
+        assert "No problems found." not in text
+        assert "WRONG ARCHITECTURE" in text
+        assert "macos-arm64" in text and "linux-x86_64" in text
+        assert "cannot run here" in text
+
+    def test_startup_banner_names_the_mismatch(self, tmp_path, monkeypatch, caplog):
+        monkeypatch.setattr(env_check, "host_platform", lambda: "linux-x86_64")
+        monkeypatch.delenv(env_check.ENV_DISABLE, raising=False)
+        path = self._write(tmp_path, "sat-family", self.MACHO_ARM64)
+        monkeypatch.setattr(
+            env_check, "check_companion_tools",
+            lambda: [ToolLocation(name="sat-family", path=str(path),
+                                  source="managed", on_path=True)],
+        )
+
+        with caplog.at_level("WARNING"):
+            broken = env_check.warn_about_missing_tools()
+
+        assert [t.name for t in broken] == ["sat-family"]
+        assert "built for macos-arm64" in caplog.text

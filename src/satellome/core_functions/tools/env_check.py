@@ -135,10 +135,28 @@ class ToolLocation:
         return self.path is not None
 
     @property
+    def built_for(self) -> Optional[str]:
+        return binary_platform(self.path) if self.found else None
+
+    @property
+    def wrong_arch(self) -> bool:
+        """Present and executable, but cannot run on this machine."""
+        return self.found and runnable_here(self.path) is False
+
+    @property
+    def usable(self) -> bool:
+        return self.found and not self.wrong_arch
+
+    @property
     def breaks_results(self) -> bool:
-        """Missing, and its absence changes what a run produces."""
+        """Unusable, and that changes what a run produces.
+
+        A binary built for another platform counts as missing here: it is worse
+        than missing, since it is reported as installed and fails only when the
+        pipeline finally tries to execute it.
+        """
         spec = self.spec
-        return not self.found and spec is not None and spec.breaks_results
+        return not self.usable and spec is not None and spec.breaks_results
 
     @property
     def hidden(self) -> bool:
@@ -276,6 +294,85 @@ def dir_on_path(directory) -> bool:
     except OSError:
         target = str(directory)
     return target in path_entries()
+
+
+# Executable-format magic. A file can be present, executable and completely
+# unable to run: five of the eight binaries on a production Linux box turned
+# out to be macOS arm64 builds copied from a developer's laptop, and satellome
+# reported them as installed right up until the run died 65 minutes in with
+# "OSError: Exec format error".
+ELF_MAGIC = b"\x7fELF"
+MACHO_MAGICS = (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf",
+                b"\xce\xfa\xed\xfe", b"\xcf\xfa\xed\xfe")
+MACHO_UNIVERSAL = (b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca")
+PE_MAGIC = b"MZ"
+
+# ELF e_machine values we care about.
+ELF_MACHINES = {0x3E: "x86_64", 0xB7: "arm64", 0x28: "arm", 0x03: "x86"}
+# Mach-O cpu types (low 32 bits, ABI64 bit stripped).
+MACHO_CPUS = {7: "x86_64", 12: "arm64"}
+
+
+def binary_platform(path) -> Optional[str]:
+    """What this executable was built for, e.g. "linux-x86_64", "macos-arm64".
+
+    Returns None when the format is unknown or the file cannot be read - which
+    includes shell scripts and other interpreted entry points, where the
+    question does not apply.
+    """
+    try:
+        with open(str(path), "rb") as handle:
+            head = handle.read(24)
+    except OSError:
+        return None
+
+    if len(head) < 4:
+        return None
+
+    if head.startswith(b"#!"):
+        return None  # a script: its interpreter decides, not the file
+
+    if head.startswith(ELF_MAGIC):
+        if len(head) < 20:
+            return "linux"
+        machine = int.from_bytes(head[18:20], "little" if head[5] == 1 else "big")
+        return f"linux-{ELF_MACHINES.get(machine, f'machine{machine:#x}')}"
+
+    if head.startswith(MACHO_UNIVERSAL):
+        return "macos-universal"
+
+    if head[:4] in MACHO_MAGICS:
+        big_endian = head[:4] in (b"\xfe\xed\xfa\xce", b"\xfe\xed\xfa\xcf")
+        cpu = int.from_bytes(head[4:8], "big" if big_endian else "little")
+        return f"macos-{MACHO_CPUS.get(cpu & 0x00FFFFFF, f'cpu{cpu:#x}')}"
+
+    if head.startswith(PE_MAGIC):
+        return "windows"
+
+    return None
+
+
+def host_platform() -> str:
+    """This machine, in the same vocabulary as ``binary_platform``."""
+    from satellome.installers.base import detect_platform
+
+    name, arch = detect_platform()
+    return f"{'macos' if name == 'darwin' else name}-{arch}"
+
+
+def runnable_here(path) -> Optional[bool]:
+    """True/False if the file's format settles it, None if it cannot be told."""
+    built_for = binary_platform(path)
+    if built_for is None:
+        return None
+    if built_for == "macos-universal":
+        return host_platform().startswith("macos")
+    host = host_platform()
+    if "unknown" in host:
+        return None
+    # Compare OS and architecture separately so an unrecognised machine value
+    # does not masquerade as a mismatch.
+    return built_for == host
 
 
 def _executable(candidate: Path) -> bool:
@@ -631,7 +728,7 @@ def degraded_tools(tools: List[ToolLocation]) -> List[ToolLocation]:
     """Absent tools that only cost speed; results are unchanged."""
     return [
         t for t in tools
-        if not t.found and t.spec is not None and t.spec.impact_class == "speedup"
+        if not t.usable and t.spec is not None and t.spec.impact_class == "speedup"
     ]
 
 
@@ -694,9 +791,15 @@ def warn_about_missing_tools(log=None) -> List[ToolLocation]:
         return []
 
     log.warning(SEPARATOR)
-    log.warning(f"{len(broken)} tool(s) missing - THIS RUN WILL PRODUCE LESS THAN A COMPLETE ONE:")
+    log.warning(f"{len(broken)} tool(s) unusable - THIS RUN WILL PRODUCE LESS THAN A COMPLETE ONE:")
     for tool in broken:
-        log.warning(f"  {tool.name}: {tool.spec.impact}")
+        if tool.wrong_arch:
+            log.warning(
+                f"  {tool.name}: built for {tool.built_for}, this machine is "
+                f"{host_platform()} - {tool.spec.impact}"
+            )
+        else:
+            log.warning(f"  {tool.name}: {tool.spec.impact}")
     for command in sorted({t.spec.install for t in broken}):
         log.warning(f"  install with: {command}")
     log.warning("Full report: satellome --doctor")
@@ -738,6 +841,12 @@ def format_doctor_report(report: EntrypointReport, tools: List[ToolLocation]) ->
             impact = f" -> {spec.impact}" if spec else ""
             label = "MISSING" if (spec and spec.breaks_results) else "missing"
             lines.append(f"  {tool.name:<14}: {label}{impact}")
+        elif tool.wrong_arch:
+            lines.append(
+                f"  {tool.name:<14}: WRONG ARCHITECTURE - built for {tool.built_for}, "
+                f"this machine is {host_platform()}"
+            )
+            lines.append(f"  {'':<14}  {tool.path}")
         elif tool.hidden:
             lines.append(f"  {tool.name:<14}: {tool.path}  [off PATH - usable by satellome only]")
         else:
@@ -763,7 +872,13 @@ def format_doctor_report(report: EntrypointReport, tools: List[ToolLocation]) ->
         # Missing tools first: they are what makes a run produce less than the
         # user thinks it did, which no amount of PATH advice will explain.
         for tool in broken:
-            lines.append(f"  ! {tool.name} is not installed - {tool.spec.impact}")
+            if tool.wrong_arch:
+                lines.append(
+                    f"  ! {tool.name} cannot run here: built for {tool.built_for}, "
+                    f"this machine is {host_platform()} - {tool.spec.impact}"
+                )
+            else:
+                lines.append(f"  ! {tool.name} is not installed - {tool.spec.impact}")
         if broken:
             for command in sorted({t.spec.install for t in broken}):
                 lines.append(f"    install with: {command}")
