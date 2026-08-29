@@ -67,6 +67,59 @@ def find_rust_sources() -> Optional[Path]:
     return None
 
 
+def source_tree_version() -> Optional[str]:
+    """Version declared by the checkout we are running from, if any.
+
+    ``satellome.__version__`` comes from installed package metadata, which in a
+    source checkout can belong to an entirely different (older) install that
+    happens to be on the path. Asking a release for assets under that version
+    finds nothing and falls back to building, which works but for a reason the
+    user has no way to guess. The checkout's own pyproject.toml is the truth
+    when we are running from one.
+
+    Returns None when this is a normal installation.
+    """
+    import satellome
+
+    package_dir = Path(satellome.__file__).resolve().parent
+    # src-layout checkout: <root>/src/satellome -> <root>; flat: <root>/satellome
+    for root in (package_dir.parent.parent, package_dir.parent):
+        pyproject = root / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        try:
+            text = pyproject.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        # Only trust satellome's own pyproject, never an unrelated parent
+        # project that happens to sit above the package directory.
+        if 'name = "satellome"' not in text:
+            continue
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("version") and "=" in stripped:
+                value = stripped.split("=", 1)[1].strip().strip('"').strip("'")
+                if value:
+                    return value
+    return None
+
+
+def asset_version(log=None) -> str:
+    """The release whose assets match the code that is actually running."""
+    log = log or logger
+    from satellome import __version__ as installed
+
+    from_source = source_tree_version()
+    if from_source and from_source != installed:
+        log.info(
+            f"Running from a source checkout at version {from_source}, while the "
+            f"installed metadata says {installed}. Fetching assets for "
+            f"{from_source}."
+        )
+        return from_source
+    return installed
+
+
 def platform_asset_suffix() -> Optional[str]:
     """Asset suffix for this machine, or None if we publish nothing for it."""
     from satellome.installers.base import detect_platform
@@ -260,7 +313,7 @@ def install_rust_tools(force: bool = False, tools: Optional[Sequence[str]] = Non
 
     # Fast path: prebuilt binaries published with this version's release.
     if not os.environ.get(ENV_NO_DOWNLOAD):
-        from satellome import __version__
+        version = asset_version()
 
         suffix = platform_asset_suffix()
         if suffix is None:
@@ -269,10 +322,10 @@ def install_rust_tools(force: bool = False, tools: Optional[Sequence[str]] = Non
                 "building from source."
             )
         else:
-            logger.info(f"Fetching prebuilt binaries for {suffix} (v{__version__})...")
+            logger.info(f"Fetching prebuilt binaries for {suffix} (v{version})...")
             still_needed = [
                 name for name in wanted
-                if not download_prebuilt(name, __version__, bin_dir)
+                if not download_prebuilt(name, version, bin_dir)
             ]
             if not still_needed:
                 logger.info(f"Installed: {', '.join(wanted)}")

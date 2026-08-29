@@ -21,6 +21,18 @@ from satellome.installers.rust_tools import (
 )
 
 
+@pytest.fixture(autouse=True)
+def no_downloads(monkeypatch):
+    """Keep the suite off the network by default.
+
+    Without this, a test about the *build* path quietly depends on the download
+    path failing — which it did only while the version lookup was broken, so
+    fixing that lookup broke three tests that had never meant to reach GitHub
+    at all. Tests that exercise downloading opt back in with `delenv`.
+    """
+    monkeypatch.setenv(rust_tools.ENV_NO_DOWNLOAD, "1")
+
+
 class TestSpecCoverage:
     def test_every_rust_tool_has_a_crate_in_the_repo(self):
         sources = find_rust_sources()
@@ -286,3 +298,120 @@ class TestPrebuiltDownload:
         monkeypatch.setattr(rust_tools, "check_cargo", lambda: (False, "no cargo"))
 
         assert rust_tools.install_rust_tools(force=True, tools=["find-gaps"]) is False
+
+
+class TestAssetVersion:
+    """Which release's assets to fetch.
+
+    `satellome.__version__` comes from installed package metadata, which in a
+    source checkout can belong to a different (older) install that happens to
+    be importable. Asking that release for assets finds nothing and silently
+    drops to building from source — correct, but for a reason the user cannot
+    guess. Observed live: a checkout at 1.16.0 asked v1.9.0 for assets.
+    """
+
+    def _checkout(self, tmp_path, version, name="satellome"):
+        root = tmp_path / "repo"
+        package = root / "src" / "satellome"
+        package.mkdir(parents=True)
+        (root / "pyproject.toml").write_text(
+            f'[project]\nname = "{name}"\nversion = "{version}"\n'
+        )
+        (package / "__init__.py").write_text("")
+        return root, package
+
+    def _pretend_running_from(self, monkeypatch, package_dir):
+        import satellome
+
+        monkeypatch.setattr(satellome, "__file__", str(package_dir / "__init__.py"))
+
+    def test_source_version_wins_over_stale_metadata(self, tmp_path, monkeypatch, caplog):
+        import satellome
+
+        _, package = self._checkout(tmp_path, "1.16.0")
+        self._pretend_running_from(monkeypatch, package)
+        monkeypatch.setattr(satellome, "__version__", "1.9.0")
+
+        with caplog.at_level("INFO"):
+            assert rust_tools.asset_version() == "1.16.0"
+
+        assert "source checkout at version 1.16.0" in caplog.text
+        assert "1.9.0" in caplog.text, "must name both, or the choice looks arbitrary"
+
+    def test_matching_versions_say_nothing(self, tmp_path, monkeypatch, caplog):
+        import satellome
+
+        _, package = self._checkout(tmp_path, "1.16.0")
+        self._pretend_running_from(monkeypatch, package)
+        monkeypatch.setattr(satellome, "__version__", "1.16.0")
+
+        with caplog.at_level("INFO"):
+            assert rust_tools.asset_version() == "1.16.0"
+        assert caplog.text == ""
+
+    def test_normal_install_uses_the_metadata(self, tmp_path, monkeypatch):
+        """No pyproject above the package: an ordinary pip install."""
+        import satellome
+
+        package = tmp_path / "site-packages" / "satellome"
+        package.mkdir(parents=True)
+        self._pretend_running_from(monkeypatch, package)
+        monkeypatch.setattr(satellome, "__version__", "1.16.0")
+
+        assert rust_tools.source_tree_version() is None
+        assert rust_tools.asset_version() == "1.16.0"
+
+    def test_an_unrelated_parent_project_is_not_trusted(self, tmp_path, monkeypatch):
+        """A pyproject.toml above us may belong to something else entirely."""
+        import satellome
+
+        _, package = self._checkout(tmp_path, "9.9.9", name="some-other-project")
+        self._pretend_running_from(monkeypatch, package)
+        monkeypatch.setattr(satellome, "__version__", "1.16.0")
+
+        assert rust_tools.source_tree_version() is None
+        assert rust_tools.asset_version() == "1.16.0"
+
+    def test_unreadable_pyproject_falls_back_to_metadata(self, tmp_path, monkeypatch):
+        import satellome
+
+        root, package = self._checkout(tmp_path, "1.16.0")
+        (root / "pyproject.toml").chmod(0o000)
+        self._pretend_running_from(monkeypatch, package)
+        monkeypatch.setattr(satellome, "__version__", "1.9.0")
+        try:
+            assert rust_tools.asset_version() == "1.9.0"
+        finally:
+            (root / "pyproject.toml").chmod(0o644)
+
+    def test_this_repository_resolves_to_its_own_version(self):
+        """Guards the real layout, not just the synthetic one above."""
+        import tomllib
+        from pathlib import Path
+
+        import satellome
+
+        root = Path(satellome.__file__).resolve().parent.parent.parent
+        pyproject = root / "pyproject.toml"
+        if not pyproject.is_file():
+            pytest.skip("not running from a checkout")
+
+        declared = tomllib.loads(pyproject.read_text())["project"]["version"]
+        assert rust_tools.source_tree_version() == declared
+
+    def test_the_download_uses_the_resolved_version(self, tmp_path, monkeypatch):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        asked = []
+        monkeypatch.delenv(rust_tools.ENV_NO_DOWNLOAD, raising=False)
+        monkeypatch.setattr(rust_tools, "get_satellome_bin_dir", lambda: bin_dir)
+        monkeypatch.setattr(rust_tools, "platform_asset_suffix", lambda: "linux-x86_64")
+        monkeypatch.setattr(rust_tools, "asset_version", lambda log=None: "1.16.0")
+        monkeypatch.setattr(
+            rust_tools, "download_prebuilt",
+            lambda name, version, d: asked.append(version) or True,
+        )
+
+        rust_tools.install_rust_tools(force=True, tools=["find-gaps"])
+
+        assert asked == ["1.16.0"], "must fetch assets for the code that is running"
