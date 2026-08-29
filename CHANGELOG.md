@@ -5,6 +5,33 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-08-29
+
+Both fixes come from running CHM13 on a production box, where five of the eight
+installed binaries turned out to be macOS arm64 builds copied from a laptop.
+
+### Fixed
+- **A step that raises no longer costs the run its manifest.** `sat-family`
+  could not be executed, the resulting `OSError: Exec format error` propagated
+  out of the step, and the process died before `run_manifest.json` was written
+  - leaving an output directory indistinguishable from an unfinished run after
+  65 minutes of completed work, which is precisely what the manifest exists to
+  rule out. Every step now runs behind a guard: an exception is that step's
+  failure, is logged with its traceback, is recorded in the manifest, and the
+  remaining steps still run. The search steps are guarded the same way.
+
+### Added
+- **Architecture checking for external binaries.** `--doctor` read only the
+  executable bit, so a Mach-O binary on Linux was reported as installed and
+  healthy right up to the moment the pipeline tried to run it. The executable
+  format (ELF / Mach-O / PE, with the machine and CPU type) is now compared
+  against the host, and a mismatch is reported as `WRONG ARCHITECTURE - built
+  for macos-arm64, this machine is linux-x86_64`, counts as a problem, and
+  appears in the pre-run banner. A wrong-architecture binary is treated as
+  worse than a missing one, because it is announced as present and fails only
+  when executed. Scripts and unreadable files are reported as unknown rather
+  than as mismatches.
+
 ## [1.15.1] - 2026-08-28
 
 ### Fixed
