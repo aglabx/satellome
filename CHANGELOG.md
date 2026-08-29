@@ -5,6 +5,26 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1] - 2026-08-29
+
+### Fixed
+- **`--install-rust-tools` asked the wrong release for its binaries when run
+  from a source checkout.** The version came from installed package metadata,
+  which in a checkout can belong to an unrelated older install that happens to
+  be importable - a tree at 1.16.0 asked v1.9.0 for assets, found none, and
+  dropped to building from source. That worked, but for a reason nobody could
+  guess from the output. The checkout's own `pyproject.toml` is now the
+  authority when the two disagree, and the mismatch is stated with both
+  versions rather than left implicit. Only satellome's own `pyproject.toml` is
+  trusted, so an unrelated parent project above the package cannot supply a
+  version.
+
+### Changed
+- The installer tests no longer reach GitHub. Three of them had come to depend
+  on downloads failing, which they only did while the version lookup was
+  broken; fixing it broke tests that were never about the network. Downloads
+  are now disabled by default in that suite and opted into explicitly.
+
 ## [1.16.0] - 2026-08-29
 
 Both fixes come from running CHM13 on a production box, where five of the eight
