@@ -5,6 +5,53 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.2] - 2026-09-06
+
+Compaction was taking about as long as recomputing the analysis. It was not the
+language: measured on a real 35 MB monomers table, splitting rows into columns
+in Python is **0.51 s** while zstd on the resulting streams is **4.09 s** at
+level 15 - Python is 11% of the encode, and the other 89% is already native in
+any implementation. The time was going somewhere else.
+
+### Fixed
+- **A real compaction priced itself before doing the work, and the pricing cost
+  more than the work.** `build_plan` read every file in full and encoded a 32 MB
+  sample of each, then the encode read and encoded everything again. On a live
+  directory that pass was **18.9 s of a 26.3 s compaction - 72%** - to produce
+  an estimate of a number the run was about to know exactly. Measuring now
+  happens only under `--dry-run`, which is what it was for; a real run reports
+  the ledger from what actually happened.
+- **The digests took three passes over each file.** Content md5, content length
+  and stored md5 are now computed in one pass, digesting the compressed bytes as
+  they are fed to the decompressor.
+- **A hung decomposer held a worker forever.** On the live corpus an
+  arraysplitter 1.7.4 run over a **35 KB probe of 200 arrays, none longer than
+  964 bp**, was still burning four cores after **eight hours** - work that size
+  finishes in well under a second. `subprocess.run` had no timeout, so one
+  pathological array cost one of ten parallel workers for the rest of the run,
+  and nothing said so. Every decomposer call is now bounded (120 s for the
+  probe, 900 s for a full re-derivation, `DecomposerTimeout` when it fires) and
+  a timeout is reported as "the per-copy layer is not reproducible here", which
+  keeps the rows rather than dropping them.
+  The input that triggers it is kept at
+  `data/arraysplitter_hang/` for a bug report against arraysplitter itself.
+
+### Changed
+- **Default `--level` is now 12, was 15.** Measured on real column streams:
+  1.11 s / 3.20 MB at level 6, 1.59 s / 2.96 MB at 12, 4.09 s / 2.67 MB at 15.
+  Level 15 costs 2.6x the time of level 12 for 10% smaller output, which is the
+  wrong side of that trade for a corpus that has to finish. Each directory
+  records its own level in `.compact.json` and the container is self-describing,
+  so a corpus compacted at mixed levels reads back the same.
+- The list of kept-but-unclassified files is printed on a real compaction too,
+  not only under `--dry-run`. Such a file is safe but it is also disk that never
+  gets compacted, and nobody goes looking for a category they were not told
+  about.
+
+### Measured effect
+End to end on a real catalogue: **26.6 s to 9.5 s, 2.8x**, for output 12%
+larger. Unchanged: every guarantee, every check, and the byte-exact round trip.
+
 ## [1.17.1] - 2026-09-05
 
 ### Fixed
