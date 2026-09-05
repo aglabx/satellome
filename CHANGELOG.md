@@ -5,6 +5,48 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1] - 2026-09-05
+
+### Fixed
+- **Nine kinds of real output had no policy row and were silently left alone.**
+  Found by running the classifier over 90 directories sampled across all six
+  tiers of the live corpus rather than by reading the file list again:
+  `*.gaps.bed` (about 1.9 MB per assembly, ~30 GB across the roster),
+  `reports/telomeres.tsv`, `reports/sat_families.tsv`, `reports/*.its.bed`,
+  `*.fna.fai`, `fasta/*.fasta`, `reports/*.txt` and any other `.tsv`, `.fasta`
+  or `.json`. Being unclassified is the safe outcome - such a file is kept and
+  named in the report - but it is also disk that never gets compacted, and the
+  gaps BED alone is the difference between compacting an assembly and compacting
+  most of it. All nine are now classified, all as kept.
+- **`.gaps.bed` is primary, not derivable.** It records assembly gaps found by
+  scanning the genome, so nothing in an output directory can rebuild it. It is
+  kept and re-encoded, never dropped.
+
+### Changed
+- A policy row now declares whether its table has a header (`has_header`)
+  instead of the encoder testing for the one kind that does not. Three call
+  sites asked `kind.name != "bed"`; adding a second headerless kind would have
+  had to find all three.
+
+### Verified on the production corpus (aglab0, arraysplitter 1.7.4)
+- **Checklist 0 passes 21 of 21** on `GCA_022385595.1`: all 8 derived `.sat`
+  views, all 9 `.gff` files, `.lengths`, and the whole per-copy layer -
+  monomers, hors and decomposed - reproduce byte-identically.
+- **compact then expand restores every file**, content-identical, 33 of 33; the
+  only file not restored is the `.1aln` the policy drops by decision, and it is
+  named rather than omitted quietly. 16.5 MB to 2.8 MB, **83.0% freed**, against
+  83.2% predicted by `--dry-run` - an error of 0.2%.
+- **The naming trap is handled**: directory `GCA_029289425.3` holding
+  `GCF_029289425.2_NHGRI_mPanPan1-v2.0_pri_genomic.*` compacts correctly
+  (1.2 GB to 625 MB), as does the non-accession basename `HLmelFor1`
+  (413 MB to 165 MB).
+- **The decomposer probe earned its place on the first T2T assembly tried.**
+  For `GCA_029289425.3`, arraysplitter 1.7.4 reproduces `hors` and `decomposed`
+  but produces different rows for 178 of 200 probed `monomers` arrays - that
+  catalogue was made by another build. Those rows are therefore kept and the
+  reason is printed. Without the probe this would have been a one-way delete
+  reported as a success.
+
 ## [1.17.0] - 2026-09-05
 
 ### Added
