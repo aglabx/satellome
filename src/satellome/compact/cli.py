@@ -41,9 +41,11 @@ def build_compact_parser():
                         help="keep per-copy rows only for arrays at least this "
                              "long [1000]; this is a scope decision, not a "
                              "storage one — see the policy notes")
-    parser.add_argument("--level", type=int, default=15, metavar="N",
-                        help="zstd level for the columnar codec [15]; measure "
-                             "with --sweep before changing it")
+    parser.add_argument("--level", type=int, default=12, metavar="N",
+                        help="zstd level for the columnar codec [12]; measured "
+                             "on real tables, 15 costs 2.6x the time of 12 for "
+                             "10%% smaller output. Use --sweep on your own data "
+                             "before changing it")
     parser.add_argument("--no-verify-drops", dest="verify_drops",
                         action="store_false", default=True,
                         help="do not regenerate each dropped file to check it "

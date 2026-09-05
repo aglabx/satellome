@@ -383,3 +383,98 @@ def test_no_verify_drops_still_records_a_recipe_and_a_digest(run_dir):
     unverified = [e for e in dropped
                   if e["recipe"].get("verified_at_compaction") is False]
     assert unverified
+
+
+def test_a_real_compaction_does_not_price_itself_first(run_dir, config, monkeypatch):
+    """Measuring reads every file in full and encodes a sample of each.
+
+    On a live directory that pass was 18.9s of a 26.3s compaction - 72% of the
+    work - to estimate a number the run was about to know exactly. It belongs to
+    --dry-run only.
+    """
+    from satellome.compact import ledger
+
+    calls = []
+    real = ledger.build_plan
+
+    def spy(run_dir, config, prefix="", measure=True, probe=None):
+        calls.append(measure)
+        return real(run_dir, config, prefix=prefix, measure=measure, probe=probe)
+
+    monkeypatch.setattr("satellome.compact.engine.build_plan", spy)
+    engine.compact(run_dir, config)
+    assert calls == [False]
+
+
+def test_the_dry_run_still_measures(run_dir, config, monkeypatch):
+    from satellome.compact import ledger
+
+    calls = []
+    real = ledger.build_plan
+
+    def spy(run_dir, config, prefix="", measure=True, probe=None):
+        calls.append(measure)
+        return real(run_dir, config, prefix=prefix, measure=measure, probe=probe)
+
+    monkeypatch.setattr("satellome.compact.engine.build_plan", spy)
+    engine.compact(run_dir, config, dry_run=True)
+    assert calls == [True]
+
+
+def test_the_record_still_carries_exact_sizes_without_the_pricing_pass(
+    run_dir, config
+):
+    import gzip
+
+    original = os.path.join(run_dir, f"{PREFIX}.sat.gz")
+    with gzip.open(original, "rb") as fh:
+        real_content_bytes = len(fh.read())
+    stored = os.path.getsize(original)
+
+    engine.compact(run_dir, config)
+    entry = [e for e in record.load_record(run_dir)["files"]
+             if e["kind"] == "sat_master"][0]
+    assert entry["before"]["content_bytes"] == real_content_bytes
+    assert entry["before"]["stored_bytes"] == stored
+
+
+def test_a_decomposer_that_hangs_is_killed_rather_than_waited_for(
+    run_dir, config, tmp_path, monkeypatch
+):
+    """One pathological array must not cost a worker for the rest of the run.
+
+    Observed live: arraysplitter 1.7.4 was still burning four cores after eight
+    hours on a 35 KB probe of 200 arrays, none longer than 964 bp.
+    """
+    hanging = tmp_path / "hanging_arraysplitter"
+    hanging.write_text("#!/bin/sh\nsleep 300\n")
+    hanging.chmod(0o755)
+    monkeypatch.setenv("SATELLOME_ARRAYSPLITTER", str(hanging))
+    monkeypatch.setattr("satellome.compact.probe.PROBE_TIMEOUT", 1)
+
+    import time
+
+    start = time.time()
+    outcome = engine.compact(run_dir, config)
+    elapsed = time.time() - start
+
+    assert outcome.ok
+    assert elapsed < 60, f"compaction waited {elapsed:.0f}s for a hung decomposer"
+    assert any("did not finish within" in note for note in outcome.kept_back)
+
+
+def test_a_timed_out_decomposer_leaves_the_per_copy_rows_intact(
+    run_dir, config, tmp_path, monkeypatch
+):
+    from satellome.compact import columnar
+
+    hanging = tmp_path / "hanging_arraysplitter"
+    hanging.write_text("#!/bin/sh\nsleep 300\n")
+    hanging.chmod(0o755)
+    monkeypatch.setenv("SATELLOME_ARRAYSPLITTER", str(hanging))
+    monkeypatch.setattr("satellome.compact.probe.PROBE_TIMEOUT", 1)
+
+    before = content_md5(os.path.join(run_dir, "fastan", f"{PREFIX}.monomers.tsv.gz"))
+    engine.compact(run_dir, config)
+    container = os.path.join(run_dir, "fastan", f"{PREFIX}.monomers.tsv.satz")
+    assert columnar.read_footer(container)["md5"] == before

@@ -25,6 +25,13 @@ from satellome.compact import formats, recipes
 
 logger = logging.getLogger("satellome")
 
+#: Seconds the probe may spend in the decomposer.
+#:
+#: 200 arrays under a kilobase each is sub-second work. The generous margin is
+#: for a loaded box, not for a decomposer that has gone into a loop - on the live
+#: corpus one such run was still going after eight hours, holding a worker.
+PROBE_TIMEOUT = 120
+
 #: Arrays fed to the probe.
 #:
 #: Sized against a measured failure, not guessed: a locally installed
@@ -138,7 +145,8 @@ def probe_decomposer(run_dir, master_rows, prefix, min_array_length, workdir):
 
     try:
         recipes.run_decomposer(
-            arrays_fasta, os.path.join(workdir, prefix), threads=1, binary=binary
+            arrays_fasta, os.path.join(workdir, prefix), threads=1, binary=binary,
+            timeout=PROBE_TIMEOUT,
         )
     except recipes.RecipeError as e:
         return ProbeResult(frozenset(), {name: str(e) for name in present})

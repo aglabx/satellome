@@ -100,11 +100,47 @@ def open_gzip_out(path, framing=None, level=GZIP_LEVEL):
 
 def md5_of_content(path, compression):
     """md5 of the *decompressed* bytes, so a re-gzip does not look like a change."""
-    digest = hashlib.md5()
-    with open_maybe_gzip(path, compression) as fh:
-        for block in iter(lambda: fh.read(IO_CHUNK), b""):
-            digest.update(block)
-    return digest.hexdigest()
+    return digest_and_size(path, compression)[0]
+
+
+class _DigestingReader:
+    """A read-only wrapper that md5s the raw bytes as they go past."""
+
+    def __init__(self, handle):
+        self._handle = handle
+        self.digest = hashlib.md5()
+
+    def read(self, size=-1):
+        block = self._handle.read(size)
+        self.digest.update(block)
+        return block
+
+    def readable(self):
+        return True
+
+
+def digest_and_size(path, compression):
+    """``(content_md5, content_bytes, stored_md5)`` in a single pass over the file.
+
+    All three go into the record, and a corpus this size cannot afford a
+    separate read for each: the compressed bytes are digested as they are fed to
+    the decompressor, and the decompressed bytes as they come out.
+    """
+    content = hashlib.md5()
+    total = 0
+    with open(path, "rb") as raw:
+        reader = _DigestingReader(raw)
+        stream = gzip.GzipFile(fileobj=reader, mode="rb") if compression == "gzip" else reader
+        for block in iter(lambda: stream.read(IO_CHUNK), b""):
+            content.update(block)
+            total += len(block)
+        if compression == "gzip":
+            # Anything after the member (a trailing garbage byte, a second
+            # member gzip.GzipFile stopped at) still belongs to the file we are
+            # digesting.
+            for block in iter(lambda: reader.read(IO_CHUNK), b""):
+                pass
+    return content.hexdigest(), total, reader.digest.hexdigest()
 
 
 # --------------------------------------------------------------------------

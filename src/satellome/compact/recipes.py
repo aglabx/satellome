@@ -212,7 +212,22 @@ def write_arrays_fasta(master_rows, out_fh, keep=None):
     return ids
 
 
-def run_decomposer(arrays_fasta, out_prefix, threads=1, binary=None):
+#: Seconds a decomposer run may take before it is killed.
+#:
+#: Not a guess: on the live corpus an arraysplitter 1.7.4 run over a 35 KB probe
+#: of 200 arrays, none longer than 964 bp, was still burning four cores after
+#: **eight hours**. Work that size finishes in well under a second, so anything
+#: past this is a hang, and a subprocess with no timeout turns one pathological
+#: array into a worker lost for the rest of the run.
+DEFAULT_DECOMPOSER_TIMEOUT = 900
+
+
+class DecomposerTimeout(RecipeError):
+    """The decomposer did not finish in time. Named, so it is never a silent stall."""
+
+
+def run_decomposer(arrays_fasta, out_prefix, threads=1, binary=None,
+                   timeout=DEFAULT_DECOMPOSER_TIMEOUT):
     """Run the decomposer over *arrays_fasta*, writing ``<out_prefix>.*``.
 
     Single-threaded by default: the content is thread-count independent (checked
@@ -221,7 +236,17 @@ def run_decomposer(arrays_fasta, out_prefix, threads=1, binary=None):
     """
     binary = binary or arraysplitter_binary()
     command = [binary, "-i", arrays_fasta, "-o", out_prefix, "-t", str(threads)]
-    completed = subprocess.run(command, capture_output=True, text=True)
+    try:
+        completed = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout
+        )
+    except subprocess.TimeoutExpired:
+        size = os.path.getsize(arrays_fasta) if os.path.exists(arrays_fasta) else 0
+        raise DecomposerTimeout(
+            f"the decomposer did not finish within {timeout}s on {size} bytes of "
+            f"arrays and was killed; treating the per-copy layer as not "
+            f"reproducible here rather than waiting for it"
+        ) from None
     if completed.returncode != 0:
         raise RecipeError(
             f"arraysplitter failed with exit code {completed.returncode}: "
@@ -259,12 +284,13 @@ class DecomposerWorkspace:
     """
 
     def __init__(self, master_rows_factory, prefix, workdir, min_array_length,
-                 threads=1):
+                 threads=1, timeout=DEFAULT_DECOMPOSER_TIMEOUT):
         self._rows = master_rows_factory
         self.prefix = prefix
         self.workdir = workdir
         self.min_array_length = min_array_length
         self.threads = threads
+        self.timeout = timeout
         self._built = False
         self.array_ids = []
 
@@ -282,6 +308,7 @@ class DecomposerWorkspace:
                 arrays_fasta,
                 os.path.join(self.workdir, self.prefix),
                 threads=self.threads,
+                timeout=self.timeout,
             )
         self._built = True
         return self

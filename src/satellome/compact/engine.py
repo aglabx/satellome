@@ -195,12 +195,23 @@ def compact(run_dir, config, dry_run=False, log=logger):
     finally:
         recipes.drop_workspace(run_dir)
 
-    plan = build_plan(run_dir, config, prefix=ready.prefix, measure=True, probe=probe)
-    lines.extend(format_ledger(plan, config))
     if dry_run:
+        plan = build_plan(run_dir, config, prefix=ready.prefix, measure=True,
+                          probe=probe)
+        lines.extend(format_ledger(plan, config))
         lines.append("")
         lines.append("  --dry-run: nothing was written")
         return Outcome(True, "planned", lines, plan.before, plan.after)
+
+    # A real compaction does NOT price itself first. Measuring means reading
+    # every file in full and encoding a sample of each - and then reading and
+    # encoding all of it again for real. Measured on a live directory: the
+    # pricing pass was 18.9s of a 26.3s compaction, 72% of the work, to produce
+    # an estimate of a number the run is about to know exactly. --dry-run is
+    # where that estimate belongs; here the ledger is reported from what
+    # actually happened.
+    plan = build_plan(run_dir, config, prefix=ready.prefix, measure=False,
+                      probe=probe)
 
     rec = record.new_record(run_dir, config, __version__, prefix=ready.prefix)
     rec["probe_refused"] = dict(probe.refused)
@@ -289,6 +300,15 @@ def compact(run_dir, config, dry_run=False, log=logger):
     )
     for note in kept_back:
         lines.append(f"  - kept: {note}")
+    if plan.unclassified:
+        # Named here as well as in the record: a file no policy row matched is
+        # kept, which is safe, but it is also disk that never gets compacted -
+        # and nobody goes looking for a category they were not told about.
+        lines.append(
+            f"  - kept, unclassified ({len(plan.unclassified)}): "
+            + ", ".join(plan.unclassified[:8])
+            + (" ..." if len(plan.unclassified) > 8 else "")
+        )
     return Outcome(True, "compacted", lines, before, after, kept_back)
 
 
@@ -297,7 +317,9 @@ def _drop_one(run_dir, entry, rec, config, classify_ws, kept_back, log):
     abs_path = os.path.join(run_dir, entry.rel_path)
     match = classify_path(entry.rel_path)
     kind = match.kind
-    before_md5 = formats.md5_of_content(abs_path, match.compression)
+    before_md5, content_bytes, stored_md5 = formats.digest_and_size(
+        abs_path, match.compression
+    )
     entry_rec = {
         "path": entry.rel_path,
         "kind": kind.name,
@@ -306,10 +328,10 @@ def _drop_one(run_dir, entry, rec, config, classify_ws, kept_back, log):
         "recipe": {"kind": kind.recipe},
         "before": {
             "stored_bytes": entry.stored_bytes,
-            "content_bytes": entry.content_bytes,
+            "content_bytes": content_bytes,
             "compression": match.compression,
             "md5": before_md5,
-            "stored_md5": formats.md5_of_file(abs_path),
+            "stored_md5": stored_md5,
             "gzip": formats.gzip_framing(abs_path),
         },
         "after": {"stored_bytes": 0},
@@ -408,7 +430,9 @@ def _reencode_one(run_dir, entry, rec, config, master_rows, decomposer_ws,
     abs_path = os.path.join(run_dir, entry.rel_path)
     match = classify_path(entry.rel_path)
     kind = match.kind
-    before_md5 = formats.md5_of_content(abs_path, match.compression)
+    before_md5, content_bytes, stored_md5 = formats.digest_and_size(
+        abs_path, match.compression
+    )
     out_rel = match.stem + ".satz"
     out_path = os.path.join(os.path.dirname(abs_path), os.path.basename(out_rel))
     out_rel_path = os.path.relpath(out_path, run_dir)
@@ -447,7 +471,7 @@ def _reencode_one(run_dir, entry, rec, config, master_rows, decomposer_ws,
     source = {
         "name": os.path.basename(entry.rel_path),
         "stored_bytes": entry.stored_bytes,
-        "content_bytes": entry.content_bytes,
+        "content_bytes": content_bytes,
         "compression": match.compression,
         "md5": before_md5,
     }
@@ -534,10 +558,10 @@ def _reencode_one(run_dir, entry, rec, config, master_rows, decomposer_ws,
         "layout": kind.layout,
         "before": {
             "stored_bytes": entry.stored_bytes,
-            "content_bytes": entry.content_bytes,
+            "content_bytes": content_bytes,
             "compression": match.compression,
             "md5": before_md5,
-            "stored_md5": formats.md5_of_file(abs_path),
+            "stored_md5": stored_md5,
             "gzip": formats.gzip_framing(abs_path),
         },
         "after": {

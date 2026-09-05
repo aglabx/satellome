@@ -162,3 +162,6 @@ families.json
 # Local corpus fixtures and probe output for compaction work (real data, not tracked)
 data/compact_fixtures/
 data/compact_probe/
+
+# Input that hangs arraysplitter 1.7.4 (kept for a bug report, not tracked)
+data/arraysplitter_hang/

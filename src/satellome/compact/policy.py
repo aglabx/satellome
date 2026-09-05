@@ -252,6 +252,10 @@ class CompactConfig(NamedTuple):
     """
 
     min_array_length: int = 1000
+    #: zstd level. Measured, not inherited: on a real 35 MB monomers table the
+    #: column streams take 1.11s at level 6, 1.59s at 12 and 4.09s at 15, for
+    #: 3.20 / 2.96 / 2.67 MB. Level 15 is 2.6x the time of 12 for 10% less, which
+    #: is the wrong side of the trade for a corpus that has to finish.
     level: int = 12
     verify_drops: bool = True
     keep_unknown: bool = True
