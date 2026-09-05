@@ -72,6 +72,8 @@ class Kind(NamedTuple):
     subdir: Optional[str] = None
     #: True when the per-copy row filter applies.
     filtered: bool = False
+    #: False for a table with no header row (every BED the pipeline writes).
+    has_header: bool = True
     #: Human-readable justification, printed by ``--explain``.
     why: str = ""
 
@@ -107,7 +109,14 @@ KINDS = (
          why="24 columns, one row per array; consensus and HOR structure that "
              "nothing else carries"),
     Kind(".bed", "bed", FileClass.PRIMARY, "tsv", None, subdir="fastan",
+         has_header=False,
          why="the SINE scan masks with it"),
+    Kind(".gaps.bed", "gaps_bed", FileClass.PRIMARY, "tsv", None, has_header=False,
+         why="assembly gaps; found by scanning the genome, so nothing in the "
+             "output directory can recompute it"),
+    Kind(".bed", "bed_other", FileClass.PRIMARY, "tsv", None, has_header=False,
+         why="any other BED the pipeline writes (reports/*.its.bed and the "
+             "like): kept, and compressed rather than left alone"),
     Kind(".1aln", "aln", FileClass.NOT_NEEDED, None, "rerun_fastan", subdir="fastan",
          why="FasTAN's alignment intermediate; dropped by decision, and it is "
              "the one kind expand cannot rebuild without the genome"),
@@ -138,6 +147,21 @@ KINDS = (
          subdir="gff3",
          why="dropped by decision; fSSR is an early-version atavism"),
     # --- kept as-is -------------------------------------------------------
+    Kind(".tsv", "tsv_other", FileClass.PRIMARY_BLOB, "blob", None,
+         why="reports/telomeres.tsv, reports/sat_families.tsv and any other "
+             "small table; encoded whole because their header conventions "
+             "differ and a wrong guess about a header is a wrong file"),
+    Kind(".fasta", "fasta_other", FileClass.PRIMARY_BLOB, "blob", None,
+         why="leftover extracted-array FASTA from the earlier campaign; kept "
+             "because dropping a file on the assumption it is a leftover is "
+             "exactly the assumption that loses data"),
+    Kind(".txt", "text", FileClass.PRIMARY_BLOB, "blob", None,
+         why="annotation reports and other free text"),
+    Kind(".fai", "fai", FileClass.KEEP, None, None,
+         why="a samtools index: tiny, and it has to stay readable beside the "
+             "file it indexes"),
+    Kind(".json", "json", FileClass.KEEP, None, None,
+         why="small records that must stay readable without satellome"),
     Kind(".report", "report", FileClass.PRIMARY_BLOB, "blob", None, subdir="reports",
          why="per-family statistics; small, but 15,620 of them"),
     Kind("microsatellites.summary.tsv", "micro_summary", FileClass.PRIMARY_BLOB,

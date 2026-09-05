@@ -230,7 +230,7 @@ def _build_plan(run_dir, config, prefix, measure, files, unclassified, scratch,
         if kind.layout in {"tsv", "fasta"}:
             ratio = _columnar_ratio(
                 abs_path, match.compression, config.level, kind.layout,
-                kind.name != "bed", scratch,
+                kind.has_header, scratch,
             )
         else:
             ratio = _blob_ratio(abs_path, match.compression, config.level)

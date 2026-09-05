@@ -205,9 +205,26 @@ for d in $(shuf -n 100 dirs.txt); do satellome compact --check-recipes "$d"; don
 # 2. Price it.
 satellome compact --dry-run --from-file dirs.txt | tee ledger.txt
 
-# 3. Do it. Drop --no-verify-drops only after step 1 has passed.
+# 3. Do it.
 satellome compact --from-file dirs.txt --continue-on-error
 ```
+
+By default every drop is re-derived and compared before it is unlinked, which
+means a full decomposer run per directory. That is the right default for one
+directory and too slow for 15,620 of them, so once step 1 has passed on a
+stratified sample, add `--no-verify-drops`:
+
+```bash
+satellome compact --from-file dirs.txt --continue-on-error --no-verify-drops
+```
+
+That skips the per-file re-derivation, **not** the checks: the 200-array probe
+still runs on every directory, the readiness test still refuses anything that is
+not verifiably finished, containers are still decoded and compared to their own
+footers, and `.compact.json` still records every digest. What it gives up is the
+proof that *these particular* sub-threshold rows come back — which is exactly
+what step 1 established for the corpus as a whole. The record says which files
+were dropped unverified, so the distinction is never lost.
 
 A T2T assembly frees only about 19% on the per-copy cut, and that is correct —
 its arrays are long and intact, so most copy rows belong to arrays above the

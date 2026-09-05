@@ -88,3 +88,22 @@ def test_prune_names_what_it_removed(run_dir, caplog):
     assert "Compact output" in text
     assert "--extended-output" in text
     assert "gff" in text and "lengths" in text
+
+
+def test_the_flag_exists_and_defaults_to_pruning():
+    """A default run prunes; --extended-output is the opt-out, not the default."""
+    from satellome.main import build_parser
+
+    parser = build_parser()
+    assert parser.parse_args([]).extended_output is False
+    assert parser.parse_args(["--extended-output"]).extended_output is True
+
+
+def test_a_recorded_argv_still_says_whether_to_prune_on_a_rerun():
+    """--rerun recovers the flag from the run's own argv, not the current one."""
+    from satellome.main import build_parser
+
+    extended = vars(build_parser().parse_args(["--extended-output", "-t", "8"]))
+    plain = vars(build_parser().parse_args(["-t", "8"]))
+    assert extended["extended_output"] is True
+    assert plain["extended_output"] is False

@@ -465,7 +465,7 @@ def _reencode_one(run_dir, entry, rec, config, master_rows, decomposer_ws,
         else:
             footer = formats.encode_tsv(
                 abs_path, match.compression, tmp, config.level,
-                has_header=(kind.name != "bed"),
+                has_header=kind.has_header,
                 row_filter=row_filter, filter_note=filter_note, source=source,
             )
     except Exception as e:

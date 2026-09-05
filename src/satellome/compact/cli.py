@@ -146,7 +146,7 @@ def _sweep_one(run_dir, rel, levels, config, lines):
                 formats.encode_fasta(abs_path, match.compression, out, level)
             else:
                 formats.encode_tsv(abs_path, match.compression, out, level,
-                                   has_header=(match.kind.name != "bed"))
+                                   has_header=match.kind.has_header)
             size = os.path.getsize(out)
             lines.append(
                 f"  {rel[:40]:<40}{level:>6}{size:>12}"
