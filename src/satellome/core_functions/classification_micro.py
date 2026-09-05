@@ -737,7 +737,11 @@ def cf_get_micro_summary_table(settings, project):
         lengths[name] += abs(int(gff_obj.end) - int(gff_obj.start))
 
     data = []
-    for name in keys:
+    # sorted(), not set iteration: string hashing is seeded per process, so
+    # iterating the set put equal-count motifs in a different order on every
+    # run and this file had a different md5 each time it was written. Ties now
+    # break alphabetically, which makes the table reproducible and diffable.
+    for name in sorted(keys):
         s = (
             name,
             micro_s[name],

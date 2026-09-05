@@ -52,7 +52,11 @@ MANIFEST_VERSION = 1
 GZ_ISIZE_MODULUS = 2 ** 32
 
 #: Files that describe the run rather than being its output.
-_EXCLUDED_NAMES = {MANIFEST_NAME, ".satellome.lock"}
+_EXCLUDED_NAMES = {MANIFEST_NAME, ".satellome.lock", ".compact.json"}
+
+#: Directories satellome uses as scratch. They exist only while a command runs,
+#: so listing them would record files that are gone by the time anyone verifies.
+_EXCLUDED_DIRS = {".compact_work"}
 
 VerifyResult = namedtuple(
     "VerifyResult", ["ok", "problems", "warnings", "manifest", "checked"]
@@ -69,7 +73,8 @@ def _iter_output_files(output_dir):
     In-progress ``*.partial`` files are skipped: by construction they are not
     outputs, and their presence at manifest time is reported separately.
     """
-    for root, _dirs, files in os.walk(output_dir):
+    for root, dirs, files in os.walk(output_dir):
+        dirs[:] = sorted(d for d in dirs if d not in _EXCLUDED_DIRS)
         for name in sorted(files):
             if name in _EXCLUDED_NAMES:
                 continue
@@ -92,7 +97,8 @@ def _iter_output_files(output_dir):
 def _leftover_partials(output_dir):
     """Relative paths of ``*.partial`` files still present under ``output_dir``."""
     leftovers = []
-    for root, _dirs, files in os.walk(output_dir):
+    for root, dirs, files in os.walk(output_dir):
+        dirs[:] = [d for d in dirs if d not in _EXCLUDED_DIRS]
         for name in files:
             if name.endswith(PARTIAL_SUFFIX):
                 leftovers.append(

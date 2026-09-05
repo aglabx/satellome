@@ -386,7 +386,11 @@ class TestAssetVersion:
 
     def test_this_repository_resolves_to_its_own_version(self):
         """Guards the real layout, not just the synthetic one above."""
-        import tomllib
+        # tomllib arrived in 3.11 and satellome supports older interpreters, so
+        # the test reads the version the same way when it is not available.
+        tomllib = pytest.importorskip(
+            "tomllib", reason="stdlib TOML parser needs Python 3.11+"
+        )
         from pathlib import Path
 
         import satellome

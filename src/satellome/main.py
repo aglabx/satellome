@@ -167,6 +167,7 @@ def build_parser():
     parser.add_argument("--ignore-lock", dest="ignore_lock", help="Run even if another satellome process holds the lock on the output directory (concurrent runs can overwrite each other's outputs)", action='store_true', default=False)
     parser.add_argument("--rerun", dest="rerun", help="Re-run named steps on an existing output directory without recomputing the rest (comma-separated; see --list-steps). Requires -o and a run_manifest.json", required=False, default=None, metavar="STEPS")
     parser.add_argument("--list-steps", dest="list_steps", help="List the steps that --rerun accepts and exit", action='store_true', default=False)
+    parser.add_argument("--extended-output", dest="extended_output", help="Keep every derived output a run produces (gff3/, the micro/pmicro/tssr/complex and 100kb/1000kb .sat views, fastan/*.lengths and fastan/*.1aln). Without this they are removed at the end of the run: they are recomputable from the master .sat, and across a 26,266-assembly panel they are most of the disk", action='store_true', default=False)
     parser.add_argument("--ucsc-track", dest="ucsc_track", help="Also write a UCSC Genome Browser track (BED9 coloured by period class, chrom.sizes, and a bigBed if bedToBigBed is available)", action='store_true', default=False)
     parser.add_argument("--ucsc-min-length", dest="ucsc_min_length", help="Only put repeats at least this long into the UCSC track [0 = all]", required=False, default=0, type=int)
     parser.add_argument("--verify-run", dest="verify_run", help="Verify a finished output directory against its run_manifest.json and exit (0 = verifiably complete, 1 = not)", required=False, default=None, metavar="DIR")
@@ -518,13 +519,20 @@ def run_trf_classification(settings, args, force_rerun):
     # Use directory containing trf_prefix for output
     classify_output_dir = os.path.dirname(trf_prefix)
 
-    # Check if main classification files exist
-    classification_files = [
-        f"{trf_prefix}.micro.sat",
-        f"{trf_prefix}.complex.sat",
-        f"{trf_prefix}.pmicro.sat",
-        f"{trf_prefix}.tssr.sat"
-    ]
+    # What "already classified" looks like depends on what the run keeps. With
+    # --extended-output the four class files are the evidence; without it they
+    # are removed at the end of every run, so results.yaml — which the
+    # classifier writes and nothing else does — is the marker. Checking for
+    # files a default run deliberately deletes would reclassify on every rerun.
+    if args.get("extended_output"):
+        classification_files = [
+            f"{trf_prefix}.micro.sat",
+            f"{trf_prefix}.complex.sat",
+            f"{trf_prefix}.pmicro.sat",
+            f"{trf_prefix}.tssr.sat",
+        ]
+    else:
+        classification_files = [os.path.join(classify_output_dir, "results.yaml")]
 
     classification_complete = all(os.path.exists(f) for f in classification_files)
 
@@ -1352,6 +1360,14 @@ def run_rerun_mode(output_dir, step_spec):
             logger.error(f"Step '{name}' raised {type(e).__name__}: {e}")
             just_run[name] = "failed"
 
+    # A re-run of the classification step writes the derived views again. Prune
+    # them back unless the original run asked to keep them, so amending a
+    # directory does not quietly undo the compaction it already had.
+    if not original.get("extended_output"):
+        from satellome.compact.prune import prune_run_directory
+
+        prune_run_directory(output_dir, log=logger)
+
     manifest = build_manifest(
         output_dir,
         project=project,
@@ -1422,6 +1438,15 @@ def _run_single_step(name, settings, args, project, fasta_file, output_dir):
 
 
 def main():
+    # Subcommands are dispatched before the flag parser so that the existing
+    # command line is untouched: 'satellome compact <dir>' acts on a finished
+    # output directory and shares none of the pipeline's options.
+    from satellome.compact.cli import dispatch as compact_dispatch
+
+    code = compact_dispatch(sys.argv[1:])
+    if code is not None:
+        sys.exit(code)
+
     args = parse_arguments()
 
     # Environment diagnosis: where this install lives, whether the shell can
@@ -1808,6 +1833,19 @@ def main():
                     steps["ucsc_track"] = "failed"
     else:
         steps["downstream"] = "skipped"
+
+    # Drop the derived outputs a default run is not asked to keep, before the
+    # manifest is written, so the manifest describes the directory that exists.
+    # Everything removed here is recomputable from the master .sat — that is
+    # what makes it droppable — and 'satellome compact --explain' says how.
+    if not args.get("extended_output"):
+        from satellome.compact.prune import prune_run_directory
+
+        pruned, freed = prune_run_directory(output_dir, log=logger)
+        if pruned:
+            steps["compact_output"] = "ok"
+    else:
+        logger.info("--extended-output: keeping every derived output")
 
     # Write the run manifest last: it is the run's own record of every file it
     # produced (with byte sizes) and the status of every step. Downstream

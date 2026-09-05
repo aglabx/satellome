@@ -3,9 +3,10 @@ requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["satellome", "satellome.core_functions", "satellome.core_functions.io",
-           "satellome.core_functions.models", "satellome.core_functions.tools",
-           "satellome.steps", "satellome.installers"]
+packages = ["satellome", "satellome.compact", "satellome.core_functions",
+           "satellome.core_functions.io", "satellome.core_functions.models",
+           "satellome.core_functions.tools", "satellome.steps",
+           "satellome.installers"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
@@ -45,6 +46,11 @@ dependencies = [
     "editdistance",
     "networkx",
     "matplotlib",
+    # The columnar codec behind 'satellome compact'. Required rather than
+    # optional: compaction has no gzip fallback, because a corpus written half
+    # in one codec and half in another is a difference nobody sees until they
+    # measure the volume again.
+    "zstandard",
 ]
 requires-python = ">=3.6"
 

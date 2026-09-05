@@ -314,25 +314,35 @@ satellome -i genome.fasta -o output_dir -p project_name -t 8 --run-trf
 
 ## Output Structure
 
+A run keeps its primary outputs and, at the end, removes the derived ones it can
+recompute — `gff3/`, the `micro`/`pmicro`/`tssr`/`complex` and `100kb`/`1000kb`
+views, `fastan/*.lengths` and `fastan/*.1aln`. It says what it removed and how to
+get it back. Pass `--extended-output` to keep everything (marked ⊖ below).
+
 ```
 output_dir/
 ├── genome.sat                    # Main SAT output (all arrays)
 ├── genome.1kb.sat                # Arrays >1kb
-├── genome.3kb.sat                # Arrays >3kb
 ├── genome.10kb.sat               # Arrays >10kb
-├── genome.micro.sat              # Microsatellites (1-9 bp monomers)
-├── genome.complex.sat            # Complex repeats (>9 bp monomers)
-├── genome.pmicro.sat             # Potential microsatellites
-├── genome.tssr.sat               # Tandem simple sequence repeats
+├── genome.100kb.sat            ⊖ # Arrays >100kb
+├── genome.micro.sat            ⊖ # Microsatellites (1-9 bp monomers)
+├── genome.complex.sat          ⊖ # Complex repeats (>9 bp monomers)
+├── genome.pmicro.sat           ⊖ # Potential microsatellites
+├── genome.tssr.sat             ⊖ # Tandem simple sequence repeats
 ├── genome.gaps.bed               # Gaps annotation
 ├── results.yaml                  # Analysis statistics
 ├── run_manifest.json             # What the run produced (written last) + step statuses
-├── fastan/                       # FasTAN intermediate files
-│   ├── genome.1aln               # FasTAN alignment output
-│   └── genome.bed                # FasTAN BED format
+├── fastan/                       # FasTAN and decomposition output
+│   ├── genome.1aln             ⊖ # FasTAN alignment intermediate
+│   ├── genome.bed                # FasTAN BED format
+│   ├── genome.monomers.tsv.gz    # One row per monomer copy
+│   ├── genome.hors.tsv.gz        # Same schema minus parent_idx
+│   ├── genome.decomposed.fasta.gz
+│   ├── genome.lengths          ⊖ # decomposed, sequences replaced by lengths
+│   └── genome.summary.tsv.gz     # One row per array
 ├── fasta/                        # FASTA sequences
 │   └── genome.arrays.fasta       # All array sequences
-├── gff3/                         # GFF3 annotations
+├── gff3/                       ⊖ # GFF3 annotations
 │   ├── genome.1kb.gff
 │   ├── genome.complex.gff
 │   └── ...
@@ -352,6 +362,32 @@ component (`..._MHOM_BR_75_M2904.karyo.*`) and the substitution is logged; the
 plot titles keep the original name. Without this the slash was read as a path
 separator and the drawing step died with `FileNotFoundError` after the whole
 pipeline had already written its data.
+
+## Compacting Finished Output
+
+A satellite catalogue is around 190 MB per assembly, and a panel of tens of
+thousands of assemblies outgrows the volume holding it long before the roster is
+finished. `satellome compact` reduces a finished output directory to the layer
+that cannot be recomputed from it — on a real catalogue, 16.5 MB to 3.1 MB — and
+`satellome expand` puts the rest back.
+
+```bash
+satellome compact --dry-run <dir>        # priced, writes nothing
+satellome compact --check-recipes <dir>  # does every recipe reproduce its file?
+satellome compact <dir>
+satellome expand <dir>
+satellome compact --explain              # the policy table, with reasons
+```
+
+Nothing is removed that has not just been reproduced and compared by md5, and
+`.compact.json` records the digest and the recipe for everything touched. The
+restored files are **content**-identical: a `.gz` holds exactly the original
+bytes, but its gzip framing is re-encoded, so compare with `zcat | md5sum`.
+`fastan/*.1aln` is dropped by decision and is the one kind expand cannot rebuild
+without the genome; it says so rather than omitting it quietly.
+
+Full details, including the 1 kb threshold and the decomposer version
+requirement: [docs/compact.md](docs/compact.md).
 
 ## Verifying a Run
 

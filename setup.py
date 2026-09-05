@@ -51,6 +51,7 @@ setup(
         "editdistance",
         "networkx",
         "matplotlib",
+        "zstandard",
     ],
     classifiers=[
         "Development Status :: 4 - Beta",
