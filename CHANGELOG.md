@@ -5,6 +5,98 @@ All notable changes to Satellome will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-09-05
+
+### Added
+- **`satellome compact` and `satellome expand`.** A finished output directory is
+  reduced to the layer that cannot be recomputed from it, and put back on
+  demand. The panel produces ~190 MB per assembly over a 26,266-assembly roster
+  - ~4.9 TB against 1.4 TB free - and the runners carry disk floors, so without
+  this the panel does not slow down as the volume fills, it stops at roughly 77%
+  of the roster. Measured on a real catalogue: 16.5 MB to 3.1 MB, 81% freed.
+  - **A policy table, not branches** (`satellome compact --explain`). Each kind
+    of output carries its class, its action and the reason. Matching is on the
+    trailing suffix, never a prefix: the basename comes from the input FASTA, so
+    directory `GCA_029289425.3` legitimately holds `GCF_029289425.2_*` files and
+    a prefix match would skip the whole assembly and call it success.
+  - **Nothing is removed that has not just been reproduced.** A dropped file is
+    regenerated into scratch and compared by md5 with the file about to be
+    unlinked; a re-encoded file is decoded and checked against its own footer
+    before the original goes. A kind whose rows cannot be shown recomputable on
+    this machine is re-encoded whole instead, with the reason printed and
+    recorded - a failure narrows the compaction, it never widens the damage.
+  - **`.compact.json`** records, per file, the class, action, before/after md5
+    and byte length, gzip framing, and regeneration recipe. `expand` reads
+    nothing else. Without that record, compaction is deletion.
+  - **`--dry-run` prints a byte ledger** that is measured, not assumed: the kept
+    fraction is counted exactly and the codec ratio is obtained by encoding a
+    bounded sample the way the real thing will be encoded. It also probes the
+    decomposer over 200 arrays first, so a ledger produced where the per-copy
+    cut cannot be applied says so rather than promising a saving it will not
+    deliver. Predicted and realised savings agreed to **0.1%** on real data.
+  - **`--check-recipes`** is the blocking gate: it reports, per kind, whether the
+    recipe reproduces the file it would replace, and changes nothing. Run it on a
+    stratified sample before any corpus-wide compaction. A "derived" file that
+    cannot actually be rederived is a one-way delete wearing the word
+    *reversible*.
+  - **A columnar codec** (`.satz`): one zstd stream per column rather than one
+    per file. `array_id` repeats ~13x per array and collapses from 45.6 MB to
+    0.9 MB, which no window size reaches on the interleaved form. 1.98x
+    byte-weighted over whole-file compression at the same level on six real
+    tables, and the gain grows with table size. The container reproduces its
+    input byte for byte: values are length-prefixed, ragged rows and odd line
+    terminators are stored verbatim, and the footer carries the md5 of what the
+    container reproduces. `--sweep 12,15,19` measures the level on the tables in
+    front of you rather than inheriting one from a brief.
+  - **Refusals are named lines, never silence.** Compaction runs only on the
+    finished tree and never on `_incoming/` - a guarantee by construction rather
+    than a check that can be written wrong - and the completeness test is
+    positive and about content: a master that decompresses to its last byte, a
+    `fastan/*.bed`, a `results.yaml`, no `.partial` files, and no uncompressed
+    `.sat` beside a compressed one. `.rc_complete` is deliberately *not* a gate
+    (1,020 finished catalogues predate it) and a `fasta/` subdirectory is
+    deliberately not read as "still computing" (1,015 carry one from an earlier
+    campaign).
+  - **`satellome --verify-run` keeps working.** Both commands refresh
+    `run_manifest.json` and append to its `compaction_history`, so the driver's
+    completeness check stays meaningful before, during and after.
+  - **`$SATELLOME_ARRAYSPLITTER`** pins the decomposer build. A catalogue can
+    only be rebuilt by the version that produced it: a locally installed
+    arraysplitter 0.1.0 writes 16 columns instead of 17, emits no `hors.tsv` at
+    all, and decomposes 3.4% of one corpus's arrays differently.
+
+- **`--extended-output`.** By default a run now removes, at the end and before
+  writing its manifest, the outputs compaction would remove anyway - `gff3/`,
+  the micro/pmicro/tssr/complex and 100kb/1000kb `.sat` views, `fastan/*.lengths`
+  and `fastan/*.1aln` - and says what it removed and how to get it back. The
+  remaining ~10,600 assemblies therefore land in the compacted shape instead of
+  being written large and shrunk afterwards. `--extended-output` keeps
+  everything. `<p>.1kb.sat` and `<p>.10kb.sat` are kept regardless: the drawing
+  and annotation steps read them, and so does `--rerun drawing`. Which kinds go
+  is read off the same policy table the compactor applies, so the two cannot
+  drift apart.
+
+### Fixed
+- **`reports/microsatellites.summary.tsv` had a different md5 on every run.**
+  The rows were built by iterating a `set` of motif names, and string hashing is
+  seeded per process, so motifs with equal counts came out in a different order
+  each time. Three runs of the same input produced three different files. Ties
+  now break alphabetically. This mattered beyond tidiness: every reproducibility
+  check in the new compaction gate is an md5 comparison, and one output that
+  could never match was one output that could never be verified.
+
+### Changed
+- `run_manifest.json` no longer lists satellome's own scratch directory
+  (`.compact_work/`) or `.compact.json`. Both describe a command rather than
+  being output of the run, and recording files that vanish when the command
+  finishes would make `--verify-run` fail on directories that are intact.
+
+### Dependencies
+- Added `zstandard`, for the columnar codec. Required rather than optional:
+  compaction has no gzip fallback, because a corpus written half in one codec
+  and half in another is a difference nobody sees until they measure the volume
+  again.
+
 ## [1.16.1] - 2026-08-29
 
 ### Fixed
